@@ -170,12 +170,14 @@ class EnhancedDocumentLoader:
             # 3. 구조화된 내용 보존
             content = self._preserve_structure(content)
             
-            # 4. 너무 짧은 내용 필터링
-            if len(content.strip()) >= 50:  # 최소 길이 확보
+            # 4. 너무 짧은 내용 필터링 강화 (300자 이상)
+            if len(content.strip()) >= 300:  # 최소 길이를 300자로 증가
                 processed_docs.append(Document(
                     page_content=content,
                     metadata=doc.metadata
                 ))
+            else:
+                logger.debug(f"너무 짧은 콘텐츠 필터링: {len(content)}자 - {content[:50]}...")
         
         return processed_docs
     
@@ -282,29 +284,37 @@ class EnhancedDocumentLoader:
             ]
         )
         
-        return korean_optimized_splitter.split_documents(documents)
+        chunks = korean_optimized_splitter.split_documents(documents)
+        
+        # 기본 청킹에도 후처리 적용
+        return self._post_process_semantic_chunks(chunks)
     
     def _post_process_semantic_chunks(self, chunks: List[Document]) -> List[Document]:
-        """의미 기반 청킹 후처리"""
+        """의미 기반 청킹 후처리 - 짧은 청크 병합 강화"""
         processed_chunks = []
         
         for chunk in chunks:
             content = chunk.page_content.strip()
             
-            # 너무 짧은 청크는 이전 청크와 합치기
-            if len(content) < 100 and processed_chunks:
+            # 너무 짧은 청크는 이전 청크와 합치기 (500자 미만)
+            if len(content) < 500 and processed_chunks:
                 last_chunk = processed_chunks[-1]
                 combined_content = last_chunk.page_content + "\n\n" + content
                 
                 # 합쳐도 최대 크기를 넘지 않으면 합치기
-                if len(combined_content) <= settings.chunk_size * 1.2:
+                if len(combined_content) <= settings.chunk_size * 1.5:  # 1.2에서 1.5로 증가
                     processed_chunks[-1] = Document(
                         page_content=combined_content,
                         metadata=last_chunk.metadata
                     )
+                    logger.debug(f"짧은 청크 병합: {len(content)}자 -> {len(combined_content)}자")
                     continue
             
-            processed_chunks.append(chunk)
+            # 여전히 너무 짧은 청크는 제외
+            if len(content) >= 300:  # 최소 크기 보장
+                processed_chunks.append(chunk)
+            else:
+                logger.debug(f"너무 짧은 청크 제외: {len(content)}자 - {content[:50]}...")
         
         return processed_chunks
     

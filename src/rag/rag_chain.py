@@ -246,8 +246,8 @@ class RAGChain:
         # 프롬프트 템플릿용 토큰 예약 (약 500토큰)
         prompt_tokens = 500
         
-        # 안전 마진 (20%)
-        safety_margin = 0.8
+        # 안전 마진 (30% - 더 보수적으로)
+        safety_margin = 0.7
         
         # 사용 가능한 컨텍스트 토큰
         available_context_tokens = int((total_context_tokens - output_tokens - prompt_tokens) * safety_margin)
@@ -259,9 +259,11 @@ class RAGChain:
         min_context = 4000  # 최소 4,000자 (로컬 모델 고려)
         max_context = 500000  # 최대 500,000자로 증가
         
-        # 로컬 모델은 더 보수적으로 설정
+        # 모델별 특별 제한
         if provider == "local":
             max_context = 12000  # 로컬 모델은 최대 12,000자로 제한
+        elif provider == "openai" and model == "gpt-3.5-turbo":
+            max_context = 40000  # GPT-3.5-turbo는 40,000자로 제한 (약 10,000 토큰)
             
         return max(min_context, min(max_context, max_context_chars))
     

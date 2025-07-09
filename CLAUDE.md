@@ -130,6 +130,14 @@ streamlit run app.py
   - 프롬프트에서 "요약" 관련 표현 제거
 - **효과**: 모든 경우에 전체 내용을 제한 없이 제공
 
+### 12. GPT-3.5-turbo 토큰 제한 오류 해결 (src/rag/rag_chain.py, config.py)
+- **문제**: "This model's maximum context length is 16385 tokens" 오류
+- **해결**:
+  - 안전 마진: 80% → 70% (더 보수적으로)
+  - GPT-3.5-turbo 최대 컨텍스트: 40,000자로 제한
+  - k_documents: 15 → 10개로 감소
+- **효과**: GPT-3.5-turbo의 토큰 제한 내에서 안정적 동작
+
 ## 주의사항
 - 청크 크기를 너무 크게 하면 검색 정확도가 떨어질 수 있음
 - 컨텍스트가 너무 길면 LLM이 중요한 정보를 놓칠 수 있음

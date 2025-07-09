@@ -37,18 +37,27 @@ class EmbeddingModel:
             # 한국어 성능이 우수한 모델 우선 선택
             model_name = self._select_best_korean_model()
             
-            self.embeddings = HuggingFaceEmbeddings(
-                model_name=model_name,
-                model_kwargs={
-                    'device': 'cpu',
-                    'trust_remote_code': True
-                },
-                encode_kwargs={
-                    'normalize_embeddings': True,
-                    'batch_size': 32,  # 배치 크기 최적화
-                    'show_progress_bar': False
-                }
-            )
+            # show_progress_bar 오류 방지를 위한 개선된 초기화
+            try:
+                self.embeddings = HuggingFaceEmbeddings(
+                    model_name=model_name,
+                    model_kwargs={
+                        'device': 'cpu',
+                        'trust_remote_code': True
+                    },
+                    encode_kwargs={
+                        'normalize_embeddings': True,
+                        'batch_size': 32,  # 배치 크기 최적화
+                    }  # show_progress_bar 매개변수 제거
+                )
+            except Exception as e:
+                logger.warning(f"HuggingFaceEmbeddings 초기화 실패, 기본 설정으로 재시도: {str(e)}")
+                # 더 간단한 설정으로 재시도
+                self.embeddings = HuggingFaceEmbeddings(
+                    model_name=model_name,
+                    model_kwargs={'device': 'cpu'}
+                )
+            
             self.model_type = "huggingface"
             logger.info(f"한국어 최적화 임베딩 모델 초기화 완료: {model_name}")
     
@@ -111,13 +120,19 @@ class EmbeddingModel:
         # 임베딩 생성
         try:
             embeddings = self.embeddings.embed_documents(filtered_texts)
-        except TypeError as e:
-            # show_progress_bar 매개변수 충돌 처리
+        except Exception as e:
+            # 다양한 오류 상황 처리
             if "show_progress_bar" in str(e) and self.model_type == "huggingface":
                 # HuggingFace 모델의 경우 직접 encode 메서드 호출
-                model = self.embeddings.client
-                embeddings = model.encode(filtered_texts, show_progress_bar=False)
-                embeddings = [emb.tolist() for emb in embeddings]
+                try:
+                    model = self.embeddings.client
+                    embeddings = model.encode(filtered_texts, show_progress_bar=False)
+                    embeddings = [emb.tolist() for emb in embeddings]
+                except Exception:
+                    # 더 안전한 방법으로 재시도
+                    model = self.embeddings.client
+                    embeddings = model.encode(filtered_texts)
+                    embeddings = [emb.tolist() for emb in embeddings]
             else:
                 raise e
         
@@ -148,13 +163,19 @@ class EmbeddingModel:
         
         try:
             return self.embeddings.embed_query(processed_query)
-        except TypeError as e:
-            # show_progress_bar 매개변수 충돌 처리
+        except Exception as e:
+            # 다양한 오류 상황 처리
             if "show_progress_bar" in str(e) and self.model_type == "huggingface":
                 # HuggingFace 모델의 경우 직접 encode 메서드 호출
-                model = self.embeddings.client
-                embeddings = model.encode([processed_query], show_progress_bar=False)
-                return embeddings[0].tolist()
+                try:
+                    model = self.embeddings.client
+                    embeddings = model.encode([processed_query], show_progress_bar=False)
+                    return embeddings[0].tolist()
+                except Exception:
+                    # 더 안전한 방법으로 재시도
+                    model = self.embeddings.client
+                    embeddings = model.encode([processed_query])
+                    return embeddings[0].tolist()
             else:
                 raise e
     
