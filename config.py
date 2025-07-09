@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     local_llm_base_url: str = os.getenv("LOCAL_LLM_BASE_URL", "http://localhost:1234")
     local_llm_model: str = os.getenv("LOCAL_LLM_MODEL", "local-model")
     local_llm_api_key: str = os.getenv("LOCAL_LLM_API_KEY", "not-needed")  # 일부 로컬 서버는 API 키 필요
-    local_llm_max_tokens: int = int(os.getenv("LOCAL_LLM_MAX_TOKENS", "2048"))  # 로컬 모델 최대 토큰
+    local_llm_max_tokens: int = int(os.getenv("LOCAL_LLM_MAX_TOKENS", "1024"))  # 로컬 모델 최대 토큰 (더 보수적으로)
     local_llm_context_window: int = int(os.getenv("LOCAL_LLM_CONTEXT_WINDOW", "4096"))  # 로컬 모델 컨텍스트 윈도우
     
     # 임베딩 모델 설정
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     semantic_chunk_sentences: int = 3  # 의미 기반 청킹 시 문장 단위
 
     # RAG 설정 - 검색 성능 최적화
-    k_documents: int = int(os.getenv("K_DOCUMENTS", "10"))  # 모델 토큰 제한 고려하여 10개로 조정
+    k_documents: int = int(os.getenv("K_DOCUMENTS", "8"))  # 모델 토큰 제한 고려하여 8개로 조정
     search_threshold_faiss: float = 1.24  # FAISS 임계값 (거리 기반, 38% 유사도에 해당)
     search_threshold_chromadb: float = 0.38  # ChromaDB 임계값 (유사도 38%)
     use_mmr_search: bool = os.getenv("USE_MMR_SEARCH", "true").lower() == "true"  # 다양성 확보

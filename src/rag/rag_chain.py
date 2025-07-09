@@ -243,8 +243,8 @@ class RAGChain:
         # 출력용 토큰 예약
         output_tokens = self._get_max_tokens_for_model(provider, model)
         
-        # 프롬프트 템플릿용 토큰 예약 (약 500토큰)
-        prompt_tokens = 500
+        # 프롬프트 템플릿용 토큰 예약 (더 많이 예약)
+        prompt_tokens = 800
         
         # 안전 마진 (30% - 더 보수적으로)
         safety_margin = 0.7
@@ -261,9 +261,9 @@ class RAGChain:
         
         # 모델별 특별 제한
         if provider == "local":
-            max_context = 12000  # 로컬 모델은 최대 12,000자로 제한
-        elif provider == "openai" and model == "gpt-3.5-turbo":
-            max_context = 40000  # GPT-3.5-turbo는 40,000자로 제한 (약 10,000 토큰)
+            max_context = 8000  # 로컬 모델은 최대 8,000자로 제한 (더 보수적으로)
+        elif provider == "openai" and model and "gpt-3.5" in model:
+            max_context = 30000  # GPT-3.5 모델들은 30,000자로 제한 (약 7,500 토큰)
             
         return max(min_context, min(max_context, max_context_chars))
     

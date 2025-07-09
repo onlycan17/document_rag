@@ -134,9 +134,17 @@ streamlit run app.py
 - **문제**: "This model's maximum context length is 16385 tokens" 오류
 - **해결**:
   - 안전 마진: 80% → 70% (더 보수적으로)
-  - GPT-3.5-turbo 최대 컨텍스트: 40,000자로 제한
-  - k_documents: 15 → 10개로 감소
+  - GPT-3.5 모델들 최대 컨텍스트: 40,000자 → 30,000자로 추가 제한
+  - k_documents: 15 → 10 → 8개로 감소
+  - 프롬프트 토큰 예약: 500 → 800토큰
 - **효과**: GPT-3.5-turbo의 토큰 제한 내에서 안정적 동작
+
+### 13. 로컬 모델 토큰 제한 오류 해결 (src/rag/rag_chain.py, config.py)
+- **문제**: "The number of tokens to keep from the initial prompt is greater than the context length" 오류
+- **해결**:
+  - 로컬 모델 최대 컨텍스트: 12,000자 → 8,000자
+  - 로컬 모델 최대 토큰: 2048 → 1024
+- **효과**: 로컬 모델의 제한된 컨텍스트 내에서 안정적 동작
 
 ### 12. 벡터 DB 청크 품질 문제 해결 (src/loaders/document_loader.py, src/embeddings/embedding_model.py)
 - **문제 발견**:
