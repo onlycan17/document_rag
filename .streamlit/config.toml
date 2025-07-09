@@ -1,0 +1,16 @@
+[browser]
+# 사용자 데이터 수집 비활성화
+gatherUsageStats = false
+
+[server]
+# 서버 설정
+port = 8501
+headless = true
+
+[theme]
+# 다크 테마 설정 (선택사항)
+primaryColor = "#FF6B6B"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#262730"
+font = "sans serif"

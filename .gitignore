@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+
+# Data and databases
+data/documents/*
+data/processed/*
+vector_db/*
+!data/documents/.gitkeep
+!data/processed/.gitkeep
+!vector_db/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+
+# Model files
+*.pkl
+*.pth
+*.onnx
+*.safetensors
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Large files
+*.pdf
+*.doc
+*.docx
