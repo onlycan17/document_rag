@@ -158,6 +158,8 @@ class RAGChain:
             "gemini-1.5-flash": 8192,
             "gemini-1.5-flash-8b": 8192,
             "gemini-1.5-pro": 8192,
+            "gemini-2.0-flash": 8192,
+            "gemini-2.5-flash": 8192,
             "gemini-1.0-pro": 2048,
             "gemini-pro": 2048,
             
@@ -193,6 +195,8 @@ class RAGChain:
             "gemini-1.5-flash": 1048576,  # 1M tokens
             "gemini-1.5-flash-8b": 1048576,
             "gemini-1.5-pro": 2097152,  # 2M tokens
+            "gemini-2.0-flash": 1048576,  # 1M tokens
+            "gemini-2.5-flash": 1048576,
             "gemini-1.0-pro": 32768,
             "gemini-pro": 32768,
             
@@ -825,6 +829,7 @@ class RAGChain:
             "google": [
                 {"name": "Gemini 1.5 Flash", "model": "gemini-1.5-flash", "description": f"빠른 응답 ({format_context_size(context_windows.get('gemini-1.5-flash', 1048576))} 컨텍스트, 최대 {model_tokens.get('gemini-1.5-flash', 8192)}토큰)"},
                 {"name": "Gemini 1.5 Flash-8B", "model": "gemini-1.5-flash-8b", "description": f"더 빠른 경량 모델 ({format_context_size(context_windows.get('gemini-1.5-flash-8b', 1048576))} 컨텍스트, 최대 {model_tokens.get('gemini-1.5-flash-8b', 8192)}토큰)"},
+                {"name": "Gemini 2.0 Flash", "model": "gemini-2.0-flash", "description": f"최신 2.0 버전 ({format_context_size(context_windows.get('gemini-2.0-flash', 1048576))} 컨텍스트, 최대 {model_tokens.get('gemini-2.0-flash', 8192)}토큰)"},
                 {"name": "Gemini 1.5 Pro", "model": "gemini-1.5-pro", "description": f"고급 기능 ({format_context_size(context_windows.get('gemini-1.5-pro', 2097152))} 컨텍스트, 최대 {model_tokens.get('gemini-1.5-pro', 8192)}토큰)"},
                 {"name": "Gemini 1.0 Pro", "model": "gemini-1.0-pro", "description": f"안정적인 버전 ({format_context_size(context_windows.get('gemini-1.0-pro', 32768))} 컨텍스트, 최대 {model_tokens.get('gemini-1.0-pro', 2048)}토큰)"}
             ],
