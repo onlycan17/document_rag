@@ -591,7 +591,29 @@ class RAGChain:
         # 기본 정제
         processed_query = query.strip()
         
-        # 질문 확장 (선택적)
+        # 동적 쿼리 확장 - 문서 기반
+        if settings.enable_query_expansion:
+            # 먼저 문서에서 관련 용어 추출
+            related_terms = self.vector_db.extract_related_terms(query)
+            if related_terms:
+                logger.info(f"문서 기반 관련 용어 추출: {related_terms[:10]}")
+                
+                # 기존 쿼리에 관련 용어 추가
+                all_terms = query.split() + related_terms[:10]  # 상위 10개만 사용
+                
+                # 중복 제거 (순서 유지)
+                seen = set()
+                unique_terms = []
+                for term in all_terms:
+                    if term not in seen and len(term) > 1:
+                        seen.add(term)
+                        unique_terms.append(term)
+                
+                processed_query = ' '.join(unique_terms[:20])  # 최대 20개 단어
+                logger.info(f"동적 쿼리 확장 완료: '{query}' -> '{processed_query}'")
+                return processed_query
+        
+        # 동적 확장이 실패하거나 비활성화된 경우, 정적 확장 사용
         if settings.enable_query_expansion:
             # 더 포괄적인 쿼리 확장
             query_expansions = {

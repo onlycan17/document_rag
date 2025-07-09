@@ -459,6 +459,55 @@ class EnhancedVectorDatabase:
             "embedding_model": self.embedding_model.get_model_info(),
             "keyword_search_available": self.bm25_retriever is not None
         }
+    
+    def extract_related_terms(self, query: str, top_k: int = 20) -> List[str]:
+        """
+        문서에서 쿼리와 관련된 용어를 동적으로 추출
+        TF-IDF와 코사인 유사도를 사용하여 관련 용어 찾기
+        """
+        if not self.tfidf_vectorizer or self.tfidf_matrix is None:
+            return []
+        
+        try:
+            # 쿼리 벡터화
+            query_processed = self._preprocess_text_for_keyword_search(query)
+            query_vector = self.tfidf_vectorizer.transform([query_processed])
+            
+            # 문서와의 유사도 계산
+            similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+            
+            # 상위 문서 선택
+            top_doc_indices = np.argsort(similarities)[::-1][:5]  # 상위 5개 문서
+            
+            # 관련 용어 추출
+            feature_names = self.tfidf_vectorizer.get_feature_names_out()
+            related_terms = set()
+            
+            for idx in top_doc_indices:
+                if idx < len(self.documents_cache) and similarities[idx] > 0.1:
+                    # 해당 문서의 TF-IDF 벡터
+                    doc_vector = self.tfidf_matrix[idx]
+                    
+                    # 중요한 용어 추출 (TF-IDF 점수가 높은 용어)
+                    doc_scores = doc_vector.toarray().flatten()
+                    top_term_indices = np.argsort(doc_scores)[::-1][:10]  # 문서당 상위 10개 용어
+                    
+                    for term_idx in top_term_indices:
+                        if doc_scores[term_idx] > 0.1:  # 임계값 이상인 용어만
+                            term = feature_names[term_idx]
+                            if len(term) > 1 and term not in query_processed:  # 쿼리에 없는 용어만
+                                related_terms.add(term)
+            
+            # 원본 쿼리의 단어도 포함
+            for word in query.split():
+                if len(word) > 1:
+                    related_terms.add(word)
+            
+            return list(related_terms)[:top_k]
+            
+        except Exception as e:
+            logger.error(f"관련 용어 추출 실패: {str(e)}")
+            return []
 
 # 기존 VectorDatabase와의 호환성 유지
 class VectorDatabase(EnhancedVectorDatabase):
