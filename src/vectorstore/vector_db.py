@@ -1,11 +1,16 @@
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from langchain_community.vectorstores import FAISS
 from langchain.schema import Document
+from langchain.retrievers import BM25Retriever
 from config import settings
 from src.embeddings import EmbeddingModel
 import os
 import pickle
 import logging
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +23,25 @@ try:
 except ImportError:
     from langchain_community.vectorstores import Chroma
 
-class VectorDatabase:
+class EnhancedVectorDatabase:
+    """
+    향상된 벡터 데이터베이스 클래스
+    - 하이브리드 검색 (벡터 + 키워드) 지원
+    - MMR (Maximal Marginal Relevance) 검색
+    - 개선된 임계값 처리
+    - 검색 성능 최적화
+    """
+    
     def __init__(self):
         self.embedding_model = EmbeddingModel()
         self.vector_store = None
+        self.documents_cache = []  # 키워드 검색을 위한 문서 캐시
+        self.bm25_retriever = None  # BM25 키워드 검색기
+        self.tfidf_vectorizer = None  # TF-IDF 벡터라이저
+        self.tfidf_matrix = None  # TF-IDF 매트릭스
+        
         self._initialize_vector_store()
+        logger.info(f"벡터 데이터베이스 초기화 완료 (타입: {settings.vector_db_type})")
     
     def _initialize_vector_store(self):
         """벡터 스토어 초기화"""
@@ -43,7 +62,16 @@ class VectorDatabase:
             raise ValueError(f"지원하지 않는 벡터 DB 타입: {settings.vector_db_type}")
     
     def add_documents(self, documents: List[Document]):
-        """문서를 벡터 DB에 추가"""
+        """
+        문서를 벡터 DB에 추가
+        - 벡터 검색용 인덱스 구축
+        - 키워드 검색용 인덱스 구축
+        """
+        if not documents:
+            logger.warning("추가할 문서가 없습니다.")
+            return
+        
+        # 벡터 스토어에 추가
         if settings.vector_db_type == "chromadb":
             self.vector_store.add_documents(documents)
             self.vector_store.persist()
@@ -58,10 +86,64 @@ class VectorDatabase:
                 self.vector_store.add_documents(documents)
             self.save_faiss_index()
         
-        print(f"{len(documents)}개의 문서가 벡터 DB에 추가되었습니다.")
+        # 키워드 검색용 문서 캐시 업데이트
+        self.documents_cache.extend(documents)
+        self._update_keyword_search_index()
+        
+        logger.info(f"{len(documents)}개의 문서가 벡터 DB에 추가되었습니다.")
+        logger.info(f"총 문서 수: {len(self.documents_cache)}개")
+    
+    def _update_keyword_search_index(self):
+        """키워드 검색 인덱스 업데이트"""
+        try:
+            if not self.documents_cache:
+                return
+            
+            # BM25 검색기 업데이트
+            if settings.enable_hybrid_search:
+                texts = [doc.page_content for doc in self.documents_cache]
+                self.bm25_retriever = BM25Retriever.from_texts(
+                    texts, 
+                    metadatas=[doc.metadata for doc in self.documents_cache]
+                )
+                logger.info("BM25 키워드 검색 인덱스 업데이트 완료")
+            
+            # TF-IDF 인덱스 업데이트 (추가 키워드 검색용)
+            texts = [self._preprocess_text_for_keyword_search(doc.page_content) 
+                    for doc in self.documents_cache]
+            
+            self.tfidf_vectorizer = TfidfVectorizer(
+                max_features=5000,
+                ngram_range=(1, 2),
+                stop_words=None,  # 한국어 불용어는 별도 처리
+                min_df=1
+            )
+            self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(texts)
+            logger.info("TF-IDF 키워드 검색 인덱스 업데이트 완료")
+            
+        except Exception as e:
+            logger.error(f"키워드 검색 인덱스 업데이트 실패: {str(e)}")
+    
+    def _preprocess_text_for_keyword_search(self, text: str) -> str:
+        """키워드 검색을 위한 텍스트 전처리"""
+        # 기본 정제
+        text = re.sub(r'[^\w\s가-힣]', ' ', text)  # 특수문자 제거
+        text = re.sub(r'\s+', ' ', text)  # 연속 공백 제거
+        
+        # 한국어 불용어 제거 (간단한 예시)
+        korean_stopwords = {'이', '그', '저', '의', '가', '을', '를', '에', '와', '과', '도', '로', '으로', '는', '은', '이다', '있다', '없다', '하다'}
+        words = text.split()
+        filtered_words = [word for word in words if word not in korean_stopwords and len(word) > 1]
+        
+        return ' '.join(filtered_words)
     
     def search(self, query: str, k: int = None) -> List[Tuple[Document, float]]:
-        """쿼리와 유사한 문서 검색"""
+        """
+        향상된 검색 메서드
+        - 하이브리드 검색 지원
+        - MMR 검색 지원
+        - 동적 임계값 조정
+        """
         if self.vector_store is None:
             return []
         
@@ -69,68 +151,316 @@ class VectorDatabase:
             k = settings.k_documents
         
         try:
-            results = self.vector_store.similarity_search_with_score(query, k=k)
-            # 점수가 너무 낮은 결과는 제외 (관련성이 낮음)
-            # FAISS의 경우 거리 기반이므로 낮을수록 좋음
-            filtered_results = []
-            for doc, score in results:
-                if settings.vector_db_type == "faiss":
-                    # FAISS는 거리 기반 (낮을수록 좋음)
-                    # 임계값을 더 관대하게 설정하여 더 많은 문서 포함
-                    if score < 2.0:  # 임계값을 1.5에서 2.0으로 상향
-                        filtered_results.append((doc, score))
-                else:
-                    # ChromaDB는 유사도 기반 (높을수록 좋음)
-                    if score > 0.2:  # 임계값을 0.3에서 0.2로 하향
-                        filtered_results.append((doc, score))
-            
-            return filtered_results
+            # 하이브리드 검색 사용 여부 확인
+            if settings.enable_hybrid_search and self.bm25_retriever:
+                return self._hybrid_search(query, k)
+            else:
+                return self._vector_search(query, k)
+                
         except Exception as e:
             logger.error(f"검색 중 오류 발생: {str(e)}")
             return []
+    
+    def _vector_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
+        """순수 벡터 검색"""
+        try:
+            # MMR 검색 사용 여부 확인
+            if settings.use_mmr_search:
+                return self._mmr_search(query, k)
+            else:
+                return self._similarity_search(query, k)
+        except Exception as e:
+            logger.error(f"벡터 검색 실패: {str(e)}")
+            return []
+    
+    def _similarity_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
+        """기본 유사도 검색"""
+        results = self.vector_store.similarity_search_with_score(query, k=k)
+        return self._filter_by_threshold(results)
+    
+    def _mmr_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
+        """MMR (Maximal Marginal Relevance) 검색"""
+        try:
+            # MMR 검색 수행
+            docs = self.vector_store.max_marginal_relevance_search(
+                query, 
+                k=k,
+                fetch_k=k * 2,  # 더 많은 후보에서 선택
+                lambda_mult=1 - settings.mmr_diversity_score  # 다양성 조절
+            )
+            
+            # 점수는 별도로 계산해야 함 (MMR은 점수를 반환하지 않음)
+            scored_results = []
+            for doc in docs:
+                # 임베딩을 통한 유사도 계산
+                doc_embedding = self.embedding_model.embed_query(doc.page_content)
+                query_embedding = self.embedding_model.embed_query(query)
+                
+                # 코사인 유사도 계산
+                similarity = cosine_similarity([query_embedding], [doc_embedding])[0][0]
+                # FAISS 거리로 변환 (낮을수록 좋음)
+                distance = 1 - similarity
+                
+                scored_results.append((doc, distance))
+            
+            return self._filter_by_threshold(scored_results)
+            
+        except Exception as e:
+            logger.warning(f"MMR 검색 실패, 기본 검색 사용: {str(e)}")
+            return self._similarity_search(query, k)
+    
+    def _hybrid_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
+        """하이브리드 검색 (벡터 + 키워드)"""
+        try:
+            # 1. 벡터 검색 결과
+            vector_results = self._similarity_search(query, k)
+            
+            # 2. 키워드 검색 결과
+            keyword_results = self._keyword_search(query, k)
+            
+            # 3. 결과 통합 및 점수 정규화
+            combined_results = self._combine_search_results(
+                vector_results, 
+                keyword_results, 
+                settings.vector_search_weight,
+                settings.keyword_search_weight
+            )
+            
+            # 4. 상위 k개 결과 반환
+            combined_results.sort(key=lambda x: x[1])  # 점수 오름차순 정렬 (낮을수록 좋음)
+            return combined_results[:k]
+            
+        except Exception as e:
+            logger.error(f"하이브리드 검색 실패, 벡터 검색만 사용: {str(e)}")
+            return self._vector_search(query, k)
+    
+    def _keyword_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
+        """키워드 검색"""
+        keyword_results = []
+        
+        try:
+            # BM25 검색
+            if self.bm25_retriever:
+                bm25_docs = self.bm25_retriever.get_relevant_documents(query)
+                for doc in bm25_docs[:k]:
+                    # BM25 점수를 거리로 변환 (간단한 추정)
+                    score = 0.5  # BM25는 정확한 점수를 제공하지 않으므로 기본값 사용
+                    keyword_results.append((doc, score))
+            
+            # TF-IDF 검색 (추가 검증)
+            if self.tfidf_vectorizer and self.tfidf_matrix is not None:
+                tfidf_results = self._tfidf_search(query, k)
+                keyword_results.extend(tfidf_results)
+            
+        except Exception as e:
+            logger.error(f"키워드 검색 실패: {str(e)}")
+        
+        return keyword_results
+    
+    def _tfidf_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
+        """TF-IDF 기반 키워드 검색"""
+        try:
+            # 쿼리 벡터화
+            query_processed = self._preprocess_text_for_keyword_search(query)
+            query_vector = self.tfidf_vectorizer.transform([query_processed])
+            
+            # 코사인 유사도 계산
+            similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+            
+            # 상위 k개 인덱스 추출
+            top_indices = np.argsort(similarities)[::-1][:k]
+            
+            results = []
+            for idx in top_indices:
+                if idx < len(self.documents_cache) and similarities[idx] > 0.1:  # 최소 임계값
+                    doc = self.documents_cache[idx]
+                    # 유사도를 거리로 변환
+                    distance = 1 - similarities[idx]
+                    results.append((doc, distance))
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"TF-IDF 검색 실패: {str(e)}")
+            return []
+    
+    def _combine_search_results(self, vector_results: List[Tuple[Document, float]], 
+                              keyword_results: List[Tuple[Document, float]],
+                              vector_weight: float, keyword_weight: float) -> List[Tuple[Document, float]]:
+        """검색 결과 통합"""
+        combined_dict = {}
+        
+        # 문서 ID 생성 함수
+        def get_doc_id(doc):
+            return doc.metadata.get('chunk_id', doc.page_content[:100])
+        
+        # 벡터 검색 결과 추가
+        for doc, score in vector_results:
+            doc_id = get_doc_id(doc)
+            combined_dict[doc_id] = {
+                'doc': doc,
+                'vector_score': score,
+                'keyword_score': None
+            }
+        
+        # 키워드 검색 결과 추가
+        for doc, score in keyword_results:
+            doc_id = get_doc_id(doc)
+            if doc_id in combined_dict:
+                combined_dict[doc_id]['keyword_score'] = score
+            else:
+                combined_dict[doc_id] = {
+                    'doc': doc,
+                    'vector_score': None,
+                    'keyword_score': score
+                }
+        
+        # 통합 점수 계산
+        results = []
+        for doc_id, data in combined_dict.items():
+            vector_score = data['vector_score'] if data['vector_score'] is not None else 1.0
+            keyword_score = data['keyword_score'] if data['keyword_score'] is not None else 1.0
+            
+            # 가중 평균으로 통합 점수 계산
+            combined_score = (vector_score * vector_weight + keyword_score * keyword_weight)
+            results.append((data['doc'], combined_score))
+        
+        return results
+    
+    def _filter_by_threshold(self, results: List[Tuple[Document, float]]) -> List[Tuple[Document, float]]:
+        """임계값에 따른 결과 필터링"""
+        if not results:
+            return []
+        
+        # 임계값 설정
+        if settings.vector_db_type == "faiss":
+            threshold = settings.search_threshold_faiss
+        else:
+            threshold = settings.search_threshold_chromadb
+        
+        # 동적 임계값 조정
+        scores = [score for _, score in results]
+        if scores:
+            min_score = min(scores)
+            avg_score = sum(scores) / len(scores)
+            
+            # 모든 점수가 임계값보다 높으면 임계값을 완화
+            if min_score > threshold:
+                adjusted_threshold = min(threshold * 1.5, avg_score)
+                logger.info(f"임계값 동적 조정: {threshold} -> {adjusted_threshold}")
+                threshold = adjusted_threshold
+        
+        # 필터링 적용
+        filtered_results = []
+        for doc, score in results:
+            if settings.vector_db_type == "faiss":
+                # FAISS는 거리 기반 (낮을수록 좋음)
+                if score < threshold:
+                    filtered_results.append((doc, score))
+            else:
+                # ChromaDB는 유사도 기반 (높을수록 좋음)
+                if score > threshold:
+                    filtered_results.append((doc, score))
+        
+        # 필터링 결과가 너무 적으면 원본 결과의 일부라도 반환
+        if len(filtered_results) < 2 and results:
+            logger.warning(f"필터링 결과가 부족함 ({len(filtered_results)}개), 상위 결과 포함")
+            filtered_results = results[:max(3, len(results) // 2)]
+        
+        return filtered_results
+    
+    def get_document_count(self) -> int:
+        """저장된 문서 수 반환"""
+        return len(self.documents_cache)
+    
+    def clear_database(self):
+        """데이터베이스 초기화"""
+        # 벡터 스토어 초기화
+        if settings.vector_db_type == "chromadb" and self.vector_store:
+            try:
+                self.vector_store.delete_collection()
+            except:
+                pass
+        elif settings.vector_db_type == "faiss":
+            # FAISS 파일 삭제
+            faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
+            if os.path.exists(faiss_index_path):
+                os.remove(faiss_index_path)
+        
+        # 캐시 및 인덱스 초기화
+        self.documents_cache = []
+        self.bm25_retriever = None
+        self.tfidf_vectorizer = None
+        self.tfidf_matrix = None
+        self.vector_store = None
+        
+        # 벡터 스토어 재초기화
+        self._initialize_vector_store()
+        
+        logger.info("벡터 데이터베이스가 초기화되었습니다.")
     
     def save_faiss_index(self):
         """FAISS 인덱스 저장"""
         if settings.vector_db_type == "faiss" and self.vector_store:
             os.makedirs(settings.vector_db_path, exist_ok=True)
             faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
+            
+            # 벡터 스토어와 문서 캐시를 함께 저장
+            data_to_save = {
+                'vector_store': self.vector_store,
+                'documents_cache': self.documents_cache
+            }
+            
             with open(faiss_index_path, "wb") as f:
-                pickle.dump(self.vector_store, f)
+                pickle.dump(data_to_save, f)
+            
+            logger.info("FAISS 인덱스 저장 완료")
     
     def load_faiss_index(self):
         """FAISS 인덱스 로드"""
         if settings.vector_db_type == "faiss":
             faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
-            with open(faiss_index_path, "rb") as f:
-                self.vector_store = pickle.load(f)
+            
+            try:
+                with open(faiss_index_path, "rb") as f:
+                    data = pickle.load(f)
+                
+                if isinstance(data, dict):
+                    # 새로운 형식 (벡터 스토어 + 문서 캐시)
+                    self.vector_store = data['vector_store']
+                    self.documents_cache = data.get('documents_cache', [])
+                else:
+                    # 기존 형식 (벡터 스토어만)
+                    self.vector_store = data
+                    self.documents_cache = []
+                
+                # 키워드 검색 인덱스 재구축
+                if self.documents_cache:
+                    self._update_keyword_search_index()
+                
+                logger.info(f"FAISS 인덱스 로드 완료 (문서 수: {len(self.documents_cache)})")
+                
+            except Exception as e:
+                logger.error(f"FAISS 인덱스 로드 실패: {str(e)}")
+                self.vector_store = None
+                self.documents_cache = []
     
-    def clear_database(self):
-        """벡터 DB 초기화"""
-        if settings.vector_db_type == "chromadb":
-            # ChromaDB 데이터 디렉토리 삭제
-            import shutil
-            if os.path.exists(settings.vector_db_path):
-                shutil.rmtree(settings.vector_db_path)
-                os.makedirs(settings.vector_db_path, exist_ok=True)
-            self.vector_store = None
-            self._initialize_vector_store()
-        elif settings.vector_db_type == "faiss":
-            # FAISS 인덱스 파일 삭제
-            faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
-            if os.path.exists(faiss_index_path):
-                os.remove(faiss_index_path)
-            self.vector_store = None
-        
-        print("벡터 데이터베이스가 초기화되었습니다.")
-    
-    def get_document_count(self) -> int:
-        """저장된 문서 수 반환"""
-        if self.vector_store is None:
-            return 0
-        
-        if settings.vector_db_type == "chromadb":
-            # ChromaDB의 경우
-            return self.vector_store._collection.count()
-        elif settings.vector_db_type == "faiss":
-            # FAISS의 경우
-            return self.vector_store.index.ntotal if hasattr(self.vector_store, 'index') else 0
+    def get_search_stats(self) -> Dict[str, Any]:
+        """검색 관련 통계 정보 반환"""
+        return {
+            "total_documents": len(self.documents_cache),
+            "vector_db_type": settings.vector_db_type,
+            "hybrid_search_enabled": settings.enable_hybrid_search,
+            "mmr_search_enabled": settings.use_mmr_search,
+            "search_threshold": {
+                "faiss": settings.search_threshold_faiss,
+                "chromadb": settings.search_threshold_chromadb
+            },
+            "embedding_model": self.embedding_model.get_model_info(),
+            "keyword_search_available": self.bm25_retriever is not None
+        }
+
+# 기존 VectorDatabase와의 호환성 유지
+class VectorDatabase(EnhancedVectorDatabase):
+    """기존 VectorDatabase와의 호환성을 위한 클래스"""
+    pass
