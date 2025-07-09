@@ -104,10 +104,12 @@ class RAGChain:
 1. **상세하고 풍부한 정보 제공**:
    - 문서에 있는 구체적인 사실, 숫자, 날짜, 발견사항을 빠짐없이 포함하세요
    - 중요한 세부사항을 생략하지 말고 충실히 전달하세요
-   - 관련된 모든 정보를 체계적으로 정리하여 제공하세요
+   - 관련된 모든 정보를 체계적으로 정리하여 상세하게 제공하세요
 
 2. **이해하기 쉬운 설명**:
    - 전문 용어는 처음 나올 때 괄호 안에 쉬운 설명을 추가하세요
+   - 중요한 내용은 강조하여 설명하세요
+   - 어려운 용어 및 개념은 예시를 통해 설명하세요
    - 복잡한 내용은 단계별로 나누어 설명하세요
    - 필요한 경우 배경 지식을 상세히 제공하세요
 
@@ -591,23 +593,77 @@ class RAGChain:
         
         # 질문 확장 (선택적)
         if settings.enable_query_expansion:
+            # 더 포괄적인 쿼리 확장
             query_expansions = {
-                "몽촌토성": "몽촌토성 백제 한성 왕성 토성",
-                "시스템": "정보시스템 시스템",
-                "구축": "구축 건설 개발 설치",
-                "운영": "운영 관리 유지보수 administration",
-                "지침": "지침 가이드 규정 가이드라인",
-                "보안": "보안 security 정보보호",
-                "관리": "관리 management 관리자",
-                "백제": "백제 한성백제 백제시대",
-                "고구려": "고구려 고구려시대",
-                "발굴": "발굴 발굴조사 고고학 유적",
-                "유물": "유물 토기 유구 출토품"
+                # 몽촌토성 관련
+                "몽촌토성": "몽촌토성 몽촌 토성 백제 한성 왕성 토성 백제왕성 백제토성 한성백제토성",
+                "몽촌": "몽촌 몽촌토성 백제 한성",
+                "토성": "토성 몽촌토성 성곽 성벽 토축성 판축",
+                
+                # 백제/고구려 관련
+                "백제": "백제 한성백제 백제시대 백제왕조 백제왕국 백제토기",
+                "고구려": "고구려 고구려시대 고구려토기 고구려유물",
+                "한성": "한성 한성백제 한성시대 한성도읍 서울",
+                
+                # 고고학 관련
+                "발굴": "발굴 발굴조사 고고학 유적 출토 조사 시굴 정밀발굴",
+                "유물": "유물 토기 유구 출토품 출토유물 도자기 자기",
+                "토기": "토기 도기 자기 그릇 토제품 백제토기 고구려토기",
+                "유적": "유적 유구 유물 흔적 건물지 주거지",
+                
+                # 지역 관련
+                "북문": "북문 북문지 북쪽문 북측",
+                "남문": "남문 남문지 남쪽문 남측",
+                "동문": "동문 동문지 동쪽문 동측",
+                "서문": "서문 서문지 서쪽문 서측",
+                
+                # 시대 관련
+                "삼국시대": "삼국시대 백제 고구려 신라 삼국",
+                "통일신라": "통일신라 통일신라시대 신라",
+                
+                # 정보시스템 관련
+                "시스템": "정보시스템 시스템 전산시스템 IT시스템",
+                "구축": "구축 건설 개발 설치 도입 구현",
+                "운영": "운영 관리 유지보수 운용 administration",
+                "지침": "지침 가이드 규정 가이드라인 매뉴얼 안내서",
+                "보안": "보안 security 정보보호 보호 사이버보안",
+                "관리": "관리 management 관리자 운영관리 시스템관리"
             }
             
-            for original, expanded in query_expansions.items():
-                if original in processed_query and len(processed_query.split()) < 10:
-                    processed_query = processed_query.replace(original, expanded)
+            # 복합 확장 처리 (여러 키워드가 포함된 경우)
+            expanded_terms = []
+            query_words = processed_query.split()
+            
+            for word in query_words:
+                if word in query_expansions:
+                    expanded_terms.append(query_expansions[word])
+                else:
+                    # 부분 일치도 확인
+                    for key, value in query_expansions.items():
+                        if key in word or word in key:
+                            expanded_terms.append(value)
+                            break
+                    else:
+                        expanded_terms.append(word)
+            
+            # 중복 제거하면서 확장된 쿼리 생성
+            all_terms = []
+            for term in expanded_terms:
+                all_terms.extend(term.split())
+            
+            # 중복 제거 (순서 유지)
+            seen = set()
+            unique_terms = []
+            for term in all_terms:
+                if term not in seen:
+                    seen.add(term)
+                    unique_terms.append(term)
+            
+            processed_query = ' '.join(unique_terms)
+            
+            # 쿼리가 너무 길어지는 것 방지
+            if len(processed_query.split()) > 20:
+                processed_query = ' '.join(processed_query.split()[:20])
         
         logger.info(f"쿼리 전처리: '{query}' -> '{processed_query}'")
         return processed_query
