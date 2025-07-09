@@ -147,6 +147,10 @@ class RAGChain:
         
         return "\n---\n".join(context_parts)
     
+    def get_last_context_tokens(self) -> int:
+        """마지막 쿼리에서 사용된 컨텍스트 토큰 수 반환"""
+        return getattr(self, '_last_context_tokens', 0)
+    
     def query(self, question: str) -> Dict[str, Any]:
         """질문에 대한 답변 생성"""
         try:
@@ -199,6 +203,9 @@ class RAGChain:
             
             # 2. 컨텍스트 생성
             context = self._format_documents(relevant_docs)
+            
+            # 컨텍스트 토큰 수 저장 (대략적인 계산)
+            self._last_context_tokens = len(context) // 4  # 대략 4글자당 1토큰
             
             # 3. LLM을 통한 답변 생성
             response = self.chain.invoke({

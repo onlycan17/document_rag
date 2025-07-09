@@ -17,6 +17,7 @@ from src.loaders import DocumentLoader
 from src.rag import RAGChain
 from src.vectorstore import VectorDatabase
 from src.utils.logging_config import setup_logging, get_logger
+from src.utils.token_counter import TokenCounter
 
 # 로깅 설정
 setup_logging(logging.INFO)
@@ -51,6 +52,8 @@ if 'current_model' not in st.session_state:
     st.session_state.current_model = None
 if 'debug_mode' not in st.session_state:
     st.session_state.debug_mode = False
+if 'token_counter' not in st.session_state:
+    st.session_state.token_counter = TokenCounter()
 
 def main():
     st.title(settings.app_title)
@@ -297,11 +300,46 @@ def main():
     # 메인 챗 인터페이스
     st.header("💬 챗봇")
     
-    # 현재 사용 중인 모델 표시
-    current_model_display = f"현재 모델: **{provider_names.get(st.session_state.current_provider, st.session_state.current_provider)}**"
-    if st.session_state.current_model:
-        current_model_display += f" - {st.session_state.current_model}"
-    st.caption(current_model_display)
+    # 현재 사용 중인 모델 및 컨텍스트 사용량 표시
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        current_model_display = f"현재 모델: **{provider_names.get(st.session_state.current_provider, st.session_state.current_provider)}**"
+        if st.session_state.current_model:
+            current_model_display += f" - {st.session_state.current_model}"
+        st.caption(current_model_display)
+    
+    with col2:
+        # 컨텍스트 사용량 계산 및 표시
+        if st.session_state.messages:
+            # 현재 대화 내역에서 텍스트 추출
+            messages_for_count = []
+            for msg in st.session_state.messages:
+                messages_for_count.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+            
+            # 마지막 검색된 문서의 토큰 수 (대략적)
+            documents_text = " " * (st.session_state.rag_chain.get_last_context_tokens() * 4)
+            
+            # 컨텍스트 사용량 계산
+            usage_info = st.session_state.token_counter.calculate_context_usage(
+                messages_for_count,
+                documents_text,
+                st.session_state.current_provider,
+                st.session_state.current_model or "gpt-3.5-turbo"
+            )
+            
+            # 사용량 표시
+            usage_display = st.session_state.token_counter.format_token_display(usage_info)
+            st.caption(f"컨텍스트: {usage_display}")
+            
+            # 상세 정보 툴팁
+            with st.expander("📊 토큰 사용량 상세"):
+                st.markdown(st.session_state.token_counter.get_usage_breakdown(usage_info))
+        else:
+            st.caption("컨텍스트: 🟢 0 토큰 사용 중")
     
     # 채팅 히스토리 표시
     for message in st.session_state.messages:
@@ -329,6 +367,9 @@ def main():
         with st.chat_message("assistant"):
             with st.spinner("답변을 생성하는 중..."):
                 response = st.session_state.rag_chain.query(prompt)
+                
+                # 실제 검색된 문서의 토큰 수 가져오기
+                context_tokens = st.session_state.rag_chain.get_last_context_tokens()
                 
                 # 디버그 모드일 때 검색 결과 표시
                 if st.session_state.debug_mode:
@@ -390,6 +431,9 @@ def main():
                         "role": "assistant",
                         "content": response["answer"]
                     })
+            
+            # 컨텍스트 사용량 업데이트를 위해 리런
+            st.rerun()
     
     # 대화 초기화 버튼
     if st.button("🔄 대화 초기화", key="clear_chat"):
