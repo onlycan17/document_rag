@@ -1,24 +1,51 @@
+# Core Framework
 streamlit==1.32.2
+
+# LangChain and Extensions
 langchain==0.3.14
 langchain-community==0.3.14
 langchain-openai==0.3.1
 langchain-google-genai==2.0.7
 langchain-anthropic==0.3.0
 langchain-chroma==0.1.4
+
+# Vector Databases
 faiss-cpu==1.9.0.post1
-sentence-transformers==3.3.0
-python-dotenv==1.0.1
-tiktoken==0.8.0
-pypdf==5.1.0
-PyPDF2==3.0.1
-pdf2image==1.17.0
-pytesseract==0.3.13
-pillow>=7.1.0,<11
 chromadb==0.4.24
-pydantic==2.10.0
-pydantic-settings==2.7.0
+
+# Embeddings and ML
+sentence-transformers==3.3.0
 torch>=2.0.0
 transformers>=4.35.0
+
+# PDF Processing
+pypdf==5.1.0
+PyPDF2==3.0.1
+pdf2image[jpeg]==1.17.0  # Includes JPEG support for better compatibility
+pytesseract==0.3.13
+
+# Image Processing
+pillow>=7.1.0,<11
+
+# API Clients
 google-generativeai==0.8.3
 anthropic==0.42.0
+openai>=1.0.0  # For OpenAI embeddings support
+
+# Configuration and Environment
+python-dotenv==1.0.1
+pydantic==2.10.0
+pydantic-settings==2.7.0
+
+# Utilities
+tiktoken==0.8.0
+numpy>=1.24.0
+requests>=2.28.0
+
+# Protocol Buffers (for various dependencies)
 protobuf==4.25.8
+
+# Note: System dependencies (installed via apt/brew):
+# - tesseract-ocr (for OCR functionality)
+# - poppler-utils (for PDF to image conversion)
+# These need to be installed separately using install_ocr.sh
