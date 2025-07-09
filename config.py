@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     local_llm_base_url: str = os.getenv("LOCAL_LLM_BASE_URL", "http://localhost:1234")
     local_llm_model: str = os.getenv("LOCAL_LLM_MODEL", "local-model")
     local_llm_api_key: str = os.getenv("LOCAL_LLM_API_KEY", "not-needed")  # 일부 로컬 서버는 API 키 필요
-    local_llm_max_tokens: int = int(os.getenv("LOCAL_LLM_MAX_TOKENS", "1024"))  # 로컬 모델 최대 토큰 (더 보수적으로)
+    local_llm_max_tokens: int = int(os.getenv("LOCAL_LLM_MAX_TOKENS", "512"))  # 로컬 모델 최대 토큰 (더 보수적으로)
     local_llm_context_window: int = int(os.getenv("LOCAL_LLM_CONTEXT_WINDOW", "4096"))  # 로컬 모델 컨텍스트 윈도우
     
     # 임베딩 모델 설정

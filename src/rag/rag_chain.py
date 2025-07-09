@@ -173,7 +173,7 @@ class RAGChain:
             "claude-instant-1.2": 4096,
             
             # 로컬 모델 (설정에서 가져오거나 기본값)
-            "local-model": settings.local_llm_max_tokens if hasattr(settings, 'local_llm_max_tokens') else 2048,
+            "local-model": settings.local_llm_max_tokens if hasattr(settings, 'local_llm_max_tokens') else 512,
         }
         
         return model_tokens
@@ -255,6 +255,12 @@ class RAGChain:
         # 안전 마진 (30% - 더 보수적으로)
         safety_margin = 0.7
         
+        # 로컬 모델은 더 보수적으로 처리
+        if provider == "local":
+            # 로컬 모델은 컨텍스트 윈도우가 작으므로 더 많은 마진 필요
+            safety_margin = 0.5  # 50%만 사용
+            prompt_tokens = 600  # 프롬프트 토큰도 줄임
+        
         # 사용 가능한 컨텍스트 토큰
         available_context_tokens = int((total_context_tokens - output_tokens - prompt_tokens) * safety_margin)
         
@@ -262,12 +268,17 @@ class RAGChain:
         max_context_chars = available_context_tokens * 4
         
         # 최소/최대 제한
-        min_context = 4000  # 최소 4,000자 (로컬 모델 고려)
+        min_context = 2000  # 최소 2,000자로 줄임 (로컬 모델 고려)
         max_context = 500000  # 최대 500,000자로 증가
         
         # 모델별 특별 제한
         if provider == "local":
-            max_context = 8000  # 로컬 모델은 최대 8,000자로 제한 (더 보수적으로)
+            # 로컬 모델은 더 작은 컨텍스트로 제한 (4096 토큰 기준)
+            # 사용 가능한 토큰의 50% = 약 2048 토큰
+            # 출력 토큰 1024 제외 = 약 1024 토큰
+            # 프롬프트 600 토큰 제외 = 약 424 토큰
+            # 424 토큰 * 4 = 약 1,696자
+            max_context = 6000  # 로컬 모델은 최대 6,000자로 제한 (더 보수적으로)
         elif provider == "openai" and model and "gpt-3.5" in model:
             max_context = 30000  # GPT-3.5 모델들은 30,000자로 제한 (약 7,500 토큰)
             
@@ -525,7 +536,13 @@ class RAGChain:
                 }
             
             # 1. 관련 문서 검색 (향상된 검색 사용)
-            relevant_docs = self.vector_db.search(processed_question, k=settings.k_documents)
+            # 로컬 모델의 경우 검색 문서 수를 줄임
+            k_docs = settings.k_documents
+            if self.current_provider == "local":
+                k_docs = min(4, settings.k_documents)  # 로컬 모델은 최대 4개 문서만
+                logger.info(f"로컬 모델 사용 중 - 검색 문서 수를 {k_docs}개로 제한")
+            
+            relevant_docs = self.vector_db.search(processed_question, k=k_docs)
             logger.info(f"검색 결과: {len(relevant_docs)}개 문서")
             
             if not relevant_docs:
