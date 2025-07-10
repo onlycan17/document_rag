@@ -56,8 +56,8 @@ class Settings(BaseSettings):
 
     # 하이브리드 검색 설정
     enable_hybrid_search: bool = os.getenv("ENABLE_HYBRID_SEARCH", "false").lower() == "true"
-    keyword_search_weight: float = 0.3  # 키워드 검색 가중치
-    vector_search_weight: float = 0.7   # 벡터 검색 가중치
+    keyword_search_weight: float = float(os.getenv("KEYWORD_SEARCH_WEIGHT", "0.3"))  # 키워드 검색 가중치
+    vector_search_weight: float = float(os.getenv("VECTOR_SEARCH_WEIGHT", "0.7"))   # 벡터 검색 가중치
 
     # 쿼리 최적화 설정
     enable_query_expansion: bool = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"

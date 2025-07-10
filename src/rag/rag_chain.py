@@ -2,13 +2,18 @@ from typing import List, Dict, Any, Optional
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_anthropic import ChatAnthropic
-from langchain_community.llms import Ollama
 from langchain.prompts import PromptTemplate
 from langchain.schema import Document
-from langchain.schema.runnable import RunnablePassthrough
 from config import settings
 from src.vectorstore import VectorDatabase
-import requests
+from src.models import ModelRegistry
+from src.utils import TextProcessor
+from src.constants import (
+    MODEL_PROMPT_TOKENS, MODEL_MIN_CONTEXT, MODEL_MAX_CONTEXT,
+    MODEL_SAFETY_MARGIN, LOCAL_MODEL_SAFETY_MARGIN, TOKEN_TO_CHAR_RATIO,
+    OPTIMAL_DOC_LENGTH_RANGE, MAX_DOC_LENGTH_SCORE, LOCAL_MODEL_MAX_DOCUMENTS,
+    REQUEST_TIMEOUT
+)
 import logging
 
 # 로거 설정
@@ -28,8 +33,12 @@ class RAGChain:
         self.current_provider = provider or settings.llm_provider
         self.current_model = model
         
-        # 모델별 최대 토큰 설정
-        self.model_max_tokens = self._get_model_max_tokens()
+        # 모델 레지스트리에서 설정 가져오기
+        if settings.llm_provider == "local":
+            ModelRegistry.update_local_model_config(
+                settings.local_llm_max_tokens,
+                settings.local_llm_context_window
+            )
     
     def _initialize_llm(self, provider: Optional[str] = None, model: Optional[str] = None):
         """LLM 초기화"""
@@ -140,98 +149,17 @@ class RAGChain:
         # 새로운 LCEL 방식 사용
         return self.prompt_template | self.llm
     
-    def _get_model_max_tokens(self) -> dict:
+    def _get_model_max_tokens(self, model_id: str) -> int:
         """모델별 최대 토큰 수 반환"""
-        # 각 모델의 최대 출력 토큰 수 (입력 컨텍스트는 별도)
-        model_tokens = {
-            # OpenAI 모델
-            "gpt-3.5-turbo": 4096,
-            "gpt-3.5-turbo-16k": 4096,
-            "gpt-4": 8192,
-            "gpt-4-32k": 8192,
-            "gpt-4-turbo": 4096,
-            "gpt-4-turbo-preview": 4096,
-            "gpt-4o": 4096,
-            "gpt-4o-mini": 16384,
-            
-            # Google Gemini 모델
-            "gemini-1.5-flash": 8192,
-            "gemini-1.5-flash-8b": 8192,
-            "gemini-1.5-pro": 8192,
-            "gemini-2.0-flash": 8192,
-            "gemini-2.5-flash": 8192,
-            "gemini-1.0-pro": 2048,
-            "gemini-pro": 2048,
-            
-            # Anthropic Claude 모델
-            "claude-3-5-sonnet-20241022": 8192,
-            "claude-3-haiku-20240307": 4096,
-            "claude-3-sonnet-20240229": 4096,
-            "claude-3-opus-20240229": 4096,
-            "claude-2.1": 4096,
-            "claude-2.0": 4096,
-            "claude-instant-1.2": 4096,
-            
-            # 로컬 모델 (설정에서 가져오거나 기본값)
-            "local-model": settings.local_llm_max_tokens if hasattr(settings, 'local_llm_max_tokens') else 512,
-        }
-        
-        return model_tokens
+        return ModelRegistry.get_max_tokens(model_id, default=settings.max_tokens)
     
-    def _get_model_context_window(self) -> dict:
+    def _get_model_context_window(self, model_id: str) -> int:
         """모델별 전체 컨텍스트 윈도우 크기 반환 (토큰 단위)"""
-        context_windows = {
-            # OpenAI 모델
-            "gpt-3.5-turbo": 16385,  # 16k
-            "gpt-3.5-turbo-16k": 16385,
-            "gpt-4": 8192,
-            "gpt-4-32k": 32768,
-            "gpt-4-turbo": 128000,
-            "gpt-4-turbo-preview": 128000,
-            "gpt-4o": 128000,
-            "gpt-4o-mini": 128000,
-            
-            # Google Gemini 모델
-            "gemini-1.5-flash": 1048576,  # 1M tokens
-            "gemini-1.5-flash-8b": 1048576,
-            "gemini-1.5-pro": 2097152,  # 2M tokens
-            "gemini-2.0-flash": 1048576,  # 1M tokens
-            "gemini-2.5-flash": 1048576,
-            "gemini-1.0-pro": 32768,
-            "gemini-pro": 32768,
-            
-            # Anthropic Claude 모델
-            "claude-3-5-sonnet-20241022": 200000,
-            "claude-3-haiku-20240307": 200000,
-            "claude-3-sonnet-20240229": 200000,
-            "claude-3-opus-20240229": 200000,
-            "claude-2.1": 200000,
-            "claude-2.0": 100000,
-            "claude-instant-1.2": 100000,
-            
-            # 로컬 모델 (설정에서 가져오거나 기본값)
-            "local-model": settings.local_llm_context_window if hasattr(settings, 'local_llm_context_window') else 4096,
-        }
-        
-        return context_windows
+        return ModelRegistry.get_context_window(model_id, default=8192)
     
     def _get_max_tokens_for_model(self, provider: str, model: str) -> int:
         """특정 모델의 최대 토큰 수 반환"""
-        model_tokens = self._get_model_max_tokens()
-        
-        # 모델 이름으로 직접 찾기
-        if model in model_tokens:
-            return model_tokens[model]
-        
-        # 기본값 반환
-        if provider == "openai":
-            return 4096
-        elif provider == "google":
-            return 8192
-        elif provider == "anthropic":
-            return 4096
-        else:
-            return settings.max_tokens  # 설정 파일의 기본값 사용
+        return self._get_model_max_tokens(model)
     
     def _get_max_context_length_for_model(self, provider: str = None, model: str = None) -> int:
         """현재 모델의 최대 컨텍스트 길이 계산 (문자 단위)"""
@@ -241,46 +169,33 @@ class RAGChain:
         if not model:
             model = self.current_model or getattr(settings, f"{provider}_model", None)
         
-        context_windows = self._get_model_context_window()
-        
         # 모델의 전체 컨텍스트 윈도우 크기 (토큰)
-        total_context_tokens = context_windows.get(model, 8192)
+        total_context_tokens = self._get_model_context_window(model)
         
         # 출력용 토큰 예약
         output_tokens = self._get_max_tokens_for_model(provider, model)
         
-        # 프롬프트 템플릿용 토큰 예약 (더 많이 예약)
-        prompt_tokens = 800
+        # 프롬프트 템플릿용 토큰 예약
+        prompt_tokens = MODEL_PROMPT_TOKENS.get(provider, MODEL_PROMPT_TOKENS["default"])
         
-        # 안전 마진 (30% - 더 보수적으로)
-        safety_margin = 0.7
-        
-        # 로컬 모델은 더 보수적으로 처리
-        if provider == "local":
-            # 로컬 모델은 컨텍스트 윈도우가 작으므로 더 많은 마진 필요
-            safety_margin = 0.5  # 50%만 사용
-            prompt_tokens = 600  # 프롬프트 토큰도 줄임
+        # 안전 마진
+        safety_margin = LOCAL_MODEL_SAFETY_MARGIN if provider == "local" else MODEL_SAFETY_MARGIN
         
         # 사용 가능한 컨텍스트 토큰
         available_context_tokens = int((total_context_tokens - output_tokens - prompt_tokens) * safety_margin)
         
-        # 토큰을 문자로 변환 (평균적으로 1토큰 = 4문자)
-        max_context_chars = available_context_tokens * 4
+        # 토큰을 문자로 변환
+        max_context_chars = available_context_tokens * TOKEN_TO_CHAR_RATIO
         
         # 최소/최대 제한
-        min_context = 2000  # 최소 2,000자로 줄임 (로컬 모델 고려)
-        max_context = 500000  # 최대 500,000자로 증가
+        min_context = MODEL_MIN_CONTEXT.get(provider, MODEL_MIN_CONTEXT["default"])
+        max_context = MODEL_MAX_CONTEXT["default"]
         
         # 모델별 특별 제한
         if provider == "local":
-            # 로컬 모델은 더 작은 컨텍스트로 제한 (4096 토큰 기준)
-            # 사용 가능한 토큰의 50% = 약 2048 토큰
-            # 출력 토큰 1024 제외 = 약 1024 토큰
-            # 프롬프트 600 토큰 제외 = 약 424 토큰
-            # 424 토큰 * 4 = 약 1,696자
-            max_context = 6000  # 로컬 모델은 최대 6,000자로 제한 (더 보수적으로)
+            max_context = MODEL_MAX_CONTEXT["local"]
         elif provider == "openai" and model and "gpt-3.5" in model:
-            max_context = 30000  # GPT-3.5 모델들은 30,000자로 제한 (약 7,500 토큰)
+            max_context = MODEL_MAX_CONTEXT["gpt-3.5"]
             
         return max(min_context, min(max_context, max_context_chars))
     
@@ -466,12 +381,14 @@ class RAGChain:
         """컨텐츠 길이 점수 계산"""
         length = len(content)
         
-        # 최적 길이 범위: 200-1000자
-        if 200 <= length <= 1000:
+        # 최적 길이 범위
+        min_optimal, max_optimal = OPTIMAL_DOC_LENGTH_RANGE
+        
+        if min_optimal <= length <= max_optimal:
             return 1.0
-        elif 100 <= length < 200 or 1000 < length <= 1500:
+        elif min_optimal // 2 <= length < min_optimal or max_optimal < length <= max_optimal * 1.5:
             return 0.8
-        elif 50 <= length < 100 or 1500 < length <= 2000:
+        elif min_optimal // 4 <= length < min_optimal // 2 or max_optimal * 1.5 < length <= MAX_DOC_LENGTH_SCORE:
             return 0.6
         else:
             return 0.3
@@ -539,7 +456,7 @@ class RAGChain:
             # 로컬 모델의 경우 검색 문서 수를 줄임
             k_docs = settings.k_documents
             if self.current_provider == "local":
-                k_docs = min(4, settings.k_documents)  # 로컬 모델은 최대 4개 문서만
+                k_docs = min(LOCAL_MODEL_MAX_DOCUMENTS, settings.k_documents)  # 로컬 모델 제한
                 logger.info(f"로컬 모델 사용 중 - 검색 문서 수를 {k_docs}개로 제한")
             
             relevant_docs = self.vector_db.search(processed_question, k=k_docs)
@@ -636,77 +553,7 @@ class RAGChain:
         
         # 동적 확장이 실패하거나 비활성화된 경우, 정적 확장 사용
         if settings.enable_query_expansion:
-            # 더 포괄적인 쿼리 확장
-            query_expansions = {
-                # 몽촌토성 관련
-                "몽촌토성": "몽촌토성 몽촌 토성 백제 한성 왕성 토성 백제왕성 백제토성 한성백제토성",
-                "몽촌": "몽촌 몽촌토성 백제 한성",
-                "토성": "토성 몽촌토성 성곽 성벽 토축성 판축",
-                
-                # 백제/고구려 관련
-                "백제": "백제 한성백제 백제시대 백제왕조 백제왕국 백제토기",
-                "고구려": "고구려 고구려시대 고구려토기 고구려유물",
-                "한성": "한성 한성백제 한성시대 한성도읍 서울",
-                
-                # 고고학 관련
-                "발굴": "발굴 발굴조사 고고학 유적 출토 조사 시굴 정밀발굴",
-                "유물": "유물 토기 유구 출토품 출토유물 도자기 자기",
-                "토기": "토기 도기 자기 그릇 토제품 백제토기 고구려토기",
-                "유적": "유적 유구 유물 흔적 건물지 주거지",
-                
-                # 지역 관련
-                "북문": "북문 북문지 북쪽문 북측",
-                "남문": "남문 남문지 남쪽문 남측",
-                "동문": "동문 동문지 동쪽문 동측",
-                "서문": "서문 서문지 서쪽문 서측",
-                
-                # 시대 관련
-                "삼국시대": "삼국시대 백제 고구려 신라 삼국",
-                "통일신라": "통일신라 통일신라시대 신라",
-                
-                # 정보시스템 관련
-                "시스템": "정보시스템 시스템 전산시스템 IT시스템",
-                "구축": "구축 건설 개발 설치 도입 구현",
-                "운영": "운영 관리 유지보수 운용 administration",
-                "지침": "지침 가이드 규정 가이드라인 매뉴얼 안내서",
-                "보안": "보안 security 정보보호 보호 사이버보안",
-                "관리": "관리 management 관리자 운영관리 시스템관리"
-            }
-            
-            # 복합 확장 처리 (여러 키워드가 포함된 경우)
-            expanded_terms = []
-            query_words = processed_query.split()
-            
-            for word in query_words:
-                if word in query_expansions:
-                    expanded_terms.append(query_expansions[word])
-                else:
-                    # 부분 일치도 확인
-                    for key, value in query_expansions.items():
-                        if key in word or word in key:
-                            expanded_terms.append(value)
-                            break
-                    else:
-                        expanded_terms.append(word)
-            
-            # 중복 제거하면서 확장된 쿼리 생성
-            all_terms = []
-            for term in expanded_terms:
-                all_terms.extend(term.split())
-            
-            # 중복 제거 (순서 유지)
-            seen = set()
-            unique_terms = []
-            for term in all_terms:
-                if term not in seen:
-                    seen.add(term)
-                    unique_terms.append(term)
-            
-            processed_query = ' '.join(unique_terms)
-            
-            # 쿼리가 너무 길어지는 것 방지
-            if len(processed_query.split()) > 20:
-                processed_query = ' '.join(processed_query.split()[:20])
+            processed_query = TextProcessor.expand_query(processed_query, use_static_expansion=True)
         
         logger.info(f"쿼리 전처리: '{query}' -> '{processed_query}'")
         return processed_query
@@ -727,13 +574,8 @@ class RAGChain:
     
     def _extract_keywords(self, query: str) -> List[str]:
         """쿼리에서 핵심 키워드 추출"""
-        # 한국어 불용어
-        stopwords = {'이', '그', '저', '의', '가', '을', '를', '에', '와', '과', '도', '로', '으로', '는', '은', '이다', '있다', '없다', '하다', '무엇', '어떻게', '왜', '언제', '어디서'}
-        
-        words = query.replace('?', '').replace('!', '').split()
-        keywords = [word for word in words if len(word) > 1 and word not in stopwords]
-        
-        return keywords[:3]  # 상위 3개 키워드만
+        # TextProcessor를 사용하여 키워드 추출
+        return TextProcessor.extract_keywords(query, top_k=3)
     
     def _generate_no_results_message(self, question: str, doc_count: int) -> str:
         """검색 결과 없음 메시지 생성"""
@@ -823,44 +665,7 @@ class RAGChain:
         
     def get_available_models(self) -> Dict[str, List[Dict[str, str]]]:
         """사용 가능한 모델 목록 반환"""
-        model_tokens = self._get_model_max_tokens()
-        context_windows = self._get_model_context_window()
-        
-        def format_context_size(tokens):
-            """토큰 수를 읽기 쉬운 형태로 변환"""
-            if tokens >= 1000000:
-                return f"{tokens // 1000000}M"
-            elif tokens >= 1000:
-                return f"{tokens // 1000}K"
-            else:
-                return str(tokens)
-        
-        models = {
-            "openai": [
-                {"name": "GPT-3.5 Turbo", "model": "gpt-3.5-turbo", "description": f"빠르고 효율적 ({format_context_size(context_windows.get('gpt-3.5-turbo', 16385))} 컨텍스트, 최대 {model_tokens.get('gpt-3.5-turbo', 4096)}토큰)"},
-                {"name": "GPT-4", "model": "gpt-4", "description": f"더 정확하지만 느림 ({format_context_size(context_windows.get('gpt-4', 8192))} 컨텍스트, 최대 {model_tokens.get('gpt-4', 8192)}토큰)"},
-                {"name": "GPT-4 Turbo", "model": "gpt-4-turbo-preview", "description": f"GPT-4의 빠른 버전 ({format_context_size(context_windows.get('gpt-4-turbo-preview', 128000))} 컨텍스트, 최대 {model_tokens.get('gpt-4-turbo-preview', 4096)}토큰)"},
-                {"name": "GPT-4o", "model": "gpt-4o", "description": f"최신 옴니 모델 ({format_context_size(context_windows.get('gpt-4o', 128000))} 컨텍스트, 최대 {model_tokens.get('gpt-4o', 4096)}토큰)"},
-                {"name": "GPT-4o mini", "model": "gpt-4o-mini", "description": f"가벼운 옴니 모델 ({format_context_size(context_windows.get('gpt-4o-mini', 128000))} 컨텍스트, 최대 {model_tokens.get('gpt-4o-mini', 16384)}토큰)"}
-            ],
-            "google": [
-                {"name": "Gemini 1.5 Flash", "model": "gemini-1.5-flash", "description": f"빠른 응답 ({format_context_size(context_windows.get('gemini-1.5-flash', 1048576))} 컨텍스트, 최대 {model_tokens.get('gemini-1.5-flash', 8192)}토큰)"},
-                {"name": "Gemini 1.5 Flash-8B", "model": "gemini-1.5-flash-8b", "description": f"더 빠른 경량 모델 ({format_context_size(context_windows.get('gemini-1.5-flash-8b', 1048576))} 컨텍스트, 최대 {model_tokens.get('gemini-1.5-flash-8b', 8192)}토큰)"},
-                {"name": "Gemini 2.0 Flash", "model": "gemini-2.0-flash", "description": f"최신 2.0 버전 ({format_context_size(context_windows.get('gemini-2.0-flash', 1048576))} 컨텍스트, 최대 {model_tokens.get('gemini-2.0-flash', 8192)}토큰)"},
-                {"name": "Gemini 2.5 Flash", "model": "gemini-2.5-flash", "description": f"최신 2.5 버전 ({format_context_size(context_windows.get('gemini-2.5-flash', 1048576))} 컨텍스트, 최대 {model_tokens.get('gemini-2.5-flash', 8192)}토큰)"},
-                {"name": "Gemini 1.5 Pro", "model": "gemini-1.5-pro", "description": f"고급 기능 ({format_context_size(context_windows.get('gemini-1.5-pro', 2097152))} 컨텍스트, 최대 {model_tokens.get('gemini-1.5-pro', 8192)}토큰)"},
-                {"name": "Gemini 1.0 Pro", "model": "gemini-1.0-pro", "description": f"안정적인 버전 ({format_context_size(context_windows.get('gemini-1.0-pro', 32768))} 컨텍스트, 최대 {model_tokens.get('gemini-1.0-pro', 2048)}토큰)"}
-            ],
-            "anthropic": [
-                {"name": "Claude 3.5 Sonnet", "model": "claude-3-5-sonnet-20241022", "description": f"최신 최고 성능 ({format_context_size(context_windows.get('claude-3-5-sonnet-20241022', 200000))} 컨텍스트, 최대 {model_tokens.get('claude-3-5-sonnet-20241022', 8192)}토큰)"},
-                {"name": "Claude 3 Haiku", "model": "claude-3-haiku-20240307", "description": f"빠르고 효율적 ({format_context_size(context_windows.get('claude-3-haiku-20240307', 200000))} 컨텍스트, 최대 {model_tokens.get('claude-3-haiku-20240307', 4096)}토큰)"},
-                {"name": "Claude 3 Sonnet", "model": "claude-3-sonnet-20240229", "description": f"균형잡힌 성능 ({format_context_size(context_windows.get('claude-3-sonnet-20240229', 200000))} 컨텍스트, 최대 {model_tokens.get('claude-3-sonnet-20240229', 4096)}토큰)"},
-                {"name": "Claude 3 Opus", "model": "claude-3-opus-20240229", "description": f"최고 성능 ({format_context_size(context_windows.get('claude-3-opus-20240229', 200000))} 컨텍스트, 최대 {model_tokens.get('claude-3-opus-20240229', 4096)}토큰)"}
-            ],
-            "local": [
-                {"name": "로컬 모델", "model": "local-model", "description": f"현재 실행 중인 모델 ({format_context_size(context_windows.get('local-model', 8192))} 컨텍스트, 최대 {model_tokens.get('local-model', 4096)}토큰)"}
-            ]
-        }
+        models = ModelRegistry.get_all_models()
         
         # 로컬 모델이 실행 중인 경우, 실제 모델 목록 가져오기
         local_models = self._get_local_models()
@@ -872,8 +677,8 @@ class RAGChain:
     def _get_local_models(self) -> List[Dict[str, str]]:
         """로컬 서버에서 사용 가능한 모델 목록 조회"""
         try:
-            import requests
-            response = requests.get(f"{settings.local_llm_base_url}/v1/models", timeout=2)
+            import requests  # 로컬 import로 옵셔널 의존성 처리
+            response = requests.get(f"{settings.local_llm_base_url}/v1/models", timeout=REQUEST_TIMEOUT)
             if response.status_code == 200:
                 data = response.json()
                 local_models = []

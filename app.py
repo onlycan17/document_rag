@@ -18,6 +18,9 @@ from src.rag import RAGChain
 from src.vectorstore import VectorDatabase
 from src.utils.logging_config import setup_logging, get_logger
 from src.utils.token_counter import TokenCounter
+from src.constants import (
+    LOG_FILE_PATTERN, TEMP_DOCUMENT_PATH, MAX_LOG_LINES_DISPLAY
+)
 
 # 로깅 설정
 setup_logging(logging.INFO)
@@ -90,7 +93,7 @@ def main():
                     status_text = st.empty()
                     
                     # 임시 파일로 저장
-                    temp_path = f"./data/documents/{uploaded_file.name}"
+                    temp_path = TEMP_DOCUMENT_PATH.format(filename=uploaded_file.name)
                     os.makedirs(os.path.dirname(temp_path), exist_ok=True)
                     
                     with open(temp_path, 'wb') as f:
@@ -181,12 +184,12 @@ def main():
         
         # 로그 뷰어 (확장 가능)
         with st.expander("📋 처리 로그 보기"):
-            log_file = f"./logs/rag_app_{datetime.now().strftime('%Y%m%d')}.log"
+            log_file = LOG_FILE_PATTERN.format(date=datetime.now().strftime('%Y%m%d'))
             if os.path.exists(log_file):
                 with open(log_file, 'r', encoding='utf-8') as f:
-                    # 최근 50줄만 표시
+                    # 최근 N줄만 표시
                     lines = f.readlines()
-                    recent_lines = lines[-50:] if len(lines) > 50 else lines
+                    recent_lines = lines[-MAX_LOG_LINES_DISPLAY:] if len(lines) > MAX_LOG_LINES_DISPLAY else lines
                     st.text(''.join(recent_lines))
             else:
                 st.text("로그 파일이 없습니다.")

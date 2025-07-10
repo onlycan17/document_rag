@@ -4,13 +4,13 @@ from langchain.schema import Document
 from langchain.retrievers import BM25Retriever
 from config import settings
 from src.embeddings import EmbeddingModel
+from src.utils import TextProcessor
 import os
 import pickle
 import logging
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -126,16 +126,8 @@ class EnhancedVectorDatabase:
     
     def _preprocess_text_for_keyword_search(self, text: str) -> str:
         """키워드 검색을 위한 텍스트 전처리"""
-        # 기본 정제
-        text = re.sub(r'[^\w\s가-힣]', ' ', text)  # 특수문자 제거
-        text = re.sub(r'\s+', ' ', text)  # 연속 공백 제거
-        
-        # 한국어 불용어 제거 (간단한 예시)
-        korean_stopwords = {'이', '그', '저', '의', '가', '을', '를', '에', '와', '과', '도', '로', '으로', '는', '은', '이다', '있다', '없다', '하다'}
-        words = text.split()
-        filtered_words = [word for word in words if word not in korean_stopwords and len(word) > 1]
-        
-        return ' '.join(filtered_words)
+        # TextProcessor를 사용하여 텍스트 정제 및 불용어 제거
+        return TextProcessor.clean_text(text, remove_stopwords=True)
     
     def search(self, query: str, k: int = None) -> List[Tuple[Document, float]]:
         """

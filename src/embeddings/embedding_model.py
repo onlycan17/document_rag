@@ -3,6 +3,7 @@ from sentence_transformers import SentenceTransformer
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from config import settings
+from src.utils import TextProcessor
 import numpy as np
 import logging
 
@@ -186,22 +187,8 @@ class EmbeddingModel:
         - 특수 문자 정리
         - 너무 짧은 텍스트 필터링
         """
-        if not text or not isinstance(text, str):
-            return ""
-        
-        # 공백 정규화
-        text = ' '.join(text.split())
-        
-        # 특수 문자 정리
-        text = text.replace('\u200b', '')  # Zero-width space
-        text = text.replace('\ufeff', '')  # BOM
-        text = text.replace('\xa0', ' ')   # Non-breaking space
-        
-        # 너무 짧은 텍스트 제외
-        if len(text.strip()) < 10:
-            return ""
-        
-        return text.strip()
+        cleaned = TextProcessor.clean_text(text, remove_stopwords=False)
+        return cleaned if TextProcessor.is_valid_text(cleaned, min_length=10) else ""
     
     def _preprocess_query(self, query: str) -> str:
         """
@@ -215,35 +202,33 @@ class EmbeddingModel:
         # 기본 전처리
         query = self._preprocess_text(query)
         
-        # 쿼리 확장 (선택적)
-        query_expansions = {
-            # 몽촌토성 관련
-            "몽촌토성": "몽촌토성 백제 한성",
-            "몽촌": "몽촌 몽촌토성",
-            "토성": "토성 몽촌토성 성곽",
-            
-            # 백제/고구려 관련
+        # 기본적인 쿼리 확장만 사용 (임베딩에서는 과도한 확장 회피)
+        # RAG의 _preprocess_query에서는 전체 확장을 사용
+        words = query.split()
+        expanded_words = []
+        
+        # 비교적 단순한 확장만 수행
+        simple_expansions = {
+            "몽촌토성": "몽촌토성 몽촌 토성",
             "백제": "백제 한성백제",
-            "고구려": "고구려 고구려시대",
-            "한성": "한성 한성백제",
-            
-            # 고고학 관련
-            "발굴": "발굴 발굴조사 출토",
-            "유물": "유물 토기 출토품",
-            "토기": "토기 도기 자기",
-            
-            # 정보시스템 관련
-            "시스템": "정보시스템 시스템",
-            "구축": "구축 건설 설치",
-            "운영": "운영 관리 유지보수",
-            "지침": "지침 가이드 규정"
+            "시스템": "시스템 정보시스템"
         }
         
-        for original, expanded in query_expansions.items():
-            if original in query and original != query:
-                query = query.replace(original, expanded)
+        for word in words:
+            if word in simple_expansions:
+                expanded_words.extend(simple_expansions[word].split())
+            else:
+                expanded_words.append(word)
         
-        return query
+        # 중복 제거
+        unique_words = []
+        seen = set()
+        for word in expanded_words:
+            if word not in seen:
+                seen.add(word)
+                unique_words.append(word)
+        
+        return ' '.join(unique_words[:10])  # 최대 10개 단어로 제한
     
     def get_embedding_dimension(self) -> int:
         """임베딩 차원 반환"""
