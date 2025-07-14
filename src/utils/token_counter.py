@@ -23,7 +23,9 @@ class TokenCounter:
             "google": {
                 "gemini-1.5-flash": 1048576,  # 1M tokens
                 "gemini-1.5-flash-8b": 1048576,  # 1M tokens
+                "gemini-2.5-flash": 1048576,  # 1M tokens
                 "gemini-1.5-pro": 2097152,  # 2M tokens
+                "gemini-2.5-pro": 2097152,  # 2M tokens
                 "gemini-1.0-pro": 32760
             },
             "anthropic": {

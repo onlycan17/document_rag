@@ -50,4 +50,4 @@ temp/
 # Large files
 *.pdf
 *.doc
-*.docx
+*.docx.cursor/

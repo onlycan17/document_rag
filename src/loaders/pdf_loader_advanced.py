@@ -91,12 +91,12 @@ class AdvancedPDFLoader:
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
                 # DPI를 높이면 품질은 좋아지지만 처리 시간이 오래 걸림
+                # thread_count 제거하여 pickle 오류 방지
                 images = convert_from_path(
                     file_path, 
                     dpi=200,
                     output_folder=temp_dir,
-                    fmt='png',
-                    thread_count=2
+                    fmt='png'
                 )
                 
                 # 각 페이지에서 OCR 수행

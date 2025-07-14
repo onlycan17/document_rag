@@ -2,12 +2,62 @@ from typing import List, Union
 from sentence_transformers import SentenceTransformer
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_upstage import UpstageEmbeddings
 from config import settings
 from src.utils import TextProcessor
 import numpy as np
 import logging
+import time
+import random
+from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+def api_retry_with_backoff(max_retries=3, base_delay=1.0, max_delay=60.0):
+    """
+    API 호출 재시도 데코레이터
+    - 429 오류 시 지수 백오프로 재시도
+    - 네트워크 오류 시 재시도
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    error_message = str(e)
+                    
+                    # 429 오류 (Too Many Requests) 확인
+                    if "429" in error_message or "too_many_requests" in error_message.lower():
+                        if attempt < max_retries:
+                            # 지수 백오프 계산 (랜덤 지터 포함)
+                            delay = min(base_delay * (2 ** attempt) + random.uniform(0, 1), max_delay)
+                            logger.warning(f"API 요청 제한 초과 (429 오류), {delay:.1f}초 후 재시도... (시도 {attempt + 1}/{max_retries + 1})")
+                            time.sleep(delay)
+                            continue
+                    
+                    # 네트워크 관련 오류 확인
+                    elif any(keyword in error_message.lower() for keyword in 
+                            ["connection", "timeout", "network", "temporary"]):
+                        if attempt < max_retries:
+                            delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
+                            logger.warning(f"네트워크 오류 발생, {delay:.1f}초 후 재시도... (시도 {attempt + 1}/{max_retries + 1})")
+                            time.sleep(delay)
+                            continue
+                    
+                    # 재시도 불가능한 오류면 즉시 발생
+                    raise e
+            
+            # 모든 재시도가 실패한 경우
+            logger.error(f"API 호출이 {max_retries + 1}번 모두 실패했습니다: {last_exception}")
+            raise last_exception
+        
+        return wrapper
+    return decorator
 
 class EmbeddingModel:
     """
@@ -34,6 +84,14 @@ class EmbeddingModel:
             )
             self.model_type = "openai"
             logger.info("OpenAI 임베딩 모델 초기화 완료")
+        elif settings.embedding_provider == "upstage" and settings.upstage_api_key:
+            # 업스테이지 solar-embedding-1-large-query 모델 초기화
+            self.embeddings = UpstageEmbeddings(
+                api_key=settings.upstage_api_key,
+                model=settings.upstage_embedding_model
+            )
+            self.model_type = "upstage"
+            logger.info(f"업스테이지 임베딩 모델 초기화 완료: {settings.upstage_embedding_model}")
         else:
             # 한국어 성능이 우수한 모델 우선 선택
             model_name = self._select_best_korean_model()
@@ -99,11 +157,13 @@ class EmbeddingModel:
         logger.warning("한국어 특화 모델 로드 실패, 기본 모델 사용")
         return settings.embedding_model_name
     
+    @api_retry_with_backoff(max_retries=3, base_delay=2.0, max_delay=120.0)
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
         여러 문서를 배치로 임베딩
         - 빈 텍스트 필터링
         - 배치 처리 최적화
+        - API 요청 제한 오류 재시도 지원
         """
         # 빈 텍스트 제거 및 전처리
         filtered_texts = []
@@ -151,10 +211,12 @@ class EmbeddingModel:
         
         return result
     
+    @api_retry_with_backoff(max_retries=3, base_delay=2.0, max_delay=120.0)
     def embed_query(self, text: str) -> List[float]:
         """
         단일 쿼리를 임베딩
         - 쿼리 전처리 및 확장
+        - API 요청 제한 오류 재시도 지원
         """
         # 쿼리 전처리
         processed_query = self._preprocess_query(text)
@@ -234,6 +296,8 @@ class EmbeddingModel:
         """임베딩 차원 반환"""
         if self.model_type == "openai":
             return 1536  # OpenAI text-embedding-ada-002
+        elif self.model_type == "upstage":
+            return 4096  # 업스테이지 solar-embedding-1-large-query
         else:
             # 테스트 임베딩으로 차원 확인
             try:
@@ -244,9 +308,15 @@ class EmbeddingModel:
     
     def get_model_info(self) -> dict:
         """현재 사용 중인 모델 정보 반환"""
+        model_name = "unknown"
+        if self.model_type == "upstage":
+            model_name = settings.upstage_embedding_model
+        else:
+            model_name = getattr(self.embeddings, 'model_name', 'unknown')
+        
         return {
             "type": self.model_type,
-            "model_name": getattr(self.embeddings, 'model_name', 'unknown'),
+            "model_name": model_name,
             "dimension": self.get_embedding_dimension(),
             "is_korean_optimized": self.model_type == "huggingface" and any(
                 korean_model in str(getattr(self.embeddings, 'model_name', ''))

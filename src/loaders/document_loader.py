@@ -60,40 +60,78 @@ class EnhancedDocumentLoader:
         - 향상된 전처리
         - 의미 기반 청킹 지원
         """
+        import time
+        start_time = time.time()
+        
         file_extension = Path(file_path).suffix.lower()
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+        file_name = Path(file_path).name
+        
+        logger.info(f"📄 문서 로딩 시작: {file_name} ({file_size_mb:.1f}MB, {file_extension})")
         
         if progress_callback:
             progress_callback(0.1, f"파일 로드 중... ({file_size_mb:.1f}MB)")
         
-        # 1. 파일 유형별 로딩
-        if file_extension in ['.txt', '.md']:
-            documents = self._load_text_file(file_path, progress_callback)
-        elif file_extension == '.pdf':
-            documents = self._load_pdf_file(file_path, progress_callback)
-        else:
-            raise ValueError(f"지원하지 않는 파일 형식입니다: {file_extension}")
-        
-        if progress_callback:
-            progress_callback(0.6, f"문서 전처리 중... ({len(documents)}개 페이지)")
-        
-        # 2. 문서 전처리 및 정제
-        processed_documents = self._preprocess_documents(documents)
-        
-        if progress_callback:
-            progress_callback(0.7, f"문서 분할 중... (전처리 완료)")
-        
-        # 3. 청킹 전략에 따른 분할
-        chunks = self._split_documents_optimized(processed_documents)
-        
-        # 4. 메타데이터 보강
-        enhanced_chunks = self._enhance_metadata(chunks, file_path)
-        
-        if progress_callback:
-            progress_callback(0.9, f"분할 완료! ({len(enhanced_chunks)}개 청크)")
-        
-        logger.info(f"문서 로딩 완료: {file_path} -> {len(enhanced_chunks)}개 청크")
-        return enhanced_chunks
+        try:
+            # 1. 파일 유형별 로딩
+            load_start = time.time()
+            if file_extension in ['.txt', '.md']:
+                documents = self._load_text_file(file_path, progress_callback)
+                load_method = "텍스트 로더"
+            elif file_extension == '.pdf':
+                documents = self._load_pdf_file(file_path, progress_callback)
+                load_method = "PDF 로더"
+            else:
+                raise ValueError(f"지원하지 않는 파일 형식입니다: {file_extension}")
+            
+            load_time = time.time() - load_start
+            logger.info(f"   ✓ {load_method} 완료: {len(documents)}개 페이지 ({load_time:.1f}초)")
+            
+            if progress_callback:
+                progress_callback(0.6, f"문서 전처리 중... ({len(documents)}개 페이지)")
+            
+            # 2. 문서 전처리 및 정제
+            preprocess_start = time.time()
+            processed_documents = self._preprocess_documents(documents)
+            preprocess_time = time.time() - preprocess_start
+            logger.info(f"   ✓ 전처리 완료: {len(processed_documents)}개 유효 페이지 ({preprocess_time:.1f}초)")
+            
+            if progress_callback:
+                progress_callback(0.7, f"문서 분할 중... (전처리 완료)")
+            
+            # 3. 청킹 전략에 따른 분할
+            chunk_start = time.time()
+            chunks = self._split_documents_optimized(processed_documents)
+            chunk_time = time.time() - chunk_start
+            logger.info(f"   ✓ 청킹 완료: {len(chunks)}개 청크 ({chunk_time:.1f}초)")
+            
+            # 4. 메타데이터 보강
+            metadata_start = time.time()
+            enhanced_chunks = self._enhance_metadata(chunks, file_path)
+            metadata_time = time.time() - metadata_start
+            logger.info(f"   ✓ 메타데이터 보강 완료 ({metadata_time:.1f}초)")
+            
+            if progress_callback:
+                progress_callback(0.9, f"분할 완료! ({len(enhanced_chunks)}개 청크)")
+            
+            total_time = time.time() - start_time
+            avg_chunk_size = sum(len(chunk.page_content) for chunk in enhanced_chunks) / len(enhanced_chunks) if enhanced_chunks else 0
+            
+            logger.info(f"✅ 문서 로딩 성공: {file_name}")
+            logger.info(f"   📊 총 처리 시간: {total_time:.1f}초")
+            logger.info(f"   📚 최종 청크 수: {len(enhanced_chunks)}개")
+            logger.info(f"   📏 평균 청크 크기: {avg_chunk_size:.0f}자")
+            
+            return enhanced_chunks
+            
+        except Exception as e:
+            total_time = time.time() - start_time
+            logger.error(f"❌ 문서 로딩 실패: {file_name}")
+            logger.error(f"   🕒 실패까지 소요 시간: {total_time:.1f}초")
+            logger.error(f"   💥 오류 내용: {str(e)}")
+            logger.error(f"   📁 파일 경로: {file_path}")
+            logger.error(f"   📊 파일 크기: {file_size_mb:.1f}MB")
+            raise
     
     def _load_text_file(self, file_path: str, progress_callback=None) -> List[Document]:
         """텍스트 파일 로딩 최적화"""

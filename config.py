@@ -29,8 +29,12 @@ class Settings(BaseSettings):
     local_llm_context_window: int = int(os.getenv("LOCAL_LLM_CONTEXT_WINDOW", "4096"))  # 로컬 모델 컨텍스트 윈도우
     
     # 임베딩 모델 설정
-    embedding_provider: str = "local"  # "openai" 또는 "local"
+    embedding_provider: str = "upstage"  # "openai", "local", "upstage"
     embedding_model_name: str = "sentence-transformers/xlm-r-100langs-bert-base-nli-stsb-mean-tokens"
+
+    # 업스테이지 임베딩 설정
+    upstage_api_key: Optional[str] = os.getenv("UPSTAGE_API_KEY")
+    upstage_embedding_model: str = "solar-embedding-1-large-query"
 
     # 한국어 최적화 임베딩 모델 설정 (우선 사용)
     korean_embedding_model: Optional[str] = os.getenv("KOREAN_EMBEDDING_MODEL", "jhgan/ko-sbert-multitask")

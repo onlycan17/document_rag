@@ -103,17 +103,17 @@ class ModelRegistry:
             "context_window": 1048576,
             "description": "최신 2.5 버전"
         },
-        "gemini-1.0-pro": {
+        "gemini-2.5-pro": {
             "provider": "google",
             "max_tokens": 2048,
             "context_window": 32768,
             "description": "안정적인 버전"
         },
-        "gemini-pro": {
+        "gemini-1.0-pro": {
             "provider": "google",
             "max_tokens": 2048,
             "context_window": 32768,
-            "description": "기본 Gemini Pro"
+            "description": "안정적인 버전"
         },
         
         # Anthropic Claude 모델

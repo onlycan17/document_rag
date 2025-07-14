@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Tuple, Optional
 from langchain_community.vectorstores import FAISS
 from langchain.schema import Document
-from langchain.retrievers import BM25Retriever
+from langchain_community.retrievers import BM25Retriever
 from config import settings
 from src.embeddings import EmbeddingModel
 from src.utils import TextProcessor
@@ -52,8 +52,10 @@ class EnhancedVectorDatabase:
             )
         elif settings.vector_db_type == "faiss":
             # FAISS 인덱스가 이미 존재하는지 확인
-            faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
-            if os.path.exists(faiss_index_path):
+            faiss_index_path = os.path.join(settings.vector_db_path, "index.faiss")
+            old_faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
+            
+            if os.path.exists(faiss_index_path) or os.path.exists(old_faiss_index_path):
                 self.load_faiss_index()
             else:
                 # 새로운 FAISS 인덱스 생성은 문서 추가 시 수행
@@ -392,46 +394,77 @@ class EnhancedVectorDatabase:
         logger.info("벡터 데이터베이스가 초기화되었습니다.")
     
     def save_faiss_index(self):
-        """FAISS 인덱스 저장"""
+        """FAISS 인덱스 저장 (pickle 오류 방지)"""
         if settings.vector_db_type == "faiss" and self.vector_store:
-            os.makedirs(settings.vector_db_path, exist_ok=True)
-            faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
-            
-            # 벡터 스토어와 문서 캐시를 함께 저장
-            data_to_save = {
-                'vector_store': self.vector_store,
-                'documents_cache': self.documents_cache
-            }
-            
-            with open(faiss_index_path, "wb") as f:
-                pickle.dump(data_to_save, f)
-            
-            logger.info("FAISS 인덱스 저장 완료")
+            try:
+                os.makedirs(settings.vector_db_path, exist_ok=True)
+                
+                # FAISS 벡터 스토어는 save_local 메서드 사용
+                self.vector_store.save_local(settings.vector_db_path)
+                
+                # 문서 캐시는 별도로 pickle로 저장
+                cache_path = os.path.join(settings.vector_db_path, "documents_cache.pkl")
+                with open(cache_path, "wb") as f:
+                    pickle.dump(self.documents_cache, f)
+                
+                logger.info(f"FAISS 인덱스 저장 완료: {len(self.documents_cache)}개 문서 캐시 포함")
+                
+            except Exception as e:
+                logger.error(f"FAISS 인덱스 저장 실패: {str(e)}")
+                # 저장 실패 시에도 계속 진행 (메모리에는 유지됨)
+                logger.warning("인덱스는 메모리에만 유지됩니다. 다음 실행 시 재구축이 필요합니다.")
     
     def load_faiss_index(self):
-        """FAISS 인덱스 로드"""
+        """FAISS 인덱스 로드 (pickle 오류 방지)"""
         if settings.vector_db_type == "faiss":
-            faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
-            
             try:
-                with open(faiss_index_path, "rb") as f:
-                    data = pickle.load(f)
-                
-                if isinstance(data, dict):
-                    # 새로운 형식 (벡터 스토어 + 문서 캐시)
-                    self.vector_store = data['vector_store']
-                    self.documents_cache = data.get('documents_cache', [])
+                # FAISS 벡터 스토어 로드
+                if os.path.exists(os.path.join(settings.vector_db_path, "index.faiss")):
+                    self.vector_store = FAISS.load_local(
+                        settings.vector_db_path, 
+                        self.embedding_model.embeddings,
+                        allow_dangerous_deserialization=True
+                    )
+                    
+                    # 문서 캐시 로드
+                    cache_path = os.path.join(settings.vector_db_path, "documents_cache.pkl")
+                    if os.path.exists(cache_path):
+                        with open(cache_path, "rb") as f:
+                            self.documents_cache = pickle.load(f)
+                    else:
+                        self.documents_cache = []
+                    
+                    # 키워드 검색 인덱스 재구축
+                    if self.documents_cache:
+                        self._update_keyword_search_index()
+                    
+                    logger.info(f"FAISS 인덱스 로드 완료 (문서 수: {len(self.documents_cache)})")
+                    
                 else:
-                    # 기존 형식 (벡터 스토어만)
-                    self.vector_store = data
-                    self.documents_cache = []
-                
-                # 키워드 검색 인덱스 재구축
-                if self.documents_cache:
-                    self._update_keyword_search_index()
-                
-                logger.info(f"FAISS 인덱스 로드 완료 (문서 수: {len(self.documents_cache)})")
-                
+                    # 기존 pickle 형식 파일이 있는지 확인 (하위 호환성)
+                    old_faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
+                    if os.path.exists(old_faiss_index_path):
+                        logger.info("기존 pickle 형식 인덱스 발견, 새 형식으로 마이그레이션...")
+                        with open(old_faiss_index_path, "rb") as f:
+                            data = pickle.load(f)
+                        
+                        if isinstance(data, dict):
+                            self.vector_store = data['vector_store']
+                            self.documents_cache = data.get('documents_cache', [])
+                        else:
+                            self.vector_store = data
+                            self.documents_cache = []
+                        
+                        # 새 형식으로 저장
+                        self.save_faiss_index()
+                        
+                        # 기존 파일 제거
+                        os.remove(old_faiss_index_path)
+                        logger.info("마이그레이션 완료")
+                    else:
+                        self.vector_store = None
+                        self.documents_cache = []
+                        
             except Exception as e:
                 logger.error(f"FAISS 인덱스 로드 실패: {str(e)}")
                 self.vector_store = None
