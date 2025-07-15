@@ -2,6 +2,7 @@
 from typing import List, Set, Dict, Optional
 import re
 import logging
+from .keyword_expander import KeywordExpander
 
 logger = logging.getLogger(__name__)
 
@@ -9,12 +10,33 @@ logger = logging.getLogger(__name__)
 class TextProcessor:
     """텍스트 전처리 및 쿼리 확장을 위한 공통 유틸리티"""
     
+    # 클래스 변수로 KeywordExpander 인스턴스
+    _keyword_expander = None
+    
     # 한국어 불용어 세트
     KOREAN_STOPWORDS: Set[str] = {
         '이', '그', '저', '의', '가', '을', '를', '에', '와', '과', '도', 
         '로', '으로', '는', '은', '이다', '있다', '없다', '하다', '되다',
         '수', '것', '등', '및', '또는', '또한', '즉', '만', '제', '위'
     }
+    
+    @classmethod
+    def get_keyword_expander(cls, embedding_model=None) -> KeywordExpander:
+        """
+        KeywordExpander 인스턴스를 반환 (싱글톤 패턴)
+        
+        Args:
+            embedding_model: 임베딩 모델 인스턴스 (옵션)
+            
+        Returns:
+            KeywordExpander 인스턴스
+        """
+        if cls._keyword_expander is None:
+            cls._keyword_expander = KeywordExpander(embedding_model=embedding_model)
+        elif embedding_model and cls._keyword_expander.embedding_model is None:
+            # 임베딩 모델이 새로 제공되었지만 기존 인스턴스에는 없는 경우
+            cls._keyword_expander.embedding_model = embedding_model
+        return cls._keyword_expander
     
     # 쿼리 확장 사전
     QUERY_EXPANSIONS: Dict[str, str] = {
@@ -107,13 +129,16 @@ class TextProcessor:
         return re.sub(pattern, ' ', text)
     
     @staticmethod
-    def expand_query(query: str, use_static_expansion: bool = True) -> str:
+    def expand_query(query: str, use_static_expansion: bool = True, 
+                    use_dynamic_expansion: bool = True, max_terms: int = 25) -> str:
         """
-        쿼리 확장
+        향상된 쿼리 확장
         
         Args:
             query: 확장할 쿼리
-            use_static_expansion: 정적 확장 사전 사용 여부
+            use_static_expansion: 정적 확장 사전 사용 여부 (하위 호환성)
+            use_dynamic_expansion: 동적 키워드 확장 사용 여부
+            max_terms: 최대 키워드 개수
             
         Returns:
             확장된 쿼리
@@ -121,10 +146,30 @@ class TextProcessor:
         if not query:
             return ""
         
-        expanded_terms = []
-        query_words = query.split()
+        # 동적 키워드 확장 사용
+        if use_dynamic_expansion:
+            try:
+                keyword_expander = TextProcessor.get_keyword_expander()
+                expanded_keywords = keyword_expander.expand_keywords(
+                    query, 
+                    max_terms=max_terms,
+                    use_semantic=True,
+                    use_domain=True
+                )
+                
+                if expanded_keywords:
+                    result = ' '.join(expanded_keywords)
+                    logger.info(f"동적 키워드 확장: '{query}' -> '{result[:100]}...'")
+                    return result
+                    
+            except Exception as e:
+                logger.warning(f"동적 키워드 확장 실패, 정적 확장 사용: {str(e)}")
         
+        # 기존 정적 확장 로직 (하위 호환성)
         if use_static_expansion:
+            expanded_terms = []
+            query_words = query.split()
+            
             for word in query_words:
                 if word in TextProcessor.QUERY_EXPANSIONS:
                     expanded_terms.append(TextProcessor.QUERY_EXPANSIONS[word])
@@ -136,24 +181,25 @@ class TextProcessor:
                             break
                     else:
                         expanded_terms.append(word)
-        else:
-            expanded_terms = query_words
+            
+            # 중복 제거하면서 확장된 쿼리 생성
+            all_terms = []
+            for term in expanded_terms:
+                if isinstance(term, str):
+                    all_terms.extend(term.split())
+            
+            # 중복 제거 (순서 유지)
+            seen = set()
+            unique_terms = []
+            for term in all_terms:
+                if term not in seen and len(term) > 1:
+                    seen.add(term)
+                    unique_terms.append(term)
+            
+            return ' '.join(unique_terms[:max_terms])
         
-        # 중복 제거하면서 확장된 쿼리 생성
-        all_terms = []
-        for term in expanded_terms:
-            if isinstance(term, str):
-                all_terms.extend(term.split())
-        
-        # 중복 제거 (순서 유지)
-        seen = set()
-        unique_terms = []
-        for term in all_terms:
-            if term not in seen and len(term) > 1:
-                seen.add(term)
-                unique_terms.append(term)
-        
-        return ' '.join(unique_terms[:30])  # 최대 30개 단어로 제한
+        # 확장 없이 원본 반환
+        return query
     
     @staticmethod
     def extract_keywords(text: str, top_k: int = 10) -> List[str]:

@@ -522,40 +522,72 @@ class RAGChain:
             }
     
     def _preprocess_query(self, query: str) -> str:
-        """쿼리 전처리 및 확장"""
+        """향상된 쿼리 전처리 및 확장"""
         if not settings.enable_query_preprocessing:
             return query
         
         # 기본 정제
         processed_query = query.strip()
         
-        # 동적 쿼리 확장 - 문서 기반
         if settings.enable_query_expansion:
-            # 먼저 문서에서 관련 용어 추출
-            related_terms = self.vector_db.extract_related_terms(query)
-            if related_terms:
-                logger.info(f"문서 기반 관련 용어 추출: {related_terms[:10]}")
+            # 1차: 새로운 동적 키워드 확장 사용 (임베딩 모델 포함)
+            try:
+                # 임베딩 모델을 KeywordExpander에 전달
+                keyword_expander = TextProcessor.get_keyword_expander(
+                    embedding_model=self.vector_db.embedding_model
+                )
                 
-                # 기존 쿼리에 관련 용어 추가
-                all_terms = query.split() + related_terms[:10]  # 상위 10개만 사용
+                expanded_query = TextProcessor.expand_query(
+                    processed_query,
+                    use_static_expansion=False,  # 정적 확장은 비활성화
+                    use_dynamic_expansion=True,  # 동적 확장 활성화
+                    max_terms=20  # 최대 20개 키워드
+                )
                 
-                # 중복 제거 (순서 유지)
-                seen = set()
-                unique_terms = []
-                for term in all_terms:
-                    if term not in seen and len(term) > 1:
-                        seen.add(term)
-                        unique_terms.append(term)
+                if expanded_query and expanded_query != processed_query:
+                    logger.info(f"동적 키워드 확장 완료: '{query}' -> '{expanded_query[:100]}...'")
+                    return expanded_query
+                    
+            except Exception as e:
+                logger.warning(f"동적 키워드 확장 실패: {str(e)}")
+            
+            # 2차: 문서 기반 관련 용어 추가 (기존 로직)
+            try:
+                related_terms = self.vector_db.extract_related_terms(query)
+                if related_terms:
+                    logger.debug(f"문서 기반 관련 용어 추출: {related_terms[:10]}")
+                    
+                    # 기존 쿼리에 관련 용어 추가
+                    all_terms = query.split() + related_terms[:10]  # 상위 10개만 사용
+                    
+                    # 중복 제거 (순서 유지)
+                    seen = set()
+                    unique_terms = []
+                    for term in all_terms:
+                        if term not in seen and len(term) > 1:
+                            seen.add(term)
+                            unique_terms.append(term)
+                    
+                    processed_query = ' '.join(unique_terms[:25])  # 최대 25개 단어
+                    logger.info(f"문서 기반 확장 완료: '{query}' -> '{processed_query[:100]}...'")
+                    return processed_query
+                    
+            except Exception as e:
+                logger.warning(f"문서 기반 확장 실패: {str(e)}")
+            
+            # 3차: 기존 정적 확장 사용 (폴백)
+            try:
+                processed_query = TextProcessor.expand_query(
+                    processed_query, 
+                    use_static_expansion=True,
+                    use_dynamic_expansion=False
+                )
+                logger.info(f"정적 확장 사용: '{query}' -> '{processed_query[:100]}...'")
                 
-                processed_query = ' '.join(unique_terms[:20])  # 최대 20개 단어
-                logger.info(f"동적 쿼리 확장 완료: '{query}' -> '{processed_query}'")
-                return processed_query
+            except Exception as e:
+                logger.warning(f"정적 확장 실패: {str(e)}")
         
-        # 동적 확장이 실패하거나 비활성화된 경우, 정적 확장 사용
-        if settings.enable_query_expansion:
-            processed_query = TextProcessor.expand_query(processed_query, use_static_expansion=True)
-        
-        logger.info(f"쿼리 전처리: '{query}' -> '{processed_query}'")
+        logger.info(f"쿼리 전처리 완료: '{query}' -> '{processed_query[:100]}...'")
         return processed_query
     
     def _fallback_search(self, query: str) -> List[tuple]:

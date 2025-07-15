@@ -51,3 +51,4 @@ temp/
 *.pdf
 *.doc
 *.docx.cursor/
+.cursor/
