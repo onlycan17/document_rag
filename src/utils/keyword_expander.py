@@ -337,9 +337,9 @@ class KeywordExpander:
             embedding_keywords = self._extract_semantic_similar_words(keywords)
             semantic_keywords.extend(embedding_keywords)
         
-        # 3. 키워드 조합으로 복합어 생성
-        compound_keywords = self._generate_compound_keywords(keywords)
-        semantic_keywords.extend(compound_keywords)
+        # 3. 키워드 조합으로 복합어 생성 (비활성화 - 의미 없는 조합 방지)
+        # compound_keywords = self._generate_compound_keywords(keywords)
+        # semantic_keywords.extend(compound_keywords)
         
         # 4. 문맥 기반 연관어 추출
         contextual_keywords = self._extract_contextual_keywords(query, keywords)
