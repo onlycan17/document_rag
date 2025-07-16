@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent.parent))
 
 from src.utils.keyword_expander import KeywordExpander
 from src.utils.text_processing import TextProcessor

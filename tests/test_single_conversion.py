@@ -10,7 +10,8 @@ import logging
 from pathlib import Path
 
 # 프로젝트 루트를 Python 경로에 추가
-sys.path.append(str(Path(__file__).parent))
+# 프로젝트 루트 디렉토리를 Python 경로에 추가
+sys.path.append(str(Path(__file__).parent.parent))
 
 from src.converters import PDFToMarkdownConverter
 from src.utils.logging_config import setup_logging, get_logger

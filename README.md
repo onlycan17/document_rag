@@ -1,97 +1,246 @@
-# RAG 기반 공공기관 정보시스템 챗봇
+# 🤖 RAG 기반 공공기관 정보시스템 챗봇
 
 행정기관 및 공공기관 정보시스템 구축·운영 지침 문서를 활용한 RAG(Retrieval-Augmented Generation) 챗봇 시스템입니다.
 
-## 주요 기능
+## ✨ 주요 기능
 
-- 📄 다양한 문서 형식 지원 (TXT, MD, PDF)
-- 🔍 벡터 데이터베이스를 활용한 효율적인 검색
-- 💬 자연스러운 한국어 대화형 인터페이스
-- 🚀 OpenAI API 및 로컬 LLM 지원
-- 📊 확장 가능한 모듈식 구조
+- 📄 **다양한 문서 형식 지원**: TXT, Markdown, PDF (OCR 포함)
+- 🔍 **고성능 벡터 검색**: FAISS 기반 효율적 문서 검색
+- 💬 **자연스러운 한국어 대화**: 업스테이지 Solar 모델 최적화
+- 🚀 **다중 LLM 지원**: OpenAI, Google Gemini, Anthropic Claude, 로컬 LLM
+- 📊 **체계적인 프로젝트 구조**: 모듈화된 코드 구조
+- 🔧 **통합 관리 도구**: 메뉴 방식의 쉬운 실행 환경
 
-## 설치 방법
+## 🏗️ 프로젝트 구조
 
-1. 저장소 클론
+```
+ragTest/
+├── 📄 app.py                    # Streamlit 메인 애플리케이션
+├── 📄 config.py                 # 시스템 설정
+├── 📄 run_rag.py               # 🎯 통합 실행 스크립트 (메인)
+├── 📄 requirements.txt          # Python 의존성
+├── 📄 domain.md                # 도메인 문서
+│
+├── 📂 src/                     # 📦 소스 코드
+│   ├── embeddings/             # 임베딩 모델
+│   ├── loaders/                # 문서 로더
+│   ├── rag/                    # RAG 체인 로직
+│   ├── vectorstore/            # 벡터 데이터베이스
+│   ├── models/                 # LLM 모델 관리
+│   └── utils/                  # 유틸리티 함수
+│
+├── 📂 scripts/                 # 🔧 실행 스크립트
+│   ├── setup/                  # 설치/설정 스크립트
+│   │   ├── install_and_run.sh
+│   │   ├── install_ocr.sh
+│   │   └── setup.sh
+│   ├── data_management/        # 데이터 관리
+│   │   ├── vector_db_manager.py  # 🎯 통합 벡터 DB 관리
+│   │   ├── load_documents.py
+│   │   └── convert_mongchon_docs.py
+│   └── run.sh                  # 앱 실행 스크립트
+│
+├── 📂 tests/                   # 🧪 테스트 코드
+│   ├── test_simple.py          # 기본 기능 테스트
+│   ├── test_upstage_embedding.py  # 임베딩 테스트
+│   ├── test_compatibility.py   # 호환성 테스트
+│   └── ...
+│
+├── 📂 docs/                    # 📚 문서
+│   ├── INSTALL.md              # 설치 가이드
+│   ├── UPSTAGE_SETUP_GUIDE.md  # 업스테이지 설정
+│   └── README_KOREAN.md        # 한국어 상세 가이드
+│
+├── 📂 data/                    # 💾 데이터
+│   ├── documents/              # 원본 문서
+│   └── processed/              # 처리된 문서
+│
+└── 📂 logs/                    # 📋 로그 파일
+```
+
+## 🚀 빠른 시작
+
+### 1️⃣ 저장소 클론
 ```bash
 git clone [repository-url]
 cd ragTest
 ```
 
-2. 가상환경 생성 및 활성화
+### 2️⃣ 통합 실행 도구 사용 (권장)
 ```bash
+python run_rag.py
+```
+
+**메뉴에서 선택할 수 있는 기능들:**
+- 🚀 Streamlit 앱 실행
+- 🗄️ 벡터 데이터베이스 관리
+- 🧪 테스트 실행  
+- ⚙️ 환경 설정
+- ℹ️ 프로젝트 정보
+
+### 3️⃣ 수동 설치 (고급 사용자)
+```bash
+# 가상환경 생성
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-```
 
-3. 필요한 패키지 설치
-```bash
+# 의존성 설치
 pip install -r requirements.txt
-```
 
-4. 환경 변수 설정
-```bash
+# 환경 변수 설정
 cp .env.example .env
-# .env 파일을 열어 필요한 API 키 설정
-```
+# .env 파일에서 API 키 설정
 
-## 사용 방법
-
-1. Streamlit 앱 실행
-```bash
+# 앱 실행
 streamlit run app.py
 ```
 
-2. 브라우저에서 http://localhost:8501 접속
+## ⚙️ 환경 설정
 
-3. 사이드바에서 문서 업로드 또는 domain.md 파일 로드
+### 필수: API 키 설정
+`.env` 파일에 다음 중 **최소 하나의 API 키**를 설정하세요:
 
-4. 채팅 인터페이스에서 질문 입력
+```env
+# 업스테이지 API 키 (한국어 최적화, 권장)
+UPSTAGE_API_KEY=your_upstage_api_key_here
 
-## 프로젝트 구조
-
-```
-ragTest/
-├── app.py                 # Streamlit 메인 애플리케이션
-├── config.py             # 설정 관리
-├── requirements.txt      # 패키지 의존성
-├── .env.example         # 환경 변수 예시
-├── src/
-│   ├── loaders/         # 문서 로더 모듈
-│   ├── embeddings/      # 임베딩 모델 모듈
-│   ├── vectorstore/     # 벡터 데이터베이스 모듈
-│   ├── rag/            # RAG 체인 모듈
-│   └── utils/          # 유틸리티 함수
-├── data/
-│   ├── documents/      # 원본 문서 저장
-│   └── processed/      # 처리된 문서 저장
-└── vector_db/          # 벡터 데이터베이스 저장
-
+# 기타 LLM API 키들 (선택)
+OPENAI_API_KEY=your_openai_api_key_here
+GOOGLE_API_KEY=your_google_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
-## 설정 옵션
+### 선택: OCR 기능 (스캔된 PDF용)
+```bash
+# 자동 설치
+bash scripts/setup/install_ocr.sh
 
-### LLM 선택
-- OpenAI GPT 모델 (API 키 필요)
-- 로컬 LLM (Ollama 등)
+# 또는 수동 설치 (macOS)
+brew install tesseract tesseract-lang-kor poppler
+```
 
-### 벡터 데이터베이스
-- ChromaDB (기본값)
-- FAISS
+## 📚 사용 방법
 
-### 임베딩 모델
-- OpenAI text-embedding-ada-002
-- Sentence Transformers (다국어 지원)
+### 방법 1: 통합 실행 도구 (권장)
+```bash
+python run_rag.py
+```
+메뉴에서 원하는 기능을 선택하세요!
 
-## 확장성
+### 방법 2: 직접 실행
+```bash
+# 1. 벡터 DB 구축
+python scripts/data_management/vector_db_manager.py
 
-- 새로운 문서 형식 추가 가능
-- 다양한 LLM 모델 통합 가능
-- 커스텀 프롬프트 템플릿 설정
-- 배치 처리 및 대용량 문서 지원
+# 2. 앱 실행  
+streamlit run app.py
 
-## 주의사항
+# 3. 테스트 실행
+python tests/test_simple.py
+```
 
-- OpenAI API 사용 시 API 키가 필요합니다
-- 로컬 LLM 사용 시 Ollama 등의 서버가 실행 중이어야 합니다
-- 대용량 문서 처리 시 충분한 메모리가 필요합니다
+## 🔧 벡터 데이터베이스 관리
+
+새로운 **통합 벡터 DB 관리 도구**를 사용하세요:
+
+```bash
+# 기본 사용법
+python scripts/data_management/vector_db_manager.py
+
+# 안전 모드 (OCR 비활성화)
+python scripts/data_management/vector_db_manager.py --safe-mode
+
+# 마크다운만 처리
+python scripts/data_management/vector_db_manager.py --markdown-only
+
+# 특정 파일들만 처리
+python scripts/data_management/vector_db_manager.py --files "file1.pdf" "file2.md"
+
+# 도움말 보기
+python scripts/data_management/vector_db_manager.py --help
+```
+
+**주요 특징:**
+- ✅ **3개 스크립트 통합**: 기존 중복 스크립트들을 하나로 통합
+- ✅ **다양한 모드**: 전체/안전/마크다운 전용 모드 지원
+- ✅ **상세한 진행률**: 실시간 처리 상황 표시
+- ✅ **오류 복구**: 강화된 오류 처리 및 재시도 로직
+
+## 🧪 테스트
+
+```bash
+# 통합 실행 도구에서 테스트 메뉴 선택
+python run_rag.py
+
+# 또는 직접 실행
+python tests/test_simple.py          # 기본 기능 테스트
+python tests/test_upstage_embedding.py  # 임베딩 테스트
+```
+
+## 📖 상세 문서
+
+- 📋 **설치 가이드**: [docs/INSTALL.md](docs/INSTALL.md)
+- ⚡ **업스테이지 설정**: [docs/UPSTAGE_SETUP_GUIDE.md](docs/UPSTAGE_SETUP_GUIDE.md)
+- 🇰🇷 **한국어 가이드**: [docs/README_KOREAN.md](docs/README_KOREAN.md)
+
+## 🛠️ 주요 개선사항 (v2.0)
+
+### 🏗️ 프로젝트 구조 재편
+- ✅ **체계적인 디렉토리 구조**: 기능별 명확한 분리
+- ✅ **스크립트 정리**: 설치/데이터관리/테스트 스크립트 분류
+- ✅ **문서 통합**: 모든 가이드를 docs/ 디렉토리로 정리
+
+### 🔧 통합 관리 도구
+- ✅ **메인 실행 스크립트**: `run_rag.py` 메뉴 방식 통합 도구
+- ✅ **벡터 DB 관리자**: 3개 중복 스크립트를 1개로 통합
+- ✅ **설정 자동화**: 환경 설정 단계별 가이드
+
+### 🧪 테스트 강화
+- ✅ **테스트 패키지화**: tests/ 디렉토리로 체계적 관리
+- ✅ **Import 경로 수정**: 새 구조에 맞는 경로 조정
+- ✅ **실행 편의성**: 통합 도구에서 메뉴 선택으로 테스트 실행
+
+## 🤝 기여하기
+
+1. 이 저장소를 포크하세요
+2. 기능 브랜치를 생성하세요 (`git checkout -b feature/amazing-feature`)
+3. 변경사항을 커밋하세요 (`git commit -m 'Add amazing feature'`)
+4. 브랜치에 푸시하세요 (`git push origin feature/amazing-feature`)
+5. Pull Request를 생성하세요
+
+## 📄 라이선스
+
+이 프로젝트는 MIT 라이선스 하에 있습니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+
+## 🆘 문제 해결
+
+### 자주 발생하는 문제들
+
+1. **임베딩 모델 오류**
+   ```bash
+   # API 키 확인
+   python tests/test_upstage_embedding.py
+   ```
+
+2. **OCR 관련 오류** 
+   ```bash
+   # 안전 모드로 실행
+   python scripts/data_management/vector_db_manager.py --safe-mode
+   ```
+
+3. **Import 오류**
+   ```bash
+   # 가상환경 활성화 확인
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+### 지원
+
+- 🐛 **버그 리포트**: GitHub Issues 사용
+- 💡 **기능 제안**: Discussion 탭 활용
+- 📧 **직접 문의**: [이메일 주소]
+
+---
+
+**🎯 처음 사용자라면 `python run_rag.py`를 실행하고 4번 환경 설정부터 시작하세요!**

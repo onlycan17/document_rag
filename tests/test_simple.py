@@ -11,7 +11,8 @@ from pathlib import Path
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY"] = "False"
 
-sys.path.append(str(Path(__file__).parent))
+# 프로젝트 루트 디렉토리를 Python 경로에 추가
+sys.path.append(str(Path(__file__).parent.parent))
 
 from src.loaders import DocumentLoader
 from src.vectorstore import VectorDatabase

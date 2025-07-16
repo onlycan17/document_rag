@@ -8,8 +8,8 @@ import sys
 import logging
 from typing import List
 
-# 프로젝트 경로 추가
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 프로젝트 루트 디렉토리를 Python 경로에 추가
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.embeddings.embedding_model import EmbeddingModel
 from config import settings
