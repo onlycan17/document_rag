@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 import logging
 from datetime import datetime
+import time
 
 # ChromaDB 텔레메트리 비활성화 (가장 먼저 실행)
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
@@ -18,6 +19,7 @@ from src.rag import RAGChain
 from src.vectorstore import VectorDatabase
 from src.utils.logging_config import setup_logging, get_logger
 from src.utils.token_counter import TokenCounter
+from src.utils.document_processor import DocumentProcessor
 from src.constants import (
     LOG_FILE_PATTERN, TEMP_DOCUMENT_PATH, MAX_LOG_LINES_DISPLAY
 )
@@ -58,6 +60,62 @@ if 'debug_mode' not in st.session_state:
 if 'token_counter' not in st.session_state:
     st.session_state.token_counter = TokenCounter()
 
+def analyze_chunks(documents):
+    """업로드된 문서의 청크 분석"""
+    if not documents:
+        return None
+    
+    chunk_sizes = [len(doc.page_content) for doc in documents]
+    return {
+        'count': len(documents),
+        'avg_size': sum(chunk_sizes) / len(chunk_sizes),
+        'min_size': min(chunk_sizes),
+        'max_size': max(chunk_sizes),
+        'total_chars': sum(chunk_sizes)
+    }
+
+def get_pdf_metadata(documents):
+    """PDF 메타데이터 추출"""
+    if not documents:
+        return None
+    
+    metadata = documents[0].metadata
+    return {
+        'extraction_method': metadata.get('extraction_method', 'standard'),
+        'page_count': metadata.get('page_count', 0),
+        'ocr_language': metadata.get('ocr_language', None),
+        'processing_method': metadata.get('processing_method', 'standard')
+    }
+
+def test_search_quality(vector_db, filename):
+    """업로드된 문서의 검색 품질 테스트"""
+    # 파일명에서 키워드 추출하여 테스트
+    test_keywords = []
+    filename_lower = filename.lower()
+    
+    # 한국 관련 키워드
+    korean_keywords = ['몽촌토성', '백제', '고고학', '발굴', '유물', '토성', '왕성', '조사']
+    for keyword in korean_keywords:
+        if keyword in filename_lower:
+            test_keywords.append(keyword)
+    
+    # 기본 키워드 추가
+    if not test_keywords:
+        test_keywords = ['문서', '내용', '정보']
+    
+    # 최대 3개 키워드만 테스트
+    test_keywords = test_keywords[:3]
+    
+    search_results = {}
+    for keyword in test_keywords:
+        try:
+            results = vector_db.search(keyword, k=3)
+            search_results[keyword] = len(results)
+        except Exception as e:
+            search_results[keyword] = f"오류: {str(e)}"
+    
+    return search_results
+
 def main():
     st.title(settings.app_title)
     st.markdown(settings.app_description)
@@ -86,64 +144,205 @@ def main():
         
         if uploaded_files:
             if st.button("문서 처리 및 저장"):
-                for uploaded_file in uploaded_files:
-                    # 파일별 진행 상황 표시
-                    file_placeholder = st.empty()
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
+                # 디렉토리 준비
+                DocumentProcessor.prepare_directories()
+                
+                # 전체 처리 통계 초기화
+                total_files = len(uploaded_files)
+                processed_files = 0
+                failed_files = 0
+                total_chunks = 0
+                total_processing_time = 0
+                
+                # 전체 진행률 표시
+                overall_progress = st.progress(0)
+                overall_status = st.empty()
+                
+                for file_idx, uploaded_file in enumerate(uploaded_files, 1):
+                    # 개별 파일 처리 시작
+                    overall_status.text(f"파일 {file_idx}/{total_files} 처리 중: {uploaded_file.name}")
+                    overall_progress.progress(file_idx / total_files)
                     
-                    # 임시 파일로 저장
-                    temp_path = TEMP_DOCUMENT_PATH.format(filename=uploaded_file.name)
-                    os.makedirs(os.path.dirname(temp_path), exist_ok=True)
-                    
-                    with open(temp_path, 'wb') as f:
-                        f.write(uploaded_file.getbuffer())
-                    
-                    # 파일 크기 확인
-                    file_size_mb = uploaded_file.size / (1024 * 1024)
-                    file_placeholder.info(f"📄 처리 중: **{uploaded_file.name}** ({file_size_mb:.1f}MB)")
-                    
-                    # 진행 상황 콜백
-                    def update_progress(progress, message):
-                        progress_bar.progress(progress)
-                        status_text.text(message)
-                    
-                    # 문서 로드 및 벡터 DB에 추가
-                    try:
-                        logger.info(f"문서 처리 시작: {uploaded_file.name} ({file_size_mb:.1f}MB)")
+                    # 파일별 상세 정보 표시
+                    file_container = st.container()
+                    with file_container:
+                        st.divider()
+                        file_col1, file_col2 = st.columns([3, 1])
                         
-                        # OCR 설정 업데이트
-                        if st.session_state.document_loader.use_ocr != use_ocr:
-                            st.session_state.document_loader = DocumentLoader(use_ocr=use_ocr)
+                        with file_col1:
+                            st.write(f"**📄 [{file_idx}/{total_files}] {uploaded_file.name}**")
                         
-                        # 문서 로드 (진행 상황 콜백 포함)
-                        documents = st.session_state.document_loader.load_document(temp_path, update_progress)
+                        with file_col2:
+                            file_size_mb = uploaded_file.size / (1024 * 1024)
+                            st.caption(f"{file_size_mb:.1f}MB")
                         
-                        # 벡터 DB에 추가
-                        update_progress(0.95, "벡터 데이터베이스에 저장 중...")
-                        st.session_state.vector_db.add_documents(documents)
+                        # 개별 파일 진행 상황
+                        file_progress = st.progress(0)
+                        file_status = st.empty()
                         
-                        # 완료
-                        update_progress(1.0, "완료!")
+                        # 임시 파일로 저장
+                        temp_path = TEMP_DOCUMENT_PATH.format(filename=uploaded_file.name)
+                        os.makedirs(os.path.dirname(temp_path), exist_ok=True)
                         
-                        # 메타데이터 확인
-                        extraction_method = documents[0].metadata.get('extraction_method', 'standard') if documents else 'unknown'
-                        file_placeholder.success(f"✅ {uploaded_file.name} 처리 완료 ({len(documents)} 청크) - 방법: {extraction_method}")
-                        logger.info(f"문서 처리 완료: {uploaded_file.name} - {len(documents)} 청크, 방법: {extraction_method}")
+                        with open(temp_path, 'wb') as f:
+                            f.write(uploaded_file.getbuffer())
+                        
+                        # 진행 상황 콜백
+                        def update_progress(progress, message):
+                            file_progress.progress(progress)
+                            file_status.text(message)
+                        
+                        # 문서 처리 시작
+                        start_time = time.time()
+                        processing_error = None
+                        documents = None
+                        
+                        try:
+                            logger.info(f"문서 처리 시작: {uploaded_file.name} ({file_size_mb:.1f}MB)")
+                            
+                            # OCR 설정 업데이트
+                            if st.session_state.document_loader.use_ocr != use_ocr:
+                                st.session_state.document_loader = DocumentLoader(use_ocr=use_ocr)
+                            
+                            # 벡터 DB에 추가하기 전 청크 수 확인
+                            before_count = st.session_state.vector_db.get_document_count()
+                            
+                            # 문서 로드
+                            documents = st.session_state.document_loader.load_document(temp_path, update_progress)
+                            
+                            if documents:
+                                # 벡터 DB에 추가
+                                update_progress(0.95, "벡터 데이터베이스에 저장 중...")
+                                st.session_state.vector_db.add_documents(documents)
+                                
+                                # 저장 후 청크 수 확인 (품질 검증)
+                                after_count = st.session_state.vector_db.get_document_count()
+                                saved_chunks = after_count - before_count
+                                
+                                # 처리 완료
+                                processing_time = time.time() - start_time
+                                update_progress(1.0, "완료!")
+                                
+                                # 통계 업데이트
+                                processed_files += 1
+                                total_chunks += len(documents)
+                                total_processing_time += processing_time
+                                
+                                # 청크 분석
+                                chunk_analysis = analyze_chunks(documents)
+                                pdf_metadata = get_pdf_metadata(documents)
+                                
+                                # 성공 메시지와 상세 정보 표시
+                                success_col1, success_col2 = st.columns([2, 1])
+                                
+                                with success_col1:
+                                    st.success(f"✅ {uploaded_file.name} 처리 완료")
+                                    
+                                    # 처리 정보 표시
+                                    if pdf_metadata:
+                                        info_text = f"**처리 정보:** {pdf_metadata['extraction_method']}"
+                                        if pdf_metadata['page_count']:
+                                            info_text += f" | {pdf_metadata['page_count']}페이지"
+                                        if pdf_metadata.get('processing_method') == 'markdown_optimized':
+                                            info_text += " | 마크다운 최적화"
+                                        st.caption(info_text)
+                                
+                                with success_col2:
+                                    st.metric("처리 시간", f"{processing_time:.1f}초")
+                                
+                                # 청크 분석 정보
+                                if chunk_analysis:
+                                    chunk_col1, chunk_col2, chunk_col3, chunk_col4 = st.columns(4)
+                                    
+                                    with chunk_col1:
+                                        st.metric("청크 수", f"{chunk_analysis['count']}개")
+                                    
+                                    with chunk_col2:
+                                        st.metric("평균 크기", f"{chunk_analysis['avg_size']:.0f}자")
+                                    
+                                    with chunk_col3:
+                                        st.metric("최소 크기", f"{chunk_analysis['min_size']}자")
+                                    
+                                    with chunk_col4:
+                                        st.metric("최대 크기", f"{chunk_analysis['max_size']}자")
+                                
+                                # 품질 검증 결과
+                                if len(documents) == saved_chunks:
+                                    st.info(f"💾 품질 검증: 모든 청크({len(documents)}개)가 성공적으로 저장됨")
+                                else:
+                                    st.warning(f"⚠️ 품질 검증: 로드된 청크({len(documents)}개) vs 저장된 청크({saved_chunks}개)")
+                                
+                                # 검색 품질 테스트
+                                search_results = test_search_quality(st.session_state.vector_db, uploaded_file.name)
+                                if search_results:
+                                    with st.expander("🔍 검색 테스트 결과"):
+                                        search_cols = st.columns(len(search_results))
+                                        for i, (keyword, result_count) in enumerate(search_results.items()):
+                                            with search_cols[i]:
+                                                if isinstance(result_count, int):
+                                                    st.metric(f"'{keyword}'", f"{result_count}개 결과")
+                                                else:
+                                                    st.caption(f"'{keyword}': {result_count}")
+                                
+                                logger.info(f"문서 처리 완료: {uploaded_file.name} - {len(documents)} 청크, 처리시간: {processing_time:.1f}초")
+                            
+                            else:
+                                failed_files += 1
+                                processing_error = "문서를 로드할 수 없음"
+                                
+                        except Exception as e:
+                            failed_files += 1
+                            processing_error = str(e)
+                            processing_time = time.time() - start_time
+                            logger.error(f"문서 처리 실패: {uploaded_file.name} - {processing_error}")
+                        
+                        # 처리 실패 시 에러 표시
+                        if processing_error:
+                            st.error(f"❌ {uploaded_file.name} 처리 실패: {processing_error}")
+                            st.caption(f"처리 시간: {processing_time:.1f}초")
                         
                         # 진행 바와 상태 텍스트 제거
-                        progress_bar.empty()
-                        status_text.empty()
+                        file_progress.empty()
+                        file_status.empty()
                         
-                    except Exception as e:
-                        logger.error(f"문서 처리 실패: {uploaded_file.name} - {str(e)}")
-                        file_placeholder.error(f"❌ {uploaded_file.name} 처리 실패: {str(e)}")
-                        progress_bar.empty()
-                        status_text.empty()
+                        # 임시 파일 정리
+                        try:
+                            os.remove(temp_path)
+                        except:
+                            pass
+                
+                # 전체 처리 완료 후 통계 표시
+                overall_progress.empty()
+                overall_status.empty()
+                
+                st.divider()
+                st.subheader("📊 전체 처리 결과")
+                
+                # 전체 통계
+                stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
+                
+                with stat_col1:
+                    st.metric("총 파일", f"{total_files}개")
+                
+                with stat_col2:
+                    st.metric("처리 성공", f"{processed_files}개", 
+                             delta=f"{failed_files}개 실패" if failed_files > 0 else "모두 성공")
+                
+                with stat_col3:
+                    st.metric("총 청크", f"{total_chunks}개")
+                
+                with stat_col4:
+                    st.metric("총 처리시간", f"{total_processing_time:.1f}초")
+                
+                # 최종 벡터 DB 상태
+                final_doc_count = st.session_state.vector_db.get_document_count()
+                if total_chunks > 0:
+                    st.success(f"🎉 업로드 완료! 벡터 데이터베이스에 총 {final_doc_count}개의 청크가 저장되어 있습니다.")
+                else:
+                    st.warning("⚠️ 처리된 문서가 없습니다.")
                 
                 # 처리 완료 후 새로고침
-                import time
-                time.sleep(1)  # 사용자가 결과를 확인할 수 있도록 잠시 대기
+                time.sleep(2)  # 사용자가 결과를 확인할 수 있도록 대기
                 st.rerun()
         
         # 기존 문서 로드
