@@ -1,9 +1,10 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Generator
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_anthropic import ChatAnthropic
 from langchain.prompts import PromptTemplate
 from langchain.schema import Document
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from config import settings
 from src.vectorstore import VectorDatabase
 from src.models import ModelRegistry
@@ -28,8 +29,10 @@ class RAGChain:
             self.vector_db = VectorDatabase()
         
         self.llm = self._initialize_llm(provider, model)
+        self.streaming_llm = self._initialize_streaming_llm(provider, model)  # 스트리밍용 LLM
         self.prompt_template = self._create_prompt_template()
         self.chain = self._create_chain()
+        self.streaming_chain = self._create_streaming_chain()  # 스트리밍용 체인
         self.current_provider = provider or settings.llm_provider
         self.current_model = model
         
@@ -41,7 +44,15 @@ class RAGChain:
             )
     
     def _initialize_llm(self, provider: Optional[str] = None, model: Optional[str] = None):
-        """LLM 초기화"""
+        """일반 LLM 초기화 (비스트리밍)"""
+        return self._create_llm(provider, model, streaming=False)
+    
+    def _initialize_streaming_llm(self, provider: Optional[str] = None, model: Optional[str] = None):
+        """스트리밍 LLM 초기화"""
+        return self._create_llm(provider, model, streaming=True)
+    
+    def _create_llm(self, provider: Optional[str] = None, model: Optional[str] = None, streaming: bool = False):
+        """LLM 생성 (스트리밍/비스트리밍 공통)"""
         # provider가 지정되지 않으면 설정에서 가져옴
         if provider is None:
             provider = settings.llm_provider
@@ -52,7 +63,10 @@ class RAGChain:
         # 모델별 최대 토큰 수 가져오기
         max_tokens = self._get_max_tokens_for_model(provider, actual_model) if actual_model else settings.max_tokens
         
-        logger.info(f"LLM 초기화: provider={provider}, model={actual_model}, max_tokens={max_tokens}")
+        logger.info(f"LLM 초기화: provider={provider}, model={actual_model}, max_tokens={max_tokens}, streaming={streaming}")
+        
+        # 스트리밍 콜백 설정
+        callbacks = [StreamingStdOutCallbackHandler()] if streaming else []
             
         if provider == "openai":
             if not settings.openai_api_key:
@@ -61,7 +75,9 @@ class RAGChain:
                 openai_api_key=settings.openai_api_key,
                 model_name=actual_model,
                 temperature=settings.temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                streaming=streaming,
+                callbacks=callbacks
             )
         
         elif provider == "google":
@@ -71,7 +87,9 @@ class RAGChain:
                 google_api_key=settings.google_api_key,
                 model=actual_model,
                 temperature=settings.temperature,
-                max_output_tokens=max_tokens
+                max_output_tokens=max_tokens,
+                streaming=streaming,
+                callbacks=callbacks
             )
         
         elif provider == "anthropic":
@@ -81,7 +99,9 @@ class RAGChain:
                 anthropic_api_key=settings.anthropic_api_key,
                 model_name=actual_model,
                 temperature=settings.temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                streaming=streaming,
+                callbacks=callbacks
             )
         
         elif provider == "local":
@@ -91,7 +111,9 @@ class RAGChain:
                 openai_api_base=settings.local_llm_base_url + "/v1",
                 model_name=actual_model,
                 temperature=settings.temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                streaming=streaming,
+                callbacks=callbacks
             )
         
         else:
@@ -145,9 +167,13 @@ class RAGChain:
         )
     
     def _create_chain(self):
-        """LLM 체인 생성"""
+        """일반 LLM 체인 생성"""
         # 새로운 LCEL 방식 사용
         return self.prompt_template | self.llm
+    
+    def _create_streaming_chain(self):
+        """스트리밍 LLM 체인 생성"""
+        return self.prompt_template | self.streaming_llm
     
     def _get_model_max_tokens(self, model_id: str) -> int:
         """모델별 최대 토큰 수 반환"""
@@ -685,7 +711,9 @@ class RAGChain:
     def update_llm(self, provider: str, model: Optional[str] = None):
         """LLM 제공자 및 모델 변경"""
         self.llm = self._initialize_llm(provider, model)
+        self.streaming_llm = self._initialize_streaming_llm(provider, model)
         self.chain = self._create_chain()
+        self.streaming_chain = self._create_streaming_chain()
         self.current_provider = provider
         self.current_model = model
         
@@ -729,3 +757,116 @@ class RAGChain:
         """사용자 피드백 저장 (향후 개선을 위한 기능)"""
         # TODO: 피드백을 데이터베이스에 저장하여 모델 개선에 활용
         pass
+
+    def stream_query(self, question: str) -> Generator[Dict[str, Any], None, None]:
+        """
+        스트리밍 방식으로 질문 처리
+        실시간으로 답변을 생성하여 yield 합니다.
+        """
+        try:
+            # 0. 쿼리 전처리 및 확장
+            processed_question = self._preprocess_query(question)
+            
+            # 벡터 DB 상태 확인
+            doc_count = self.vector_db.get_document_count()
+            logger.info(f"벡터 DB 문서 수: {doc_count}")
+            
+            if doc_count == 0:
+                yield {
+                    "type": "error",
+                    "content": "벡터 데이터베이스에 문서가 없습니다. 먼저 문서를 업로드해주세요.",
+                    "sources": [],
+                    "status": "no_documents"
+                }
+                return
+            
+            # 검색 시작 알림
+            yield {
+                "type": "status",
+                "content": "🔍 관련 문서를 검색하고 있습니다...",
+                "status": "searching"
+            }
+            
+            # 1. 관련 문서 검색
+            k_docs = settings.k_documents
+            if self.current_provider == "local":
+                k_docs = min(LOCAL_MODEL_MAX_DOCUMENTS, settings.k_documents)
+            
+            relevant_docs = self.vector_db.search(processed_question, k=k_docs)
+            logger.info(f"검색 결과: {len(relevant_docs)}개 문서")
+            
+            if not relevant_docs:
+                # 대안 검색 시도
+                fallback_results = self._fallback_search(processed_question)
+                
+                if not fallback_results:
+                    yield {
+                        "type": "error",
+                        "content": self._generate_no_results_message(question, doc_count),
+                        "sources": [],
+                        "status": "no_relevant_documents"
+                    }
+                    return
+                else:
+                    relevant_docs = fallback_results
+            
+            # 검색 완료 및 답변 생성 시작 알림
+            yield {
+                "type": "status", 
+                "content": f"✅ {len(relevant_docs)}개 문서 발견. 답변을 생성하고 있습니다...",
+                "status": "generating"
+            }
+            
+            # 2. 컨텍스트 생성
+            context = self._format_documents(relevant_docs, question)
+            self._last_context_tokens = len(context) // 4
+            
+            # 3. 스트리밍 방식 답변 생성
+            full_response = ""
+            
+            # 스트리밍 체인 실행
+            for chunk in self.streaming_chain.stream({
+                "context": context,
+                "question": question
+            }):
+                # 응답 텍스트 추출
+                if hasattr(chunk, 'content'):
+                    chunk_text = chunk.content
+                elif isinstance(chunk, dict) and 'text' in chunk:
+                    chunk_text = chunk['text']
+                elif isinstance(chunk, str):
+                    chunk_text = chunk
+                else:
+                    chunk_text = str(chunk)
+                
+                if chunk_text:
+                    full_response += chunk_text
+                    yield {
+                        "type": "content",
+                        "content": chunk_text,
+                        "full_content": full_response,
+                        "status": "streaming"
+                    }
+            
+            # 4. 스트리밍 완료 후 최종 정보 전송
+            sources = self._generate_enhanced_sources(relevant_docs)
+            search_info = self._get_search_info(question, relevant_docs)
+            
+            yield {
+                "type": "complete",
+                "content": "",
+                "full_content": full_response,
+                "sources": sources,
+                "status": "success",
+                "search_info": search_info,
+                "context_tokens": self._last_context_tokens
+            }
+            
+        except Exception as e:
+            logger.error(f"스트리밍 쿼리 처리 중 오류 발생: {str(e)}")
+            yield {
+                "type": "error",
+                "content": f"죄송합니다. 답변 생성 중 오류가 발생했습니다. 다시 시도해주세요.\n\n오류 정보: {str(e)}",
+                "sources": [],
+                "status": "error"
+            }

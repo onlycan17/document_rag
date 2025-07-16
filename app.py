@@ -495,6 +495,14 @@ def main():
         )
         settings.temperature = temperature
         
+        # 스트리밍 설정
+        enable_streaming = st.checkbox(
+            "🚀 실시간 답변 (스트리밍)", 
+            value=settings.enable_streaming,
+            help="답변이 실시간으로 타이핑되듯이 나타납니다. ChatGPT와 같은 경험을 제공합니다."
+        )
+        settings.enable_streaming = enable_streaming
+        
         # 디버그 모드
         debug_mode = st.checkbox("🐛 디버그 모드", help="검색 결과와 점수를 표시합니다.")
         st.session_state.debug_mode = debug_mode
@@ -565,16 +573,101 @@ def main():
         with st.chat_message("user"):
             st.markdown(prompt)
         
-        # 봇 응답 생성
+        # 봇 응답 생성 (스트리밍/일반 모드 선택)
         with st.chat_message("assistant"):
-            with st.spinner("답변을 생성하는 중..."):
-                response = st.session_state.rag_chain.query(prompt)
+            if settings.enable_streaming:
+                # 🚀 스트리밍 모드
+                status_placeholder = st.empty()
+                response_placeholder = st.empty()
                 
-                # 실제 검색된 문서의 토큰 수 가져오기
-                context_tokens = st.session_state.rag_chain.get_last_context_tokens()
+                # 스트리밍 응답 변수들
+                full_response = ""
+                response_sources = []
+                response_status = "unknown"
+                response_search_info = {}
+                context_tokens = 0
                 
-                # 디버그 모드일 때 검색 결과 표시
-                if st.session_state.debug_mode:
+                # 스트리밍 쿼리 실행
+                try:
+                    def stream_generator():
+                        """스트리밍 제너레이터"""
+                        for chunk in st.session_state.rag_chain.stream_query(prompt):
+                            yield chunk
+                    
+                    # 스트리밍 응답 처리
+                    for chunk in stream_generator():
+                        chunk_type = chunk.get("type", "unknown")
+                        chunk_content = chunk.get("content", "")
+                        
+                        if chunk_type == "status":
+                            # 상태 메시지 표시
+                            status_placeholder.info(chunk_content)
+                            
+                        elif chunk_type == "content":
+                            # 실시간 답변 내용 추가
+                            full_response = chunk.get("full_content", full_response + chunk_content)
+                            response_placeholder.markdown(full_response + "▌")  # 커서 효과
+                            
+                        elif chunk_type == "complete":
+                            # 스트리밍 완료 - 최종 정보 수집
+                            full_response = chunk.get("full_content", full_response)
+                            response_sources = chunk.get("sources", [])
+                            response_status = chunk.get("status", "success")
+                            response_search_info = chunk.get("search_info", {})
+                            context_tokens = chunk.get("context_tokens", 0)
+                            
+                            # 상태 메시지 제거하고 최종 답변 표시
+                            status_placeholder.empty()
+                            response_placeholder.markdown(full_response)
+                            
+                        elif chunk_type == "error":
+                            # 에러 처리
+                            full_response = chunk_content
+                            response_sources = chunk.get("sources", [])
+                            response_status = chunk.get("status", "error")
+                            
+                            # 상태 메시지 제거하고 에러 메시지 표시
+                            status_placeholder.empty()
+                            response_placeholder.error(full_response)
+                            
+                            break
+                    
+                    # 응답 구조 생성 (기존 코드와 호환성 유지)
+                    response = {
+                        "answer": full_response,
+                        "sources": response_sources,
+                        "status": response_status,
+                        "search_info": response_search_info
+                    }
+                    
+                except Exception as e:
+                    # 스트리밍 에러 처리
+                    logger.error(f"스트리밍 중 오류 발생: {str(e)}")
+                    status_placeholder.empty()
+                    response_placeholder.error(f"죄송합니다. 답변 생성 중 오류가 발생했습니다: {str(e)}")
+                    
+                    response = {
+                        "answer": f"답변 생성 중 오류가 발생했습니다: {str(e)}",
+                        "sources": [],
+                        "status": "error"
+                    }
+                    
+            else:
+                # 📝 일반 모드 (기존 방식)
+                with st.spinner("답변을 생성하는 중..."):
+                    response = st.session_state.rag_chain.query(prompt)
+                    
+                    # 실제 검색된 문서의 토큰 수 가져오기
+                    context_tokens = st.session_state.rag_chain.get_last_context_tokens()
+                    
+                    # 답변 표시
+                    if response["status"] == "success":
+                        st.markdown(response["answer"])
+                    else:
+                        st.error(response["answer"])
+                
+            # 디버그 모드일 때 검색 결과 표시
+            if st.session_state.debug_mode:
                     with st.expander("🔍 디버그 정보"):
                         st.write(f"**검색 쿼리**: {prompt}")
                         st.write(f"**벡터 DB 상태**:")
@@ -608,31 +701,33 @@ def main():
                                             st.write(f"- 문서 {i+1}: 점수 {score:.4f}, 내용: {doc.page_content[:100]}...")
                                 except Exception as e:
                                     st.write(f"원시 검색 실패: {str(e)}")
+            
+            # 응답 처리 및 저장 (스트리밍 완료 후)
+            if response["status"] == "success":
+                # 응답 저장
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response["answer"],
+                    "sources": response["sources"]
+                })
                 
-                if response["status"] == "success":
-                    st.markdown(response["answer"])
-                    
-                    # 응답 저장
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": response["answer"],
-                        "sources": response["sources"]
-                    })
-                    
-                    # 출처 정보 표시
-                    if response["sources"]:
-                        with st.expander("📌 참고 문서"):
-                            for i, source in enumerate(response["sources"]):
-                                st.markdown(f"**문서 {i+1}**: {source['file_name']}")
-                                st.markdown(f"- 관련도: {1 - source['relevance_score']:.2%}")
-                                st.markdown(f"- 내용 미리보기: {source['content_preview']}")
-                                st.divider()
-                else:
-                    st.error(response["answer"])
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": response["answer"]
-                    })
+                # 출처 정보 표시
+                if response["sources"]:
+                    with st.expander("📌 참고 문서"):
+                        for i, source in enumerate(response["sources"]):
+                            st.markdown(f"**문서 {i+1}**: {source['file_name']}")
+                            if 'relevance_percent' in source:
+                                st.markdown(f"- 관련도: {source['relevance_percent']:.1f}%")
+                            else:
+                                st.markdown(f"- 관련도: {(1 - source['relevance_score']):.2%}")
+                            st.markdown(f"- 내용 미리보기: {source['content_preview']}")
+                            st.divider()
+            else:
+                # 에러 상황일 때도 메시지 저장
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response["answer"]
+                })
             
             # 컨텍스트 사용량 업데이트를 위해 리런
             st.rerun()

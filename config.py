@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     temperature: float = 0.3
     max_tokens: int = 4096  # 기본값 - 모델별로 자동 조정됨
     
+    # 스트리밍 설정
+    enable_streaming: bool = os.getenv("ENABLE_STREAMING", "true").lower() == "true"
+    
     # UI 설정
     app_title: str = "쉽게 설명하는 RAG 챗봇"
     app_description: str = "복잡한 문서도 쉽게! 궁금한 내용을 질문하세요. 일반인도 이해할 수 있도록 친절하게 설명해드립니다."
