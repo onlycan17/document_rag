@@ -16,6 +16,7 @@ class EnhancedDocumentLoader:
     향상된 문서 로더 클래스
     - 의미 기반 청킹 지원
     - 한국어 문서 최적화
+    - 마크다운 특화 처리 (CLI 스크립트와 동일한 로직)
     - 다양한 청킹 전략 지원
     """
     
@@ -26,6 +27,32 @@ class EnhancedDocumentLoader:
             chunk_overlap=settings.chunk_overlap,
             length_function=len,
             separators=["\n\n", "\n", ".", "。", "!", "?", ";", "；", ",", "，", " ", ""]
+        )
+        
+        # 마크다운 전용 분할기 (새로 추가)
+        self.markdown_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=settings.chunk_size,
+            chunk_overlap=settings.chunk_overlap,
+            length_function=len,
+            # 마크다운 구조를 고려한 분리자 순서
+            separators=[
+                "\n\n\n",    # 여러 줄바꿈 (섹션 구분)
+                "\n\n",      # 문단 분리
+                "\n#",       # 제목 구분
+                "\n##",      # 하위 제목 구분
+                "\n###",     # 세부 제목 구분
+                "\n- ",      # 목록 항목
+                "\n* ",      # 목록 항목 (별표)
+                "\n",        # 일반 줄바꿈
+                "。",        # 한국어 마침표
+                ".",         # 영어 마침표
+                "!",         # 느낌표
+                "?",         # 물음표
+                ";",         # 세미콜론
+                ",",         # 쉼표
+                " ",         # 공백
+                ""           # 문자 단위
+            ]
         )
         
         # 의미 기반 분할기 (향상된 방식)
@@ -57,6 +84,7 @@ class EnhancedDocumentLoader:
         """
         단일 문서를 로드하고 최적화된 청크로 분할
         - 파일 유형별 최적화된 로딩
+        - 마크다운 특화 처리
         - 향상된 전처리
         - 의미 기반 청킹 지원
         """
@@ -75,7 +103,10 @@ class EnhancedDocumentLoader:
         try:
             # 1. 파일 유형별 로딩
             load_start = time.time()
-            if file_extension in ['.txt', '.md']:
+            if file_extension == '.md':
+                documents = self._load_markdown_file(file_path, progress_callback)
+                load_method = "마크다운 전용 로더"
+            elif file_extension == '.txt':
                 documents = self._load_text_file(file_path, progress_callback)
                 load_method = "텍스트 로더"
             elif file_extension == '.pdf':
@@ -92,7 +123,7 @@ class EnhancedDocumentLoader:
             
             # 2. 문서 전처리 및 정제
             preprocess_start = time.time()
-            processed_documents = self._preprocess_documents(documents)
+            processed_documents = self._preprocess_documents(documents, file_extension)
             preprocess_time = time.time() - preprocess_start
             logger.info(f"   ✓ 전처리 완료: {len(processed_documents)}개 유효 페이지 ({preprocess_time:.1f}초)")
             
@@ -101,7 +132,7 @@ class EnhancedDocumentLoader:
             
             # 3. 청킹 전략에 따른 분할
             chunk_start = time.time()
-            chunks = self._split_documents_optimized(processed_documents)
+            chunks = self._split_documents_optimized(processed_documents, file_extension)
             chunk_time = time.time() - chunk_start
             logger.info(f"   ✓ 청킹 완료: {len(chunks)}개 청크 ({chunk_time:.1f}초)")
             
@@ -132,6 +163,58 @@ class EnhancedDocumentLoader:
             logger.error(f"   📁 파일 경로: {file_path}")
             logger.error(f"   📊 파일 크기: {file_size_mb:.1f}MB")
             raise
+    
+    def _load_markdown_file(self, file_path: str, progress_callback=None) -> List[Document]:
+        """
+        마크다운 파일 전용 로딩 (rebuild_markdown_vector_db.py와 동일한 로직)
+        """
+        try:
+            file_name = Path(file_path).name
+            
+            # 다양한 인코딩으로 시도
+            encodings = ['utf-8', 'utf-8-sig', 'cp949', 'euc-kr']
+            content = None
+            used_encoding = None
+            
+            for encoding in encodings:
+                try:
+                    with open(file_path, 'r', encoding=encoding) as f:
+                        content = f.read()
+                    used_encoding = encoding
+                    break
+                except UnicodeDecodeError:
+                    continue
+                except Exception as e:
+                    logger.debug(f"   인코딩 {encoding} 시도 실패: {str(e)}")
+                    continue
+            
+            if content is None:
+                raise ValueError("마크다운 파일 로딩 실패: 지원되는 인코딩 없음")
+            
+            logger.info(f"   📖 마크다운 로딩 완료: {used_encoding} 인코딩")
+            
+            if progress_callback:
+                progress_callback(0.5, "마크다운 텍스트 추출 완료")
+            
+            # Document 객체 생성 (마크다운 특화 메타데이터 포함)
+            document = Document(
+                page_content=content,
+                metadata={
+                    'source': str(file_path),
+                    'file_name': file_name,
+                    'file_type': '.md',
+                    'encoding': used_encoding,
+                    'original_size': len(content),
+                    'processing_method': 'markdown_optimized'
+                }
+            )
+            
+            return [document]
+            
+        except Exception as e:
+            logger.error(f"마크다운 파일 로딩 실패: {str(e)}")
+            # 기본 텍스트 로더로 폴백
+            return self._load_text_file(file_path, progress_callback)
     
     def _load_text_file(self, file_path: str, progress_callback=None) -> List[Document]:
         """텍스트 파일 로딩 최적화"""
@@ -187,9 +270,10 @@ class EnhancedDocumentLoader:
         
         return documents
     
-    def _preprocess_documents(self, documents: List[Document]) -> List[Document]:
+    def _preprocess_documents(self, documents: List[Document], file_extension: str = None) -> List[Document]:
         """
         문서 전처리 및 정제
+        - 마크다운 파일은 특화 처리
         - 불필요한 내용 제거
         - 텍스트 정규화
         - 한국어 최적화
@@ -199,8 +283,11 @@ class EnhancedDocumentLoader:
         for doc in documents:
             content = doc.page_content
             
-            # 1. 기본 정제
-            content = self._clean_text(content)
+            # 1. 파일 타입별 특화 전처리
+            if file_extension == '.md':
+                content = self._clean_markdown_text(content)
+            else:
+                content = self._clean_text(content)
             
             # 2. 한국어 특화 정제
             content = self._korean_text_normalization(content)
@@ -218,6 +305,74 @@ class EnhancedDocumentLoader:
                 logger.debug(f"너무 짧은 콘텐츠 필터링: {len(content)}자 - {content[:50]}...")
         
         return processed_docs
+    
+    def _clean_markdown_text(self, text: str) -> str:
+        """마크다운 특화 텍스트 정제 (rebuild_markdown_vector_db.py와 동일한 로직)"""
+        if not text:
+            return ""
+        
+        # 기본 정제
+        text = text.strip()
+        
+        # 마크다운 메타데이터 제거 (YAML front matter)
+        text = re.sub(r'^---\n.*?\n---\n', '', text, flags=re.DOTALL)
+        
+        # 불필요한 마크다운 구문 정리 (내용은 보존하되 구문만 정리)
+        # 이미지 링크는 텍스트만 추출
+        text = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'\1', text)
+        
+        # 링크는 텍스트만 추출
+        text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+        
+        # 코드 블록 표시 제거 (내용은 유지)
+        text = re.sub(r'```[a-zA-Z]*\n', '', text)
+        text = text.replace('```', '')
+        
+        # 인라인 코드 표시 제거
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+        
+        # 강조 표시 제거 (내용은 유지)
+        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # 굵은 글씨
+        text = re.sub(r'\*([^*]+)\*', r'\1', text)      # 이탤릭
+        text = re.sub(r'__([^_]+)__', r'\1', text)      # 굵은 글씨
+        text = re.sub(r'_([^_]+)_', r'\1', text)        # 이탤릭
+        
+        # 제목 표시 정리 (# 기호 제거하되 제목은 유지)
+        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        
+        # 목록 표시 정리
+        text = re.sub(r'^[-*+]\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^\d+\.\s+', '', text, flags=re.MULTILINE)
+        
+        # 일반적인 텍스트 정제
+        text = self._general_text_cleaning(text)
+        
+        return text
+    
+    def _general_text_cleaning(self, text: str) -> str:
+        """일반적인 텍스트 정제"""
+        # 특수 문자 정리
+        text = text.replace('\u200b', '')  # Zero-width space
+        text = text.replace('\ufeff', '')  # BOM
+        text = text.replace('\xa0', ' ')   # Non-breaking space
+        text = text.replace('\u3000', ' ') # Ideographic space
+        
+        # 연속된 공백 제거
+        text = re.sub(r' +', ' ', text)
+        
+        # 연속된 줄바꿈 정리 (3개 이상을 2개로)
+        text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+        
+        # 제어 문자 제거
+        text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+        
+        # 한국어 문장 부호 정규화
+        text = text.replace('．', '.')
+        text = text.replace('，', ',')
+        text = text.replace('；', ';')
+        text = text.replace('：', ':')
+        
+        return text.strip()
     
     def _clean_text(self, text: str) -> str:
         """기본 텍스트 정제"""
@@ -238,7 +393,7 @@ class EnhancedDocumentLoader:
         text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
         
         return text.strip()
-    
+
     def _korean_text_normalization(self, text: str) -> str:
         """한국어 텍스트 정규화"""
         # 한글 자모 결합 문제 해결
@@ -280,12 +435,20 @@ class EnhancedDocumentLoader:
         
         return '\n'.join(processed_lines)
     
-    def _split_documents_optimized(self, documents: List[Document]) -> List[Document]:
+    def _split_documents_optimized(self, documents: List[Document], file_extension: str = None) -> List[Document]:
         """
         최적화된 문서 분할
+        - 마크다운 파일은 마크다운 전용 분할기 사용
         - 설정에 따라 의미 기반 또는 일반 분할 선택
         - 한국어 문장 구조 고려
         """
+        # 마크다운 파일은 마크다운 전용 분할기 사용
+        if file_extension == '.md':
+            logger.info("마크다운 특화 청킹 사용")
+            chunks = self.markdown_splitter.split_documents(documents)
+            return self._post_process_markdown_chunks(chunks)
+        
+        # 기타 파일 타입
         if settings.use_semantic_chunking and self.semantic_splitter:
             logger.info("의미 기반 청킹 사용")
             try:
@@ -299,6 +462,38 @@ class EnhancedDocumentLoader:
         logger.info("향상된 기본 청킹 사용")
         return self._enhanced_default_chunking(documents)
     
+    def _post_process_markdown_chunks(self, chunks: List[Document]) -> List[Document]:
+        """마크다운 청킹 후처리 - 짧은 청크 병합 및 품질 개선"""
+        processed_chunks = []
+        merged_count = 0
+        
+        for i, chunk in enumerate(chunks):
+            content = chunk.page_content.strip()
+            
+            # 최소 길이 체크
+            if len(content) < 200:  # 200자 미만은 이전 청크와 병합 시도
+                if processed_chunks:
+                    last_chunk = processed_chunks[-1]
+                    combined_content = last_chunk.page_content + "\n\n" + content
+                    
+                    # 병합 후 크기가 적절하면 병합
+                    if len(combined_content) <= settings.chunk_size * 1.3:
+                        processed_chunks[-1] = Document(
+                            page_content=combined_content,
+                            metadata={**last_chunk.metadata, 'merged_chunks': True}
+                        )
+                        merged_count += 1
+                        continue
+            
+            # 유효한 청크로 판단
+            if len(content) >= 50:  # 최소 50자 이상
+                processed_chunks.append(chunk)
+        
+        if merged_count > 0:
+            logger.info(f"   🔗 마크다운 청크 병합: {merged_count}개")
+        
+        return processed_chunks
+
     def _enhanced_default_chunking(self, documents: List[Document]) -> List[Document]:
         """향상된 기본 청킹"""
         # 한국어에 최적화된 분리자 순서
@@ -360,6 +555,7 @@ class EnhancedDocumentLoader:
         """메타데이터 보강"""
         enhanced_chunks = []
         file_name = Path(file_path).name
+        file_extension = Path(file_path).suffix.lower()
         
         for i, chunk in enumerate(chunks):
             # 기존 메타데이터 복사
@@ -369,12 +565,16 @@ class EnhancedDocumentLoader:
             metadata.update({
                 'source': file_path,
                 'file_name': file_name,
-                'file_type': Path(file_path).suffix.lower(),
+                'file_type': file_extension,
                 'chunk_id': f"{file_name}_{i:04d}",
                 'chunk_index': i,
                 'total_chunks': len(chunks),
                 'chunk_size': len(chunk.page_content),
-                'processing_method': 'semantic' if settings.use_semantic_chunking and self.semantic_splitter else 'enhanced_default'
+                'processing_method': metadata.get('processing_method', 
+                    'markdown_optimized' if file_extension == '.md' else 
+                    'semantic' if settings.use_semantic_chunking and self.semantic_splitter else 
+                    'enhanced_default'
+                )
             })
             
             enhanced_chunks.append(Document(
