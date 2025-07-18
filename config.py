@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     enable_query_expansion: bool = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
     enable_query_preprocessing: bool = os.getenv("ENABLE_QUERY_PREPROCESSING", "true").lower() == "true"
 
+    # LangSmith 설정
+    langsmith_tracing: str = os.getenv("LANGSMITH_TRACING", "false")
+    langsmith_endpoint: Optional[str] = os.getenv("LANGSMITH_ENDPOINT")
+    langsmith_api_key: Optional[str] = os.getenv("LANGSMITH_API_KEY")
+    langsmith_project: Optional[str] = os.getenv("LANGSMITH_PROJECT")
+
     temperature: float = 0.3
     max_tokens: int = 4096  # 기본값 - 모델별로 자동 조정됨
     
