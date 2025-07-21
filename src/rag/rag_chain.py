@@ -358,11 +358,11 @@ class RAGChain:
             # 4. 메타데이터 품질 점수
             metadata_score = self._calculate_metadata_quality(doc.metadata)
             
-            # 5. 종합 점수 계산
+            # 5. 종합 점수 계산 (관련성에 더 높은 가중치)
             final_score = (
-                relevance_score * 0.5 +
-                quality_score * 0.2 +
-                length_score * 0.2 +
+                relevance_score * 0.7 +
+                quality_score * 0.1 +
+                length_score * 0.1 +
                 metadata_score * 0.1
             )
             
@@ -401,7 +401,9 @@ class RAGChain:
             quality_score += 0.1
         
         # 전문 용어 및 키워드 포함 여부
-        professional_terms = ['시스템', '정보', '구축', '운영', '관리', '지침', '규정', '법령']
+        professional_terms = ['시스템', '정보', '구축', '운영', '관리', '지침', '규정', '법령',
+                            '발굴', '유물', '토기', '백제', '고구려', '출토', '유적', '조사',
+                            '파수', '고배', '호', '옹', '시루', '토성', '몽촌토성']
         term_count = sum(1 for term in professional_terms if term in content)
         quality_score += min(0.2, term_count * 0.05)
         
@@ -559,27 +561,39 @@ class RAGChain:
         # 기본 정제
         processed_query = query.strip()
         
+        # 특정 고유명사가 포함된 경우 제한적 확장
+        specific_terms = ['우각형파수편', '고배', '토기편', '파수편']
+        contains_specific = any(term in processed_query for term in specific_terms)
+        
         if settings.enable_query_expansion:
-            # 1차: 새로운 동적 키워드 확장 사용 (임베딩 모델 포함)
-            try:
-                # 임베딩 모델을 KeywordExpander에 전달
-                keyword_expander = TextProcessor.get_keyword_expander(
-                    embedding_model=self.vector_db.embedding_model
-                )
-                
-                expanded_query = TextProcessor.expand_query(
-                    processed_query,
-                    use_static_expansion=False,  # 정적 확장은 비활성화
-                    use_dynamic_expansion=True,  # 동적 확장 활성화
-                    max_terms=20  # 최대 20개 키워드
-                )
-                
-                if expanded_query and expanded_query != processed_query:
-                    logger.info(f"동적 키워드 확장 완료: '{query}' -> '{expanded_query[:100]}...'")
-                    return expanded_query
+            if contains_specific:
+                # 특정 용어가 있으면 기본 확장만 수행
+                logger.info(f"특정 용어 감지, 제한적 확장 수행: {processed_query}")
+                # 질문 의도 키워드만 추가
+                if '뭐야' in processed_query or '무엇' in processed_query:
+                    processed_query += " 백제 토기 유물"
+                return processed_query
+            else:
+                # 1차: 새로운 동적 키워드 확장 사용 (임베딩 모델 포함)
+                try:
+                    # 임베딩 모델을 KeywordExpander에 전달
+                    keyword_expander = TextProcessor.get_keyword_expander(
+                        embedding_model=self.vector_db.embedding_model
+                    )
                     
-            except Exception as e:
-                logger.warning(f"동적 키워드 확장 실패: {str(e)}")
+                    expanded_query = TextProcessor.expand_query(
+                        processed_query,
+                        use_static_expansion=False,  # 정적 확장은 비활성화
+                        use_dynamic_expansion=True,  # 동적 확장 활성화
+                        max_terms=20  # 최대 20개 키워드
+                    )
+                    
+                    if expanded_query and expanded_query != processed_query:
+                        logger.info(f"동적 키워드 확장 완료: '{query}' -> '{expanded_query[:100]}...'")
+                        return expanded_query
+                        
+                except Exception as e:
+                    logger.warning(f"동적 키워드 확장 실패: {str(e)}")
             
             # 2차: 문서 기반 관련 용어 추가 (기존 로직)
             try:

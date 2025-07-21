@@ -22,43 +22,7 @@ class ModelRegistry:
     
     # 모델별 설정 정보
     MODEL_CONFIGS: Dict[str, Dict[str, Any]] = {
-        # OpenAI 모델
-        "gpt-3.5-turbo": {
-            "provider": "openai",
-            "max_tokens": 4096,
-            "context_window": 16385,
-            "description": "빠르고 효율적"
-        },
-        "gpt-3.5-turbo-16k": {
-            "provider": "openai",
-            "max_tokens": 4096,
-            "context_window": 16385,
-            "description": "확장된 컨텍스트"
-        },
-        "gpt-4": {
-            "provider": "openai",
-            "max_tokens": 8192,
-            "context_window": 8192,
-            "description": "더 정확하지만 느림"
-        },
-        "gpt-4-32k": {
-            "provider": "openai",
-            "max_tokens": 8192,
-            "context_window": 32768,
-            "description": "대용량 컨텍스트"
-        },
-        "gpt-4-turbo": {
-            "provider": "openai",
-            "max_tokens": 4096,
-            "context_window": 128000,
-            "description": "GPT-4의 빠른 버전"
-        },
-        "gpt-4-turbo-preview": {
-            "provider": "openai",
-            "max_tokens": 4096,
-            "context_window": 128000,
-            "description": "GPT-4 터보 프리뷰"
-        },
+        # OpenAI 모델       
         "gpt-4o": {
             "provider": "openai",
             "max_tokens": 4096,
@@ -70,6 +34,24 @@ class ModelRegistry:
             "max_tokens": 16384,
             "context_window": 128000,
             "description": "가벼운 옴니 모델"
+        },
+        "gpt-4.1": {
+            "provider": "openai",
+            "max_tokens": 8192,
+            "context_window": 1000000,
+            "description": "코딩 특화 1M 토큰"
+        },
+        "gpt-4.1-mini": {
+            "provider": "openai",
+            "max_tokens": 8192,
+            "context_window": 1000000,
+            "description": "균형잡힌 1M 토큰"
+        },
+        "gpt-4.1-nano": {
+            "provider": "openai",
+            "max_tokens": 4096,
+            "context_window": 1000000,
+            "description": "빠르고 저렴한 1M 토큰"
         },
         
         # Google Gemini 모델

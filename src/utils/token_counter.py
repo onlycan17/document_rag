@@ -18,7 +18,10 @@ class TokenCounter:
                 "gpt-4": 8192,
                 "gpt-4-turbo-preview": 128000,
                 "gpt-4o": 128000,
-                "gpt-4o-mini": 128000
+                "gpt-4o-mini": 128000,
+                "gpt-4.1": 1000000,
+                "gpt-4.1-mini": 1000000,
+                "gpt-4.1-nano": 1000000
             },
             "google": {
                 "gemini-1.5-flash": 1048576,  # 1M tokens

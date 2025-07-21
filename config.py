@@ -52,10 +52,10 @@ class Settings(BaseSettings):
     semantic_chunk_sentences: int = 3  # 의미 기반 청킹 시 문장 단위
 
     # RAG 설정 - 검색 성능 최적화
-    k_documents: int = int(os.getenv("K_DOCUMENTS", "8"))  # 모델 토큰 제한 고려하여 8개로 조정
-    search_threshold_faiss: float = 1.24  # FAISS 임계값 (거리 기반, 38% 유사도에 해당)
+    k_documents: int = int(os.getenv("K_DOCUMENTS", "12"))  # 더 많은 문서를 검색하여 관련 정보 포함 가능성 높임
+    search_threshold_faiss: float = 1.5  # FAISS 임계값 (거리 기반, 25% 유사도에 해당, 더 관대한 검색)
     search_threshold_chromadb: float = 0.38  # ChromaDB 임계값 (유사도 38%)
-    use_mmr_search: bool = os.getenv("USE_MMR_SEARCH", "true").lower() == "true"  # 다양성 확보
+    use_mmr_search: bool = os.getenv("USE_MMR_SEARCH", "false").lower() == "true"  # MMR 검색 비활성화 (점수 계산 문제)
     mmr_diversity_score: float = 0.3  # MMR 다양성 점수
 
     # 하이브리드 검색 설정
