@@ -5,6 +5,14 @@ RAG 컨텍스트 검증 스크립트
 우각형파수편 검색 시 LLM에 전달되는 컨텍스트 확인
 """
 
+import sys
+import os
+from pathlib import Path
+
+# 프로젝트 루트를 Python 경로에 추가
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from src.rag.rag_chain import RAGChain
 import logging
 

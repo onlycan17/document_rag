@@ -5,8 +5,9 @@ import os
 import sys
 import logging
 
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project root to path  
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
 
 from src.vectorstore import VectorDatabase
 from src.rag import RAGChain

@@ -13,22 +13,31 @@ RAG 챗봇 통합 실행 스크립트
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
+from typing import List, Optional
 
 # 프로젝트 루트 디렉토리
 PROJECT_ROOT = Path(__file__).parent
 
-def print_header():
-    """헤더 출력"""
+def print_header() -> None:
+    """
+    헤더 출력
+    
+    RAG 챗봇 시스템의 제목과 구분선을 출력합니다.
+    """
     print("=" * 60)
     print("🤖 RAG 챗봇 시스템 통합 실행 도구")
     print("=" * 60)
     print()
 
-def print_menu():
-    """메인 메뉴 출력"""
+def print_menu() -> None:
+    """
+    메인 메뉴 출력
+    
+    사용 가능한 모든 기능의 메뉴를 출력합니다.
+    """
     print("📋 사용 가능한 기능:")
     print()
     print("1️⃣  Streamlit 앱 실행")

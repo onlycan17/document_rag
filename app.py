@@ -1,10 +1,19 @@
-import streamlit as st
+"""
+RAG 챗봇 메인 애플리케이션
+
+Streamlit 기반의 RAG(Retrieval-Augmented Generation) 챗봇 웹 애플리케이션입니다.
+문서 업로드, 벡터 데이터베이스 관리, 다양한 LLM 모델 지원 등의 기능을 제공합니다.
+"""
+
+import logging
 import os
 import sys
-from pathlib import Path
-import logging
-from datetime import datetime
 import time
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+
+import streamlit as st
 
 # ChromaDB 텔레메트리 비활성화 (가장 먼저 실행)
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
@@ -60,8 +69,21 @@ if 'debug_mode' not in st.session_state:
 if 'token_counter' not in st.session_state:
     st.session_state.token_counter = TokenCounter()
 
-def analyze_chunks(documents):
-    """업로드된 문서의 청크 분석"""
+def analyze_chunks(documents: List[Any]) -> Optional[Dict[str, Any]]:
+    """
+    업로드된 문서의 청크 분석
+    
+    Args:
+        documents: 분석할 문서 청크 리스트
+        
+    Returns:
+        청크 분석 결과 딕셔너리 또는 None (문서가 없는 경우)
+        - count: 청크 개수
+        - avg_size: 평균 크기
+        - min_size: 최소 크기
+        - max_size: 최대 크기
+        - total_chars: 총 문자 수
+    """
     if not documents:
         return None
     
@@ -74,21 +96,49 @@ def analyze_chunks(documents):
         'total_chars': sum(chunk_sizes)
     }
 
-def get_pdf_metadata(documents):
-    """PDF 메타데이터 추출"""
+def get_pdf_metadata(documents: List[Any]) -> Optional[Dict[str, Any]]:
+    """
+    PDF 메타데이터 추출
+    
+    Args:
+        documents: 문서 리스트 (첫 번째 문서의 메타데이터 사용)
+        
+    Returns:
+        PDF 메타데이터 딕셔너리 또는 None (문서가 없는 경우)
+        - extraction_method: 추출 방법
+        - page_count: 페이지 수
+        - ocr_language: OCR 언어
+        - processing_method: 처리 방법
+        - image_count: 이미지 개수
+        - conversion_status: 변환 상태
+    """
     if not documents:
         return None
     
     metadata = documents[0].metadata
     return {
-        'extraction_method': metadata.get('extraction_method', 'standard'),
+        'extraction_method': metadata.get('extraction_method', metadata.get('processing_method', 'standard')),
         'page_count': metadata.get('page_count', 0),
         'ocr_language': metadata.get('ocr_language', None),
-        'processing_method': metadata.get('processing_method', 'standard')
+        'processing_method': metadata.get('processing_method', 'standard'),
+        'image_count': metadata.get('image_count', 0),
+        'conversion_status': metadata.get('conversion_status', 'unknown')
     }
 
-def test_search_quality(vector_db, filename):
-    """업로드된 문서의 검색 품질 테스트"""
+def test_search_quality(vector_db: Any, filename: str) -> Dict[str, Any]:
+    """
+    업로드된 문서의 검색 품질 테스트
+    
+    파일명에서 추출한 키워드로 벡터 데이터베이스 검색을 테스트하여
+    문서가 제대로 인덱싱되었는지 확인합니다.
+    
+    Args:
+        vector_db: 벡터 데이터베이스 인스턴스
+        filename: 테스트할 파일명
+        
+    Returns:
+        키워드별 검색 결과 개수 딕셔너리
+    """
     # 파일명에서 키워드 추출하여 테스트
     test_keywords = []
     filename_lower = filename.lower()
@@ -116,7 +166,13 @@ def test_search_quality(vector_db, filename):
     
     return search_results
 
-def main():
+def main() -> None:
+    """
+    Streamlit 메인 애플리케이션 함수
+    
+    RAG 챗봇의 전체 사용자 인터페이스를 구성하고 실행합니다.
+    사이드바의 설정 패널과 메인 채팅 인터페이스를 포함합니다.
+    """
     st.title(settings.app_title)
     st.markdown(settings.app_description)
     
@@ -139,7 +195,7 @@ def main():
             "문서 업로드 (TXT, MD, PDF)",
             type=['txt', 'md', 'pdf'],
             accept_multiple_files=True,
-            help="대용량 PDF의 경우 OCR 처리 시 시간이 오래 걸릴 수 있습니다."
+            help="📄 PDF 파일은 개선된 변환기로 처리됩니다 (문장 연결성 향상, 이미지 추출). 대용량 PDF의 경우 OCR 처리 시 시간이 오래 걸릴 수 있습니다."
         )
         
         if uploaded_files:
@@ -245,6 +301,10 @@ def main():
                                             info_text += f" | {pdf_metadata['page_count']}페이지"
                                         if pdf_metadata.get('processing_method') == 'markdown_optimized':
                                             info_text += " | 마크다운 최적화"
+                                        elif pdf_metadata.get('processing_method') == 'improved_pdf_converter':
+                                            info_text += " | 개선된 PDF 변환 (문장 연결성 향상)"
+                                            if pdf_metadata.get('image_count', 0) > 0:
+                                                info_text += f" | {pdf_metadata['image_count']}개 이미지 추출"
                                         st.caption(info_text)
                                 
                                 with success_col2:
@@ -575,6 +635,10 @@ def main():
         
         # 봇 응답 생성 (스트리밍/일반 모드 선택)
         with st.chat_message("assistant"):
+            # 공통 변수 초기화
+            context_tokens = 0
+            response = {"status": "error", "answer": "", "sources": []}
+            
             if settings.enable_streaming:
                 # 🚀 스트리밍 모드
                 status_placeholder = st.empty()
@@ -585,7 +649,7 @@ def main():
                 response_sources = []
                 response_status = "unknown"
                 response_search_info = {}
-                context_tokens = 0
+                context_tokens = 0  # 스트리밍 모드용 초기화
                 
                 # 스트리밍 쿼리 실행
                 try:
@@ -656,15 +720,15 @@ def main():
                 # 📝 일반 모드 (기존 방식)
                 with st.spinner("답변을 생성하는 중..."):
                     response = st.session_state.rag_chain.query(prompt)
-                    
-                    # 실제 검색된 문서의 토큰 수 가져오기
-                    context_tokens = st.session_state.rag_chain.get_last_context_tokens()
-                    
-                    # 답변 표시
-                    if response["status"] == "success":
-                        st.markdown(response["answer"])
-                    else:
-                        st.error(response["answer"])
+                
+                # 실제 검색된 문서의 토큰 수 가져오기
+                context_tokens = st.session_state.rag_chain.get_last_context_tokens()
+                
+                # 답변 표시
+                if response["status"] == "success":
+                    st.markdown(response["answer"])
+                else:
+                    st.error(response["answer"])
                 
             # 디버그 모드일 때 검색 결과 표시
             if st.session_state.debug_mode:

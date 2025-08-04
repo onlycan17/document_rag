@@ -37,15 +37,19 @@ ragTest/
 │   │   └── setup.sh
 │   ├── data_management/        # 데이터 관리
 │   │   ├── vector_db_manager.py  # 🎯 통합 벡터 DB 관리
-│   │   ├── load_documents.py
-│   │   └── convert_mongchon_docs.py
+│   │   └── load_documents.py
 │   └── run.sh                  # 앱 실행 스크립트
 │
 ├── 📂 tests/                   # 🧪 테스트 코드
+│   ├── debug/                  # 🔍 디버그 및 진단 테스트
+│   │   ├── test_rag_context.py     # RAG 컨텍스트 검증
+│   │   └── test_rag_query.py       # RAG 쿼리 진단
+│   ├── legacy/                 # 📦 레거시 테스트
+│   │   └── test_gpt41_rag.py       # GPT-4.1 특정 테스트
 │   ├── test_simple.py          # 기본 기능 테스트
 │   ├── test_upstage_embedding.py  # 임베딩 테스트
-│   ├── test_compatibility.py   # 호환성 테스트
-│   └── ...
+│   ├── test_keyword_expansion.py  # 키워드 확장 테스트
+│   └── test_faiss_upstage_compatibility.py  # 호환성 테스트
 │
 ├── 📂 docs/                    # 📚 문서
 │   ├── INSTALL.md              # 설치 가이드

@@ -7,7 +7,9 @@ import re
 from pathlib import Path
 from config import settings
 from .pdf_loader_advanced import AdvancedPDFLoader
+from ..utils.pdf_converter import ImprovedPDFConverter
 import logging
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -247,26 +249,93 @@ class EnhancedDocumentLoader:
             return loader.load()
     
     def _load_pdf_file(self, file_path: str, progress_callback=None) -> List[Document]:
-        """PDF 파일 로딩 최적화"""
+        """PDF 파일 로딩 최적화 - 개선된 PDF 변환기 우선 사용"""
+        # 1차 시도: 개선된 PDF 변환기 (문장 연결성 향상)
+        try:
+            if progress_callback:
+                progress_callback(0.1, "개선된 PDF 변환기로 처리 중...")
+            
+            # 임시 출력 디렉토리 사용
+            import tempfile
+            temp_output_dir = tempfile.mkdtemp(prefix="pdf_convert_")
+            pdf_converter = ImprovedPDFConverter(output_dir=temp_output_dir)
+            
+            # PDF를 마크다운으로 변환
+            markdown_content, image_count = pdf_converter.convert_pdf_to_markdown(
+                file_path, progress_callback
+            )
+            
+            if markdown_content:
+                # 마크다운 내용을 Document 객체로 변환
+                document = Document(
+                    page_content=markdown_content,
+                    metadata={
+                        'source': str(file_path),
+                        'file_name': Path(file_path).name,
+                        'file_type': '.pdf',
+                        'processing_method': 'improved_pdf_converter',
+                        'image_count': image_count,
+                        'conversion_status': 'success'
+                    }
+                )
+                
+                logger.info(f"개선된 PDF 변환기로 처리 완료: {file_path} ({image_count}개 이미지 추출)")
+                
+                # 임시 디렉토리 정리
+                import shutil
+                try:
+                    shutil.rmtree(temp_output_dir)
+                except:
+                    pass
+                
+                return [document]
+            else:
+                logger.warning(f"개선된 PDF 변환기에서 내용 추출 실패: {file_path}")
+                # 임시 디렉토리 정리
+                import shutil
+                try:
+                    shutil.rmtree(temp_output_dir)
+                except:
+                    pass
+                
+        except Exception as e:
+            logger.warning(f"개선된 PDF 변환기 실패, OCR 모드로 전환: {str(e)}")
+            # 임시 디렉토리 정리
+            import shutil
+            try:
+                shutil.rmtree(temp_output_dir)
+            except:
+                pass
+            if progress_callback:
+                progress_callback(0.3, "OCR 모드로 전환 중...")
+        
+        # 2차 시도: OCR을 사용한 고급 PDF 로더
         if self.use_ocr:
             try:
                 if progress_callback:
-                    progress_callback(0.2, "PDF 분석 중... (OCR 모드)")
+                    progress_callback(0.4, "PDF 분석 중... (OCR 모드)")
                 documents = self.advanced_pdf_loader.load_pdf(file_path, progress_callback)
                 logger.info(f"고급 PDF 로더로 처리: {file_path}")
                 return documents
             except Exception as e:
                 logger.warning(f"고급 PDF 로더 실패, 기본 로더 사용: {str(e)}")
                 if progress_callback:
-                    progress_callback(0.3, "기본 PDF 로더로 전환...")
+                    progress_callback(0.6, "기본 PDF 로더로 전환...")
         
-        # 기본 PDF 로더
+        # 3차 시도: 기본 PDF 로더 (최후 수단)
         if progress_callback:
-            progress_callback(0.2, "PDF 텍스트 추출 중...")
+            progress_callback(0.7, "기본 PDF 텍스트 추출 중...")
         loader = PyPDFLoader(file_path)
         documents = loader.load()
         if progress_callback:
-            progress_callback(0.5, "텍스트 추출 완료")
+            progress_callback(0.9, "기본 텍스트 추출 완료")
+        
+        # 기본 로더 사용 시 메타데이터 보강
+        for doc in documents:
+            doc.metadata.update({
+                'processing_method': 'basic_pdf_loader',
+                'conversion_status': 'fallback'
+            })
         
         return documents
     
