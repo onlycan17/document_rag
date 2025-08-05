@@ -16,6 +16,13 @@ from src.constants import (
     REQUEST_TIMEOUT
 )
 import logging
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+# 새로운 컨텍스트 분할 모듈 임포트
+from .context_chunker import ContextChunker, ContextChunk
+from .summarizer import HierarchicalSummarizer
+from .parallel_processor import ParallelRAGProcessor
 
 # 로거 설정
 logger = logging.getLogger(__name__)
@@ -35,6 +42,20 @@ class RAGChain:
         self.streaming_chain = self._create_streaming_chain()  # 스트리밍용 체인
         self.current_provider = provider or settings.llm_provider
         self.current_model = model
+        
+        # 새로운 컨텍스트 분할 시스템 초기화
+        self.context_chunker = ContextChunker(max_chunk_size=30000)  # 30KB 청크
+        self.summarizer = HierarchicalSummarizer(llm=self.llm, max_summary_length=500)
+        self.parallel_processor = ParallelRAGProcessor(
+            max_workers=3,
+            chunk_timeout=30.0,
+            enable_result_merging=True
+        )
+        self.parallel_processor.set_summarizer(self.summarizer)
+        
+        # 대량 문서 처리 활성화 여부
+        self.enable_large_context_processing = getattr(settings, 'enable_large_context_processing', True)
+        self.large_context_threshold = getattr(settings, 'large_context_threshold', 50000)  # 50KB 임계값
         
         # 모델 레지스트리에서 설정 가져오기
         if settings.llm_provider == "local":
@@ -463,9 +484,10 @@ class RAGChain:
     
     def query(self, question: str) -> Dict[str, Any]:
         """
-        향상된 질문 처리
+        향상된 질문 처리 (대량 문서 지원)
         - 쿼리 전처리 및 확장
         - 검색 결과 분석
+        - 컨텍스트 분할 및 병렬 처리 (필요시)
         - 컨텍스트 최적화
         """
         try:
@@ -508,41 +530,18 @@ class RAGChain:
                 else:
                     relevant_docs = fallback_results
             
-            # 2. 컨텍스트 생성 (향상된 포맷팅)
-            context = self._format_documents(relevant_docs, question)
+            # 2. 대량 문서 처리 여부 결정
+            total_context_length = sum(len(doc.page_content) for doc, _ in relevant_docs)
             
-            # 컨텍스트 토큰 수 저장
-            self._last_context_tokens = len(context) // 4
-            
-            # 3. LLM을 통한 답변 생성
-            response = self.chain.invoke({
-                "context": context,
-                "question": question  # 원본 질문 사용
-            })
-            
-            # 응답 텍스트 추출
-            if hasattr(response, 'content'):
-                answer_text = response.content
-            elif isinstance(response, dict) and 'text' in response:
-                answer_text = response['text']
-            elif isinstance(response, str):
-                answer_text = response
+            if (self.enable_large_context_processing and 
+                total_context_length > self.large_context_threshold):
+                # 대량 문서 처리 모드
+                logger.info(f"대량 문서 처리 모드 활성화: {total_context_length:,}자")
+                return self._process_large_context(question, relevant_docs)
             else:
-                answer_text = str(response)
-            
-            # 4. 출처 정보 수집 (향상된 메타데이터)
-            sources = self._generate_enhanced_sources(relevant_docs)
-            
-            # 5. 검색 정보 수집
-            search_info = self._get_search_info(question, relevant_docs)
-            
-            return {
-                "answer": answer_text,
-                "sources": sources,
-                "status": "success",
-                "search_info": search_info,
-                "context_tokens": self._last_context_tokens
-            }
+                # 기존 방식 처리
+                logger.info(f"기존 방식 처리: {total_context_length:,}자")
+                return self._process_standard_context(question, relevant_docs)
             
         except Exception as e:
             logger.error(f"쿼리 처리 중 오류 발생: {str(e)}")
@@ -888,3 +887,206 @@ class RAGChain:
                 "sources": [],
                 "status": "error"
             }
+    
+    def _process_standard_context(self, question: str, relevant_docs: List[tuple]) -> Dict[str, Any]:
+        """기존 방식의 표준 컨텍스트 처리"""
+        # 2. 컨텍스트 생성 (향상된 포맷팅)
+        context = self._format_documents(relevant_docs, question)
+        
+        # 컨텍스트 토큰 수 저장
+        self._last_context_tokens = len(context) // 4
+        
+        # 3. LLM을 통한 답변 생성
+        response = self.chain.invoke({
+            "context": context,
+            "question": question  # 원본 질문 사용
+        })
+        
+        # 응답 텍스트 추출
+        if hasattr(response, 'content'):
+            answer_text = response.content
+        elif isinstance(response, dict) and 'text' in response:
+            answer_text = response['text']
+        elif isinstance(response, str):
+            answer_text = response
+        else:
+            answer_text = str(response)
+        
+        # 4. 출처 정보 수집 (향상된 메타데이터)
+        sources = self._generate_enhanced_sources(relevant_docs)
+        
+        # 5. 검색 정보 수집
+        search_info = self._get_search_info(question, relevant_docs)
+        
+        return {
+            "answer": answer_text,
+            "sources": sources,
+            "status": "success",
+            "search_info": search_info,
+            "context_tokens": self._last_context_tokens,
+            "processing_mode": "standard"
+        }
+    
+    def _process_large_context(self, question: str, relevant_docs: List[tuple]) -> Dict[str, Any]:
+        """대량 문서 처리를 위한 컨텍스트 분할 및 병렬 처리"""
+        try:
+            # 1. 컨텍스트 분할
+            chunks = self.context_chunker.split_documents(
+                relevant_docs, 
+                question, 
+                strategy="hybrid"  # 하이브리드 전략 사용
+            )
+            
+            logger.info(f"컨텍스트 분할 완료: {len(chunks)}개 청크")
+            
+            # 2. 청크 순서 최적화
+            optimized_chunks = self.context_chunker.optimize_chunk_order(chunks, question)
+            
+            # 3. 병렬 처리 실행
+            if len(optimized_chunks) > 1:
+                # 비동기 병렬 처리
+                try:
+                    # 새로운 이벤트 루프가 필요한지 확인
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # 이미 실행 중인 루프가 있는 경우 ThreadPoolExecutor 사용
+                        with ThreadPoolExecutor(max_workers=1) as executor:
+                            future = executor.submit(self._run_async_processing, optimized_chunks, question)
+                            result = future.result(timeout=120)  # 2분 타임아웃
+                    except RuntimeError:
+                        # 실행 중인 루프가 없는 경우 직접 실행
+                        result = asyncio.run(self._run_async_processing(optimized_chunks, question))
+                        
+                except Exception as e:
+                    logger.warning(f"병렬 처리 실패, 순차 처리로 대체: {e}")
+                    # 병렬 처리 실패 시 순차 처리로 대체
+                    result = self.parallel_processor.process_chunks_sequential(
+                        optimized_chunks, 
+                        question, 
+                        self._single_chunk_rag,
+                        early_stop_threshold=0.8
+                    )
+            else:
+                # 단일 청크인 경우 직접 처리
+                result = self._single_chunk_rag(optimized_chunks[0].documents, question)
+                result = {
+                    "answer": result,
+                    "chunks_processed": 1,
+                    "processing_time": 0.0,
+                    "processing_mode": "single_chunk"
+                }
+            
+            # 4. 출처 정보 수집
+            all_sources = []
+            for chunk in optimized_chunks:
+                chunk_sources = self._generate_enhanced_sources(chunk.documents)
+                all_sources.extend(chunk_sources)
+            
+            # 중복 제거
+            unique_sources = []
+            seen_sources = set()
+            for source in all_sources:
+                source_key = (source.get('file_name', ''), source.get('chunk_id', ''))
+                if source_key not in seen_sources:
+                    unique_sources.append(source)
+                    seen_sources.add(source_key)
+            
+            # 5. 검색 정보 수집
+            search_info = self._get_search_info(question, relevant_docs)
+            search_info.update({
+                "chunks_created": len(chunks),
+                "chunks_processed": result.get("chunks_processed", len(optimized_chunks)),
+                "processing_time": result.get("processing_time", 0.0),
+                "chunking_strategy": "hybrid"
+            })
+            
+            # 6. 최종 결과 구성
+            return {
+                "answer": result.get("answer", "처리 중 오류가 발생했습니다."),
+                "sources": unique_sources,
+                "status": "success",
+                "search_info": search_info,
+                "context_tokens": sum(chunk.total_length for chunk in optimized_chunks) // 4,
+                "processing_mode": "large_context",
+                "chunks_summary": self.context_chunker.get_chunk_summary(optimized_chunks)
+            }
+            
+        except Exception as e:
+            logger.error(f"대량 문서 처리 중 오류: {e}")
+            # 오류 발생 시 기존 방식으로 대체
+            logger.info("기존 방식으로 대체 처리")
+            return self._process_standard_context(question, relevant_docs)
+    
+    async def _run_async_processing(self, chunks: List[ContextChunk], question: str) -> Dict[str, Any]:
+        """비동기 처리 실행"""
+        return await self.parallel_processor.process_chunks_parallel(
+            chunks,
+            question,
+            self._single_chunk_rag
+        )
+    
+    def _single_chunk_rag(self, documents: List[tuple], question: str) -> str:
+        """단일 청크에 대한 RAG 처리"""
+        try:
+            # 컨텍스트 생성
+            context = self._format_documents(documents, question)
+            
+            # LLM 호출
+            response = self.chain.invoke({
+                "context": context,
+                "question": question
+            })
+            
+            # 응답 텍스트 추출
+            if hasattr(response, 'content'):
+                return response.content
+            elif isinstance(response, dict) and 'text' in response:
+                return response['text']
+            elif isinstance(response, str):
+                return response
+            else:
+                return str(response)
+                
+        except Exception as e:
+            logger.error(f"단일 청크 RAG 처리 오류: {e}")
+            return f"이 문서 청크 처리 중 오류가 발생했습니다: {str(e)}"
+    
+    def get_large_context_settings(self) -> Dict[str, Any]:
+        """대량 컨텍스트 처리 설정 정보 반환"""
+        return {
+            "enable_large_context_processing": self.enable_large_context_processing,
+            "large_context_threshold": self.large_context_threshold,
+            "max_chunk_size": self.context_chunker.max_chunk_size,
+            "parallel_workers": self.parallel_processor.max_workers,
+            "chunk_timeout": self.parallel_processor.chunk_timeout,
+            "enable_result_merging": self.parallel_processor.enable_result_merging
+        }
+    
+    def update_large_context_settings(self, **kwargs):
+        """대량 컨텍스트 처리 설정 업데이트"""
+        if 'enable_large_context_processing' in kwargs:
+            self.enable_large_context_processing = kwargs['enable_large_context_processing']
+        
+        if 'large_context_threshold' in kwargs:
+            self.large_context_threshold = kwargs['large_context_threshold']
+        
+        if 'max_chunk_size' in kwargs:
+            self.context_chunker.max_chunk_size = kwargs['max_chunk_size']
+        
+        if 'parallel_workers' in kwargs:
+            self.parallel_processor.max_workers = kwargs['parallel_workers']
+        
+        if 'chunk_timeout' in kwargs:
+            self.parallel_processor.chunk_timeout = kwargs['chunk_timeout']
+        
+        if 'enable_result_merging' in kwargs:
+            self.parallel_processor.enable_result_merging = kwargs['enable_result_merging']
+        
+        logger.info(f"대량 컨텍스트 처리 설정 업데이트: {kwargs}")
+
+    def get_processing_statistics(self) -> Dict[str, Any]:
+        """컨텍스트 분할 및 병렬 처리 통계 반환"""
+        return {
+            "parallel_processing_stats": self.parallel_processor.get_processing_stats(),
+            "current_settings": self.get_large_context_settings()
+        }

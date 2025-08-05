@@ -166,6 +166,96 @@ def test_search_quality(vector_db: Any, filename: str) -> Dict[str, Any]:
     
     return search_results
 
+def serve_image(image_path: str) -> str:
+    """
+    이미지 파일을 base64로 인코딩하여 Streamlit에서 표시할 수 있는 형태로 변환
+    
+    Args:
+        image_path: 이미지 파일 경로
+        
+    Returns:
+        base64 인코딩된 이미지 데이터 URL
+    """
+    import base64
+    
+    try:
+        if os.path.exists(image_path):
+            with open(image_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode()
+                
+                # 파일 확장자로 MIME 타입 결정
+                ext = Path(image_path).suffix.lower()
+                if ext in ['.jpg', '.jpeg']:
+                    mime_type = 'image/jpeg'
+                elif ext == '.png':
+                    mime_type = 'image/png'
+                elif ext == '.gif':
+                    mime_type = 'image/gif'
+                elif ext == '.bmp':
+                    mime_type = 'image/bmp'
+                else:
+                    mime_type = 'image/png'  # 기본값
+                
+                return f"data:{mime_type};base64,{encoded_string}"
+        else:
+            logger.warning(f"이미지 파일을 찾을 수 없습니다: {image_path}")
+            return None
+    except Exception as e:
+        logger.error(f"이미지 서빙 실패: {str(e)}")
+        return None
+
+def display_images_in_response(response_text: str, context_documents: List = None) -> str:
+    """
+    응답 텍스트와 컨텍스트 문서에서 이미지를 찾아 표시
+    
+    Args:
+        response_text: RAG 응답 텍스트
+        context_documents: 검색된 컨텍스트 문서들
+        
+    Returns:
+        이미지가 포함된 HTML 마크업이 추가된 응답 텍스트
+    """
+    if not context_documents:
+        return response_text
+    
+    # 관련 이미지 수집
+    related_images = []
+    
+    for doc in context_documents:
+        metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+        images = metadata.get('images', [])
+        
+        for image_info in images:
+            image_path = image_info.get('path', '')
+            if os.path.exists(image_path):
+                related_images.append({
+                    'path': image_path,
+                    'filename': image_info.get('filename', 'Unknown'),
+                    'source': metadata.get('file_name', 'Unknown')
+                })
+    
+    # 이미지가 있으면 응답에 추가
+    if related_images:
+        st.markdown("### 📸 관련 이미지")
+        
+        # 이미지를 열로 나누어 표시 (최대 3개씩)
+        cols = st.columns(min(3, len(related_images)))
+        
+        for i, image_info in enumerate(related_images[:6]):  # 최대 6개까지만 표시
+            col_idx = i % 3
+            
+            with cols[col_idx]:
+                image_data_url = serve_image(image_info['path'])
+                if image_data_url:
+                    st.markdown(
+                        f'<img src="{image_data_url}" style="width:100%; border-radius:5px; margin-bottom:5px;">',
+                        unsafe_allow_html=True
+                    )
+                    st.caption(f"📄 {image_info['source']}")
+                    st.caption(f"🖼️ {image_info['filename']}")
+    
+    return response_text
+
 def main() -> None:
     """
     Streamlit 메인 애플리케이션 함수
@@ -192,10 +282,10 @@ def main() -> None:
         
         # 파일 업로드
         uploaded_files = st.file_uploader(
-            "문서 업로드 (TXT, MD, PDF)",
-            type=['txt', 'md', 'pdf'],
+            "문서 업로드 (TXT, MD, PDF, DOCX) 🆕 이미지 추출 지원",
+            type=['txt', 'md', 'pdf', 'docx'],
             accept_multiple_files=True,
-            help="📄 PDF 파일은 개선된 변환기로 처리됩니다 (문장 연결성 향상, 이미지 추출). 대용량 PDF의 경우 OCR 처리 시 시간이 오래 걸릴 수 있습니다."
+            help="📄 PDF: 개선된 변환기로 처리 (문장 연결성 향상, 이미지 자동 추출)\n📝 DOCX: 문단, 표, 이미지 모두 추출\n🖼️ 추출된 이미지는 챗봇 응답에서 자동으로 표시됩니다"
         )
         
         if uploaded_files:
@@ -616,13 +706,69 @@ def main() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             
+            # 어시스턴트 응답에 이미지 표시
+            if message["role"] == "assistant" and "sources" in message and message["sources"]:
+                # 관련 이미지 수집 및 표시
+                related_images = []
+                for source in message["sources"]:
+                    # source가 dict인지 확인하고 images 필드 찾기
+                    if isinstance(source, dict):
+                        # 직접 images 필드가 있는 경우
+                        images = source.get('images', [])
+                        source_name = source.get('file_name', 'Unknown')
+                    else:
+                        # Document 객체인 경우 metadata에서 찾기
+                        metadata = getattr(source, 'metadata', {})
+                        images = metadata.get('images', [])
+                        source_name = metadata.get('file_name', 'Unknown')
+                    
+                    for image_info in images:
+                        image_path = image_info.get('path', '')
+                        if os.path.exists(image_path):
+                            related_images.append({
+                                'path': image_path,
+                                'filename': image_info.get('filename', 'Unknown'),
+                                'source': source_name
+                            })
+                
+                # 이미지 표시
+                if related_images:
+                    st.markdown("### 📸 관련 이미지")
+                    
+                    # 이미지를 열로 나누어 표시 (최대 3개씩)
+                    cols = st.columns(min(3, len(related_images)))
+                    
+                    for i, image_info in enumerate(related_images[:6]):  # 최대 6개까지만 표시
+                        col_idx = i % 3
+                        
+                        with cols[col_idx]:
+                            image_data_url = serve_image(image_info['path'])
+                            if image_data_url:
+                                st.markdown(
+                                    f'<img src="{image_data_url}" style="width:100%; border-radius:5px; margin-bottom:5px;">',
+                                    unsafe_allow_html=True
+                                )
+                                st.caption(f"📄 {image_info['source']}")
+                                st.caption(f"🖼️ {image_info['filename']}")
+            
             # 출처 정보 표시
             if "sources" in message and message["sources"]:
                 with st.expander("📌 참고 문서"):
                     for i, source in enumerate(message["sources"]):
-                        st.markdown(f"**문서 {i+1}**: {source['file_name']}")
-                        st.markdown(f"- 관련도: {1 - source['relevance_score']:.2%}")
-                        st.markdown(f"- 내용 미리보기: {source['content_preview']}")
+                        if isinstance(source, dict):
+                            file_name = source.get('file_name', 'Unknown')
+                            relevance_score = source.get('relevance_score', 0)
+                            content_preview = source.get('content_preview', '')
+                        else:
+                            metadata = getattr(source, 'metadata', {})
+                            file_name = metadata.get('file_name', 'Unknown')
+                            relevance_score = 0
+                            content_preview = source.page_content[:200] if hasattr(source, 'page_content') else ''
+                        
+                        st.markdown(f"**문서 {i+1}**: {file_name}")
+                        if relevance_score > 0:
+                            st.markdown(f"- 관련도: {1 - relevance_score:.2%}")
+                        st.markdown(f"- 내용 미리보기: {content_preview}")
                         st.divider()
     
     # 사용자 입력
@@ -704,6 +850,10 @@ def main() -> None:
                         "search_info": response_search_info
                     }
                     
+                    # 스트리밍 완료 후 관련 이미지 표시
+                    if response_status == "success" and response_sources:
+                        display_images_in_response(full_response, response_sources)
+                    
                 except Exception as e:
                     # 스트리밍 에러 처리
                     logger.error(f"스트리밍 중 오류 발생: {str(e)}")
@@ -727,6 +877,10 @@ def main() -> None:
                 # 답변 표시
                 if response["status"] == "success":
                     st.markdown(response["answer"])
+                    
+                    # 관련 이미지 표시
+                    if 'sources' in response and response['sources']:
+                        display_images_in_response(response["answer"], response['sources'])
                 else:
                     st.error(response["answer"])
                 
@@ -775,16 +929,71 @@ def main() -> None:
                     "sources": response["sources"]
                 })
                 
+                # 관련 이미지 표시 (새로운 응답)
+                if response["sources"]:
+                    related_images = []
+                    for source in response["sources"]:
+                        # source가 dict인지 확인하고 images 필드 찾기
+                        if isinstance(source, dict):
+                            images = source.get('images', [])
+                            source_name = source.get('file_name', 'Unknown')
+                        else:
+                            # Document 객체인 경우 metadata에서 찾기
+                            metadata = getattr(source, 'metadata', {})
+                            images = metadata.get('images', [])
+                            source_name = metadata.get('file_name', 'Unknown')
+                        
+                        for image_info in images:
+                            image_path = image_info.get('path', '')
+                            if os.path.exists(image_path):
+                                related_images.append({
+                                    'path': image_path,
+                                    'filename': image_info.get('filename', 'Unknown'),
+                                    'source': source_name
+                                })
+                    
+                    # 이미지 표시
+                    if related_images:
+                        st.markdown("### 📸 관련 이미지")
+                        
+                        # 이미지를 열로 나누어 표시 (최대 3개씩)
+                        cols = st.columns(min(3, len(related_images)))
+                        
+                        for i, image_info in enumerate(related_images[:6]):  # 최대 6개까지만 표시
+                            col_idx = i % 3
+                            
+                            with cols[col_idx]:
+                                image_data_url = serve_image(image_info['path'])
+                                if image_data_url:
+                                    st.markdown(
+                                        f'<img src="{image_data_url}" style="width:100%; border-radius:5px; margin-bottom:5px;">',
+                                        unsafe_allow_html=True
+                                    )
+                                    st.caption(f"📄 {image_info['source']}")
+                                    st.caption(f"🖼️ {image_info['filename']}")
+                
                 # 출처 정보 표시
                 if response["sources"]:
                     with st.expander("📌 참고 문서"):
                         for i, source in enumerate(response["sources"]):
-                            st.markdown(f"**문서 {i+1}**: {source['file_name']}")
-                            if 'relevance_percent' in source:
-                                st.markdown(f"- 관련도: {source['relevance_percent']:.1f}%")
+                            if isinstance(source, dict):
+                                file_name = source.get('file_name', 'Unknown')
+                                relevance_score = source.get('relevance_score', 0)
+                                content_preview = source.get('content_preview', '')
+                                relevance_percent = source.get('relevance_percent', None)
                             else:
-                                st.markdown(f"- 관련도: {(1 - source['relevance_score']):.2%}")
-                            st.markdown(f"- 내용 미리보기: {source['content_preview']}")
+                                metadata = getattr(source, 'metadata', {})
+                                file_name = metadata.get('file_name', 'Unknown')
+                                relevance_score = 0
+                                content_preview = source.page_content[:200] if hasattr(source, 'page_content') else ''
+                                relevance_percent = None
+                            
+                            st.markdown(f"**문서 {i+1}**: {file_name}")
+                            if relevance_percent is not None:
+                                st.markdown(f"- 관련도: {relevance_percent:.1f}%")
+                            elif relevance_score > 0:
+                                st.markdown(f"- 관련도: {(1 - relevance_score):.2%}")
+                            st.markdown(f"- 내용 미리보기: {content_preview}")
                             st.divider()
             else:
                 # 에러 상황일 때도 메시지 저장

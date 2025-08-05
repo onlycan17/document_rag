@@ -25,6 +25,9 @@ PyPDF2==3.0.1
 pdf2image[jpeg]==1.17.0  # Includes JPEG support for better compatibility
 pytesseract==0.3.13
 
+# DOCX Processing
+python-docx==1.1.2
+
 # Image Processing
 pillow>=7.1.0,<11
 

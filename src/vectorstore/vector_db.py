@@ -373,13 +373,34 @@ class EnhancedVectorDatabase:
         if settings.vector_db_type == "chromadb" and self.vector_store:
             try:
                 self.vector_store.delete_collection()
-            except:
-                pass
+                logger.info("ChromaDB 컬렉션 삭제 완료")
+            except Exception as e:
+                logger.error(f"ChromaDB 컬렉션 삭제 실패: {str(e)}")
+                # 물리적 파일도 삭제 시도
+                import shutil
+                if os.path.exists(settings.vector_db_path):
+                    try:
+                        shutil.rmtree(settings.vector_db_path)
+                        logger.info("ChromaDB 디렉토리 삭제 완료")
+                    except Exception as dir_e:
+                        logger.error(f"ChromaDB 디렉토리 삭제 실패: {str(dir_e)}")
         elif settings.vector_db_type == "faiss":
-            # FAISS 파일 삭제
-            faiss_index_path = os.path.join(settings.vector_db_path, "faiss_index.pkl")
-            if os.path.exists(faiss_index_path):
-                os.remove(faiss_index_path)
+            # 모든 FAISS 관련 파일 삭제
+            faiss_files = [
+                "index.faiss",
+                "index.pkl", 
+                "documents_cache.pkl",
+                "faiss_index.pkl"  # 기존 호환성 유지
+            ]
+            
+            for filename in faiss_files:
+                file_path = os.path.join(settings.vector_db_path, filename)
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"FAISS 파일 삭제: {filename}")
+                    except Exception as e:
+                        logger.error(f"FAISS 파일 삭제 실패 ({filename}): {str(e)}")
         
         # 캐시 및 인덱스 초기화
         self.documents_cache = []
@@ -391,7 +412,7 @@ class EnhancedVectorDatabase:
         # 벡터 스토어 재초기화
         self._initialize_vector_store()
         
-        logger.info("벡터 데이터베이스가 초기화되었습니다.")
+        logger.info("벡터 데이터베이스가 완전히 초기화되었습니다.")
     
     def save_faiss_index(self):
         """FAISS 인덱스 저장 (pickle 오류 방지)"""

@@ -79,6 +79,14 @@ class Settings(BaseSettings):
     # 스트리밍 설정
     enable_streaming: bool = os.getenv("ENABLE_STREAMING", "true").lower() == "true"
     
+    # 대량 문서 처리 설정
+    enable_large_context_processing: bool = os.getenv("ENABLE_LARGE_CONTEXT_PROCESSING", "true").lower() == "true"
+    large_context_threshold: int = int(os.getenv("LARGE_CONTEXT_THRESHOLD", "50000"))  # 50KB
+    max_chunk_size: int = int(os.getenv("MAX_CHUNK_SIZE", "30000"))  # 30KB
+    parallel_workers: int = int(os.getenv("PARALLEL_WORKERS", "3"))
+    chunk_timeout: float = float(os.getenv("CHUNK_TIMEOUT", "30.0"))  # 30초
+    enable_result_merging: bool = os.getenv("ENABLE_RESULT_MERGING", "true").lower() == "true"
+    
     # UI 설정
     app_title: str = "쉽게 설명하는 RAG 챗봇"
     app_description: str = "복잡한 문서도 쉽게! 궁금한 내용을 질문하세요. 일반인도 이해할 수 있도록 친절하게 설명해드립니다."
