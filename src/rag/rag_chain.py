@@ -13,7 +13,7 @@ from src.constants import (
     MODEL_PROMPT_TOKENS, MODEL_MIN_CONTEXT, MODEL_MAX_CONTEXT,
     MODEL_SAFETY_MARGIN, LOCAL_MODEL_SAFETY_MARGIN, TOKEN_TO_CHAR_RATIO,
     OPTIMAL_DOC_LENGTH_RANGE, MAX_DOC_LENGTH_SCORE, LOCAL_MODEL_MAX_DOCUMENTS,
-    REQUEST_TIMEOUT
+    REQUEST_TIMEOUT, LOCAL_MODEL_TIMEOUT, MAX_RETRIES, RETRY_DELAY, RETRY_DELAY_LOCAL
 )
 import logging
 import asyncio
@@ -127,6 +127,7 @@ class RAGChain:
         
         elif provider == "local":
             # OpenAI 호환 API를 사용하는 로컬 모델
+            from src.constants import LOCAL_MODEL_TIMEOUT
             return ChatOpenAI(
                 openai_api_key=settings.local_llm_api_key,
                 openai_api_base=settings.local_llm_base_url + "/v1",
@@ -134,7 +135,8 @@ class RAGChain:
                 temperature=settings.temperature,
                 max_tokens=max_tokens,
                 streaming=streaming,
-                callbacks=callbacks
+                callbacks=callbacks,
+                request_timeout=LOCAL_MODEL_TIMEOUT  # 로컬 모델용 타임아웃 설정
             )
         
         else:

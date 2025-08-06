@@ -59,7 +59,7 @@ if 'rag_chain' not in st.session_state:
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'document_loader' not in st.session_state:
-    st.session_state.document_loader = DocumentLoader(use_ocr=True)
+    st.session_state.document_loader = DocumentLoader(use_ocr=True, use_agent_preprocessing=False, enable_postprocessing=False)
 if 'current_provider' not in st.session_state:
     st.session_state.current_provider = settings.llm_provider
 if 'current_model' not in st.session_state:
@@ -280,6 +280,28 @@ def main() -> None:
             help="스캔된 PDF나 이미지 PDF에서 텍스트를 추출하려면 체크하세요. (Tesseract 필요)"
         )
         
+        # 에이전트 모드 옵션
+        use_agent_mode = st.checkbox(
+            "🤖 에이전트 모드 (고품질 처리)", 
+            value=False,
+            help="로컬 LLM을 활용한 지능형 문서 전처리를 사용합니다.\n• 한국어 텍스트 분절 문제 해결\n• 고유명사 완성도 향상\n• 문맥 연결성 개선\n⚠️ 처리 시간이 더 오래 걸립니다."
+        )
+        
+        # 2단계 품질 개선 옵션 (기본값: True)
+        enable_postprocessing = st.checkbox(
+            "✨ PDF 변환 시 텍스트 품질 자동 개선 (권장)", 
+            value=True,
+            help="PDF에서 추출한 텍스트의 품질을 자동으로 개선합니다.\n• 한국어 문장 연결 및 띄어쓰기 교정\n• 문맥 일관성 향상\n• 품질 점수 90점 이상 달성\n• 처리된 파일은 processed_docs 폴더에 저장됩니다.",
+            disabled=False
+        )
+        
+        # 현재 설정 상태 표시
+        if use_agent_mode:
+            st.info("🤖 **에이전트 모드 활성화**: 고품질 전처리 사용 중")
+        if enable_postprocessing:
+            st.info("✨ **2단계 품질 개선 활성화**: PDF 변환 후 자동으로 텍스트 품질을 개선합니다.")
+        st.divider()
+        
         # 파일 업로드
         uploaded_files = st.file_uploader(
             "문서 업로드 (TXT, MD, PDF, DOCX) 🆕 이미지 추출 지원",
@@ -290,6 +312,15 @@ def main() -> None:
         
         if uploaded_files:
             if st.button("문서 처리 및 저장"):
+                # DocumentLoader를 현재 옵션으로 재초기화
+                if (use_agent_mode != st.session_state.document_loader.use_agent_preprocessing or
+                    enable_postprocessing != getattr(st.session_state.document_loader, 'enable_postprocessing', False)):
+                    st.session_state.document_loader = DocumentLoader(
+                        use_ocr=st.session_state.document_loader.use_ocr,
+                        use_agent_preprocessing=use_agent_mode,
+                        enable_postprocessing=enable_postprocessing
+                    )
+                
                 # 디렉토리 준비
                 DocumentProcessor.prepare_directories()
                 
@@ -342,13 +373,20 @@ def main() -> None:
                         start_time = time.time()
                         processing_error = None
                         documents = None
+                        processing_time = 0.0  # 초기값 설정
                         
                         try:
                             logger.info(f"문서 처리 시작: {uploaded_file.name} ({file_size_mb:.1f}MB)")
                             
-                            # OCR 설정 업데이트
-                            if st.session_state.document_loader.use_ocr != use_ocr:
-                                st.session_state.document_loader = DocumentLoader(use_ocr=use_ocr)
+                            # DocumentLoader 설정 업데이트
+                            current_ocr = getattr(st.session_state.document_loader, 'use_ocr', True)
+                            current_agent = getattr(st.session_state.document_loader, 'use_agent_preprocessing', False)
+                            
+                            if current_ocr != use_ocr or current_agent != use_agent_mode:
+                                st.session_state.document_loader = DocumentLoader(
+                                    use_ocr=use_ocr, 
+                                    use_agent_preprocessing=use_agent_mode
+                                )
                             
                             # 벡터 DB에 추가하기 전 청크 수 확인
                             before_count = st.session_state.vector_db.get_document_count()
@@ -389,9 +427,15 @@ def main() -> None:
                                         info_text = f"**처리 정보:** {pdf_metadata['extraction_method']}"
                                         if pdf_metadata['page_count']:
                                             info_text += f" | {pdf_metadata['page_count']}페이지"
-                                        if pdf_metadata.get('processing_method') == 'markdown_optimized':
+                                        
+                                        processing_method = pdf_metadata.get('processing_method', '')
+                                        if processing_method == 'markdown_optimized':
                                             info_text += " | 마크다운 최적화"
-                                        elif pdf_metadata.get('processing_method') == 'improved_pdf_converter':
+                                        elif 'agent_based' in processing_method:
+                                            info_text += " | 🤖 에이전트 기반 고품질 변환"
+                                            if pdf_metadata.get('image_count', 0) > 0:
+                                                info_text += f" | {pdf_metadata['image_count']}개 이미지 추출"
+                                        elif processing_method == 'improved_pdf_converter_with_images':
                                             info_text += " | 개선된 PDF 변환 (문장 연결성 향상)"
                                             if pdf_metadata.get('image_count', 0) > 0:
                                                 info_text += f" | {pdf_metadata['image_count']}개 이미지 추출"
@@ -439,6 +483,7 @@ def main() -> None:
                             else:
                                 failed_files += 1
                                 processing_error = "문서를 로드할 수 없음"
+                                processing_time = time.time() - start_time
                                 
                         except Exception as e:
                             failed_files += 1
@@ -790,12 +835,15 @@ def main() -> None:
                 status_placeholder = st.empty()
                 response_placeholder = st.empty()
                 
+                # 로컬 모델 사용 시 추가 대기 메시지
+                if st.session_state.current_provider == "local":
+                    status_placeholder.warning("⏳ 로컬 모델을 사용 중입니다. 응답 시간이 다소 걸릴 수 있습니다. 잠시만 기다려주세요...")
+                
                 # 스트리밍 응답 변수들
                 full_response = ""
                 response_sources = []
                 response_status = "unknown"
                 response_search_info = {}
-                context_tokens = 0  # 스트리밍 모드용 초기화
                 
                 # 스트리밍 쿼리 실행
                 try:
@@ -811,7 +859,14 @@ def main() -> None:
                         
                         if chunk_type == "status":
                             # 상태 메시지 표시
-                            status_placeholder.info(chunk_content)
+                            if st.session_state.current_provider == "local":
+                                # 로컬 모델용 상태 메시지 커스터마이징
+                                if "검색" in chunk_content:
+                                    status_placeholder.info(chunk_content)
+                                elif "생성" in chunk_content:
+                                    status_placeholder.warning("⏳ 로컬 모델이 답변을 생성 중입니다. 시간이 걸릴 수 있습니다...")
+                            else:
+                                status_placeholder.info(chunk_content)
                             
                         elif chunk_type == "content":
                             # 실시간 답변 내용 추가
@@ -868,11 +923,20 @@ def main() -> None:
                     
             else:
                 # 📝 일반 모드 (기존 방식)
-                with st.spinner("답변을 생성하는 중..."):
+                # 로컬 모델 사용 시 특별 메시지
+                if st.session_state.current_provider == "local":
+                    spinner_text = "⏳ 로컬 모델이 답변을 생성하는 중... (최대 60초까지 걸릴 수 있습니다)"
+                else:
+                    spinner_text = "답변을 생성하는 중..."
+                
+                with st.spinner(spinner_text):
                     response = st.session_state.rag_chain.query(prompt)
                 
-                # 실제 검색된 문서의 토큰 수 가져오기
-                context_tokens = st.session_state.rag_chain.get_last_context_tokens()
+                # 실제 검색된 문서의 토큰 수 가져오기 (안전하게)
+                try:
+                    context_tokens = st.session_state.rag_chain.get_last_context_tokens()
+                except AttributeError:
+                    context_tokens = 0
                 
                 # 답변 표시
                 if response["status"] == "success":

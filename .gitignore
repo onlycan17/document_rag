@@ -19,6 +19,22 @@ vector_db/*
 !data/processed/.gitkeep
 !vector_db/.gitkeep
 
+# Generated MD files and conversion outputs
+converted_docs/
+converted_docs_agent/
+benchmark_agent/
+benchmark_fallback/
+static/images/pdf/
+*.md
+!README.md
+!CLAUDE.md
+!AGENT_SYSTEM_REPORT.md
+
+# Benchmark and test outputs
+benchmark_report.json
+test_*.py
+tests/outputs/
+
 # Logs
 logs/
 *.log
@@ -50,5 +66,21 @@ temp/
 # Large files
 *.pdf
 *.doc
-*.docx.cursor/
+*.docx
+
+# Test outputs
+test_agent_output/
+test_agent_output_fallback/
+test_md_files/
+test_output/
+test_parallel_output/
+test_quick_output/
+test_quick_output_fallback/
+
+# Processed docs
+processed_docs/
+docs/
+
+# Python virtual environment
+ragtest_env/
 .cursor/

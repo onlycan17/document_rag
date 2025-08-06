@@ -248,43 +248,83 @@ class ParallelRAGProcessor:
                             chunk: ContextChunk,
                             query: str,
                             rag_chain_func: Callable) -> ProcessingResult:
-        """단일 청크 처리"""
+        """단일 청크 처리 (재시도 로직 포함)"""
         start_time = time.time()
         
-        try:
-            # 청크 내용을 문서 형태로 변환
-            chunk_documents = chunk.documents
-            
-            # RAG 체인 함수 호출
-            result = rag_chain_func(chunk_documents, query)
-            
-            processing_time = time.time() - start_time
-            
-            return ProcessingResult(
-                chunk_id=chunk.chunk_id,
-                success=True,
-                result=result,
-                metadata={
-                    "chunk_size": chunk.total_length,
-                    "document_count": len(chunk.documents),
-                    "relevance_score": chunk.relevance_score,
-                    "topic_keywords": chunk.topic_keywords
-                },
-                processing_time=processing_time
-            )
-            
-        except Exception as e:
-            processing_time = time.time() - start_time
-            logger.error(f"청크 {chunk.chunk_id} 처리 실패: {e}")
-            
-            return ProcessingResult(
-                chunk_id=chunk.chunk_id,
-                success=False,
-                result=None,
-                metadata={},
-                processing_time=processing_time,
-                error_message=str(e)
-            )
+        # 설정 가져오기
+        from config import settings
+        is_local_model = getattr(settings, 'llm_provider', '') == 'local'
+        max_retries = 3 if is_local_model else 1  # 로컬 모델은 더 많은 재시도
+        retry_delay = 2 if is_local_model else 1  # 로컬 모델은 더 긴 대기시간
+        
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                # 재시도 시 로깅
+                if attempt > 0:
+                    logger.info(f"청크 {chunk.chunk_id} 재시도 {attempt}/{max_retries}")
+                    time.sleep(retry_delay * attempt)  # 지수 백오프
+                
+                # 청크 내용을 문서 형태로 변환
+                chunk_documents = chunk.documents
+                
+                # RAG 체인 함수 호출 (타임아웃 적용)
+                if is_local_model:
+                    # 로컬 모델의 경우 더 긴 타임아웃 설정
+                    import asyncio
+                    import concurrent.futures
+                    
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(rag_chain_func, chunk_documents, query)
+                        try:
+                            # 로컬 모델용 긴 타임아웃 (120초)
+                            from src.constants import LOCAL_MODEL_TIMEOUT
+                            result = future.result(timeout=LOCAL_MODEL_TIMEOUT)
+                        except concurrent.futures.TimeoutError:
+                            logger.warning(f"청크 {chunk.chunk_id} 처리 타임아웃 (시도 {attempt+1}/{max_retries})")
+                            raise TimeoutError("로컬 모델 응답 타임아웃")
+                else:
+                    # 일반 모델 호출
+                    result = rag_chain_func(chunk_documents, query)
+                
+                processing_time = time.time() - start_time
+                
+                # 성공 시 결과 반환
+                return ProcessingResult(
+                    chunk_id=chunk.chunk_id,
+                    success=True,
+                    result=result,
+                    metadata={
+                        "chunk_size": chunk.total_length,
+                        "document_count": len(chunk.documents),
+                        "relevance_score": chunk.relevance_score,
+                        "topic_keywords": chunk.topic_keywords,
+                        "attempts": attempt + 1  # 시도 횟수 기록
+                    },
+                    processing_time=processing_time
+                )
+                
+            except Exception as e:
+                last_error = e
+                logger.warning(f"청크 {chunk.chunk_id} 처리 실패 (시도 {attempt+1}/{max_retries}): {str(e)}")
+                
+                # 마지막 시도가 아니면 계속 시도
+                if attempt < max_retries - 1:
+                    continue
+        
+        # 모든 재시도 실패 시
+        processing_time = time.time() - start_time
+        logger.error(f"청크 {chunk.chunk_id} 최종 처리 실패: {last_error}")
+        
+        return ProcessingResult(
+            chunk_id=chunk.chunk_id,
+            success=False,
+            result=None,
+            metadata={"attempts": max_retries},
+            processing_time=processing_time,
+            error_message=str(last_error)
+        )
     
     def _prioritize_chunks(self, 
                          chunks: List[ContextChunk], 

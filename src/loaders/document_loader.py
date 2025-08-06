@@ -8,6 +8,9 @@ from pathlib import Path
 from config import settings
 from .pdf_loader_advanced import AdvancedPDFLoader
 from ..utils.pdf_converter import ImprovedPDFConverter
+from ..utils.agent_pdf_converter import AgentBasedPDFConverter
+from ..utils.md_postprocessor import MDPostProcessor
+from ..utils.quality_checker import QualityChecker
 import logging
 import tempfile
 from datetime import datetime
@@ -29,7 +32,11 @@ class EnhancedDocumentLoader:
     - 다양한 청킹 전략 지원
     """
     
-    def __init__(self, use_ocr: bool = True):
+    def __init__(self, use_ocr: bool = True, use_agent_preprocessing: bool = False, enable_postprocessing: bool = False):
+        self.use_ocr = use_ocr
+        self.use_agent_preprocessing = use_agent_preprocessing
+        self.enable_postprocessing = enable_postprocessing
+        
         # 기본 텍스트 분할기 (기존 방식)
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.chunk_size,
@@ -258,9 +265,170 @@ class EnhancedDocumentLoader:
             loader = TextLoader(file_path, encoding='utf-8')
             return loader.load()
     
+    def _process_converted_content(self, markdown_content: str, file_path: str, temp_output_dir: str, 
+                                 progress_callback=None, processing_method: str = 'pdf_converter', image_count: int = 0) -> List[Document]:
+        """변환된 마크다운 콘텐츠와 이미지를 처리하여 Document 객체 생성"""
+        
+        # PDF에서 추출된 이미지 정보 수집
+        pdf_stem = Path(file_path).stem
+        extracted_images = []
+        
+        # 이미지 디렉토리에서 해당 PDF의 이미지들 찾기
+        images_dir = Path(temp_output_dir) / "images"
+        if images_dir.exists():
+            for img_path in images_dir.glob(f"{pdf_stem}_page*_img*.png"):
+                try:
+                    stat = img_path.stat()
+                    image_info = {
+                        'filename': img_path.name,
+                        'path': str(img_path),
+                        'relative_path': f"converted_docs/images/{img_path.name}",
+                        'size': stat.st_size,
+                        'format': 'PNG',
+                        'content_type': 'image/png',
+                        'extracted_at': datetime.fromtimestamp(stat.st_ctime).isoformat()
+                    }
+                    extracted_images.append(image_info)
+                except Exception as e:
+                    logger.warning(f"PDF 이미지 정보 수집 실패: {str(e)}")
+        
+        # 이미지를 영구 위치로 복사
+        if extracted_images:
+            permanent_images_dir = Path("static/images/pdf")
+            permanent_images_dir.mkdir(parents=True, exist_ok=True)
+            
+            for image_info in extracted_images:
+                src_path = Path(image_info['path'])
+                dst_path = permanent_images_dir / image_info['filename']
+                
+                try:
+                    import shutil
+                    shutil.copy2(src_path, dst_path)
+                    # 경로 업데이트
+                    image_info['path'] = str(dst_path)
+                    image_info['relative_path'] = f"static/images/pdf/{image_info['filename']}"
+                    logger.info(f"   🖼️  PDF 이미지 이동: {image_info['filename']}")
+                except Exception as e:
+                    logger.warning(f"PDF 이미지 이동 실패: {str(e)}")
+        
+        # 마크다운 내용을 Document 객체로 변환
+        document = Document(
+            page_content=markdown_content,
+            metadata={
+                'source': str(file_path),
+                'file_name': Path(file_path).name,
+                'file_type': '.pdf',
+                'processing_method': processing_method,
+                'image_count': image_count or len(extracted_images),
+                'images': extracted_images,
+                'conversion_status': 'success'
+            }
+        )
+        
+        method_name = "에이전트 기반 변환기" if "agent" in processing_method else "개선된 PDF 변환기"
+        logger.info(f"{method_name}로 처리 완료: {file_path} ({len(extracted_images)}개 이미지 추출)")
+        
+        # MD 파일 저장 (전처리 확인용)
+        try:
+            md_dir = Path("converted_docs")
+            md_dir.mkdir(parents=True, exist_ok=True)
+            
+            pdf_name = Path(file_path).stem
+            md_file_path = md_dir / f"{pdf_name}.md"
+            
+            with open(md_file_path, 'w', encoding='utf-8') as f:
+                f.write(f"# {pdf_name}\n\n")
+                f.write(f"**원본 파일**: {Path(file_path).name}\n")
+                f.write(f"**변환 시간**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"**처리 방법**: {method_name}\n")
+                f.write(f"**추출된 이미지**: {len(extracted_images)}개\n\n")
+                f.write("---\n\n")
+                f.write(markdown_content)
+            
+            # 메타데이터에 MD 파일 경로 추가
+            document.metadata['md_file_path'] = str(md_file_path)
+            document.metadata['md_saved'] = True
+            
+            logger.info(f"   📝 MD 파일 저장: {md_file_path}")
+            
+            # 2단계 후처리 실행 (설정이 활성화된 경우)
+            if settings.enable_md_postprocessing:
+                try:
+                    logger.info("🔧 2단계 MD 후처리 시작...")
+                    
+                    # MDPostProcessor 초기화
+                    postprocessor = MDPostProcessor(
+                        output_dir="processed_docs",
+                        target_quality=settings.md_postprocess_target_quality
+                    )
+                    
+                    # 품질 검사기 초기화 및 연결
+                    quality_checker = QualityChecker()
+                    postprocessor.set_quality_checker(quality_checker)
+                    
+                    # 2단계 후처리 실행
+                    processed_path = postprocessor.process_file(str(md_file_path))
+                    
+                    if processed_path:
+                        logger.info(f"   ✅ 2단계 후처리 완료: {processed_path}")
+                        
+                        # 처리된 내용으로 document 업데이트
+                        with open(processed_path, 'r', encoding='utf-8') as f:
+                            processed_content = f.read()
+                            document.page_content = processed_content
+                        
+                        document.metadata['postprocessed'] = True
+                        document.metadata['processed_md_path'] = str(processed_path)
+                        document.metadata['processing_quality'] = postprocessor.last_quality_score
+                    else:
+                        logger.warning("2단계 후처리 실패 - 원본 유지")
+                        document.metadata['postprocessed'] = False
+                        
+                except Exception as e:
+                    logger.error(f"2단계 후처리 중 오류: {str(e)}")
+                    document.metadata['postprocessed'] = False
+            else:
+                logger.info("2단계 후처리 비활성화됨")
+                document.metadata['postprocessed'] = False
+            
+        except Exception as e:
+            logger.warning(f"MD 파일 저장 실패: {str(e)}")
+            document.metadata['md_saved'] = False
+        
+        return [document]
+    
     def _load_pdf_file(self, file_path: str, progress_callback=None) -> List[Document]:
-        """PDF 파일 로딩 최적화 - 개선된 PDF 변환기 우선 사용"""
-        # 1차 시도: 개선된 PDF 변환기 (문장 연결성 향상)
+        """PDF 파일 로딩 - 에이전트 모드 또는 개선된 PDF 변환기 사용"""
+        
+        # 에이전트 모드가 활성화된 경우
+        if self.use_agent_preprocessing:
+            try:
+                if progress_callback:
+                    progress_callback(0.1, "🤖 에이전트 기반 고품질 변환 중...")
+                
+                # 임시 출력 디렉토리 사용
+                import tempfile
+                temp_output_dir = tempfile.mkdtemp(prefix="agent_pdf_convert_")
+                agent_converter = AgentBasedPDFConverter(
+                    output_dir=temp_output_dir,
+                    enable_quality_validation=True
+                )
+                
+                # 에이전트 기반 PDF 변환
+                markdown_path = agent_converter.convert_pdf_to_markdown(file_path)
+                
+                if markdown_path and os.path.exists(markdown_path):
+                    with open(markdown_path, 'r', encoding='utf-8') as f:
+                        markdown_content = f.read()
+                    
+                    # 기존 이미지 처리 로직 재사용
+                    return self._process_converted_content(markdown_content, file_path, temp_output_dir, progress_callback, processing_method='agent_based_converter')
+                    
+            except Exception as e:
+                logger.warning(f"에이전트 변환 실패, 기존 방식으로 폴백: {str(e)}")
+                # 에이전트 실패 시 기존 방식으로 폴백
+        
+        # 기존 방식: 개선된 PDF 변환기 (문장 연결성 향상)
         try:
             if progress_callback:
                 progress_callback(0.1, "개선된 PDF 변환기로 처리 중...")
@@ -268,7 +436,10 @@ class EnhancedDocumentLoader:
             # 임시 출력 디렉토리 사용
             import tempfile
             temp_output_dir = tempfile.mkdtemp(prefix="pdf_convert_")
-            pdf_converter = ImprovedPDFConverter(output_dir=temp_output_dir)
+            pdf_converter = ImprovedPDFConverter(
+                output_dir=temp_output_dir,
+                enable_postprocessing=self.enable_postprocessing
+            )
             
             # PDF를 마크다운으로 변환
             markdown_content, image_count = pdf_converter.convert_pdf_to_markdown(
@@ -276,89 +447,9 @@ class EnhancedDocumentLoader:
             )
             
             if markdown_content:
-                # PDF에서 추출된 이미지 정보 수집
-                pdf_stem = Path(file_path).stem
-                extracted_images = []
-                
-                # 이미지 디렉토리에서 해당 PDF의 이미지들 찾기
-                images_dir = Path(temp_output_dir) / "images"
-                if images_dir.exists():
-                    for img_path in images_dir.glob(f"{pdf_stem}_page*_img*.png"):
-                        try:
-                            stat = img_path.stat()
-                            image_info = {
-                                'filename': img_path.name,
-                                'path': str(img_path),
-                                'relative_path': f"converted_docs/images/{img_path.name}",
-                                'size': stat.st_size,
-                                'format': 'PNG',
-                                'content_type': 'image/png',
-                                'extracted_at': datetime.fromtimestamp(stat.st_ctime).isoformat()
-                            }
-                            extracted_images.append(image_info)
-                        except Exception as e:
-                            logger.warning(f"PDF 이미지 정보 수집 실패: {str(e)}")
-                
-                # 이미지를 영구 위치로 복사
-                if extracted_images:
-                    permanent_images_dir = Path("static/images/pdf")
-                    permanent_images_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    for image_info in extracted_images:
-                        src_path = Path(image_info['path'])
-                        dst_path = permanent_images_dir / image_info['filename']
-                        
-                        try:
-                            import shutil
-                            shutil.copy2(src_path, dst_path)
-                            # 경로 업데이트
-                            image_info['path'] = str(dst_path)
-                            image_info['relative_path'] = f"static/images/pdf/{image_info['filename']}"
-                            logger.info(f"   🖼️  PDF 이미지 이동: {image_info['filename']}")
-                        except Exception as e:
-                            logger.warning(f"PDF 이미지 이동 실패: {str(e)}")
-                
-                # 마크다운 내용을 Document 객체로 변환
-                document = Document(
-                    page_content=markdown_content,
-                    metadata={
-                        'source': str(file_path),
-                        'file_name': Path(file_path).name,
-                        'file_type': '.pdf',
-                        'processing_method': 'improved_pdf_converter_with_images',
-                        'image_count': image_count,
-                        'images': extracted_images,
-                        'conversion_status': 'success'
-                    }
-                )
-                
-                logger.info(f"개선된 PDF 변환기로 처리 완료: {file_path} ({image_count}개 이미지 추출)")
-                
-                # MD 파일 저장 (전처리 확인용)
-                try:
-                    md_dir = Path("converted_docs")
-                    md_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    pdf_name = Path(file_path).stem
-                    md_file_path = md_dir / f"{pdf_name}.md"
-                    
-                    with open(md_file_path, 'w', encoding='utf-8') as f:
-                        f.write(f"# {pdf_name}\n\n")
-                        f.write(f"**원본 파일**: {Path(file_path).name}\n")
-                        f.write(f"**변환 시간**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                        f.write(f"**추출된 이미지**: {image_count}개\n\n")
-                        f.write("---\n\n")
-                        f.write(markdown_content)
-                    
-                    # 메타데이터에 MD 파일 경로 추가
-                    document.metadata['md_file_path'] = str(md_file_path)
-                    document.metadata['md_saved'] = True
-                    
-                    logger.info(f"   📝 MD 파일 저장: {md_file_path}")
-                    
-                except Exception as e:
-                    logger.warning(f"MD 파일 저장 실패: {str(e)}")
-                    document.metadata['md_saved'] = False
+                # 공통 이미지 처리 로직 사용
+                return self._process_converted_content(markdown_content, file_path, temp_output_dir, progress_callback, 
+                                                     processing_method='improved_pdf_converter_with_images', image_count=image_count)
                 
                 # 임시 디렉토리 정리
                 import shutil

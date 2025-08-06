@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     local_llm_api_key: str = os.getenv("LOCAL_LLM_API_KEY", "not-needed")  # 일부 로컬 서버는 API 키 필요
     local_llm_max_tokens: int = int(os.getenv("LOCAL_LLM_MAX_TOKENS", "512"))  # 로컬 모델 최대 토큰 (더 보수적으로)
     local_llm_context_window: int = int(os.getenv("LOCAL_LLM_CONTEXT_WINDOW", "4096"))  # 로컬 모델 컨텍스트 윈도우
+    local_llm_timeout: int = int(os.getenv("LOCAL_LLM_TIMEOUT", "120"))  # 로컬 모델 응답 타임아웃 (초)
+    local_llm_max_retries: int = int(os.getenv("LOCAL_LLM_MAX_RETRIES", "3"))  # 로컬 모델 재시도 횟수
+    
+    # MD 후처리 설정
+    enable_md_postprocessing: bool = os.getenv("ENABLE_MD_POSTPROCESSING", "true").lower() == "true"
+    md_postprocess_target_quality: int = int(os.getenv("MD_POSTPROCESS_TARGET_QUALITY", "90"))
     
     # 임베딩 모델 설정
     embedding_provider: str = "upstage"  # "openai", "local", "upstage"
@@ -84,8 +90,13 @@ class Settings(BaseSettings):
     large_context_threshold: int = int(os.getenv("LARGE_CONTEXT_THRESHOLD", "50000"))  # 50KB
     max_chunk_size: int = int(os.getenv("MAX_CHUNK_SIZE", "30000"))  # 30KB
     parallel_workers: int = int(os.getenv("PARALLEL_WORKERS", "3"))
-    chunk_timeout: float = float(os.getenv("CHUNK_TIMEOUT", "30.0"))  # 30초
+    chunk_timeout: float = float(os.getenv("CHUNK_TIMEOUT", "120.0"))  # 120초로 증가 (Rate Limit 대응)
     enable_result_merging: bool = os.getenv("ENABLE_RESULT_MERGING", "true").lower() == "true"
+    
+    # API Rate Limit 대응 설정
+    api_max_retries: int = int(os.getenv("API_MAX_RETRIES", "5"))  # 재시도 횟수 증가
+    api_base_delay: float = float(os.getenv("API_BASE_DELAY", "3.0"))  # 기본 대기 시간 증가
+    api_max_delay: float = float(os.getenv("API_MAX_DELAY", "300.0"))  # 최대 대기 시간 증가 (5분)
     
     # UI 설정
     app_title: str = "쉽게 설명하는 RAG 챗봇"

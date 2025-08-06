@@ -71,6 +71,8 @@ TFIDF_NGRAM_RANGE = (1, 2)
 TFIDF_MIN_DF = 1
 
 # 재시도 및 타임아웃 설정
-REQUEST_TIMEOUT = 2  # 초
+REQUEST_TIMEOUT = 2  # 초 (일반 모델)
+LOCAL_MODEL_TIMEOUT = 120  # 초 (로컬 모델 - 응답 시간이 길 수 있음)
 MAX_RETRIES = 3
 RETRY_DELAY = 1  # 초
+RETRY_DELAY_LOCAL = 2  # 초 (로컬 모델용)

@@ -13,12 +13,20 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 
-def api_retry_with_backoff(max_retries=3, base_delay=1.0, max_delay=60.0):
+def api_retry_with_backoff(max_retries=None, base_delay=None, max_delay=None):
     """
     API 호출 재시도 데코레이터
     - 429 오류 시 지수 백오프로 재시도
     - 네트워크 오류 시 재시도
+    - Rate Limit 대응을 위해 더 관대한 재시도 정책 적용
     """
+    # config에서 기본값 가져오기
+    if max_retries is None:
+        max_retries = settings.api_max_retries
+    if base_delay is None:
+        base_delay = settings.api_base_delay
+    if max_delay is None:
+        max_delay = settings.api_max_delay
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -32,20 +40,31 @@ def api_retry_with_backoff(max_retries=3, base_delay=1.0, max_delay=60.0):
                     error_message = str(e)
                     
                     # 429 오류 (Too Many Requests) 확인
-                    if "429" in error_message or "too_many_requests" in error_message.lower():
+                    if "429" in error_message or "too_many_requests" in error_message.lower() or "rate limit" in error_message.lower():
                         if attempt < max_retries:
                             # 지수 백오프 계산 (랜덤 지터 포함)
                             delay = min(base_delay * (2 ** attempt) + random.uniform(0, 1), max_delay)
-                            logger.warning(f"API 요청 제한 초과 (429 오류), {delay:.1f}초 후 재시도... (시도 {attempt + 1}/{max_retries + 1})")
+                            logger.warning(f"⚠️ API 요청 제한 초과 (Rate Limit 429 오류)")
+                            logger.warning(f"📊 재시도 정보: {attempt + 1}/{max_retries + 1}번째 시도")
+                            logger.warning(f"⏰ {delay:.1f}초 후 재시도합니다...")
+                            logger.info(f"💡 현재 설정: max_retries={max_retries}, base_delay={base_delay}, max_delay={max_delay}")
                             time.sleep(delay)
                             continue
+                        else:
+                            logger.error(f"🚨 API Rate Limit 재시도 횟수 초과: {max_retries + 1}번 모두 실패")
+                            logger.error("💡 해결 방법:")
+                            logger.error("   1. 잠시 후 다시 시도해보세요")
+                            logger.error("   2. 환경변수로 재시도 설정 조정: API_MAX_RETRIES, API_BASE_DELAY, API_MAX_DELAY")
+                            logger.error("   3. API 제공업체에서 Rate Limit 증가 요청 고려")
                     
                     # 네트워크 관련 오류 확인
                     elif any(keyword in error_message.lower() for keyword in 
-                            ["connection", "timeout", "network", "temporary"]):
+                            ["connection", "timeout", "network", "temporary", "unavailable", "service"]):
                         if attempt < max_retries:
-                            delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
-                            logger.warning(f"네트워크 오류 발생, {delay:.1f}초 후 재시도... (시도 {attempt + 1}/{max_retries + 1})")
+                            delay = min(base_delay * (2 ** attempt) + random.uniform(0, 0.5), max_delay)
+                            logger.warning(f"🌐 네트워크/서비스 오류 발생: {error_message[:100]}...")
+                            logger.warning(f"📊 재시도 정보: {attempt + 1}/{max_retries + 1}번째 시도")
+                            logger.warning(f"⏰ {delay:.1f}초 후 재시도합니다...")
                             time.sleep(delay)
                             continue
                     
@@ -53,7 +72,12 @@ def api_retry_with_backoff(max_retries=3, base_delay=1.0, max_delay=60.0):
                     raise e
             
             # 모든 재시도가 실패한 경우
-            logger.error(f"API 호출이 {max_retries + 1}번 모두 실패했습니다: {last_exception}")
+            logger.error(f"🚨 API 호출이 {max_retries + 1}번 모두 실패했습니다")
+            logger.error(f"❌ 최종 오류: {str(last_exception)[:200]}...")
+            logger.error("💡 Rate Limit 문제인 경우 다음을 시도해보세요:")
+            logger.error("   • 잠시 후 다시 실행")
+            logger.error("   • .env 파일에 API_MAX_RETRIES=10, API_MAX_DELAY=600 설정")
+            logger.error("   • API 제공업체 Rate Limit 증가 요청")
             raise last_exception
         
         return wrapper
@@ -157,7 +181,7 @@ class EmbeddingModel:
         logger.warning("한국어 특화 모델 로드 실패, 기본 모델 사용")
         return settings.embedding_model_name
     
-    @api_retry_with_backoff(max_retries=3, base_delay=2.0, max_delay=120.0)
+    @api_retry_with_backoff()
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
         여러 문서를 배치로 임베딩
@@ -211,7 +235,7 @@ class EmbeddingModel:
         
         return result
     
-    @api_retry_with_backoff(max_retries=3, base_delay=2.0, max_delay=120.0)
+    @api_retry_with_backoff()
     def embed_query(self, text: str) -> List[float]:
         """
         단일 쿼리를 임베딩
