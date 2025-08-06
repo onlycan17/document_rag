@@ -10,6 +10,7 @@ from pathlib import Path
 
 from src.agents import ContextConnectorAgent, StructureParserAgent, QualityValidatorAgent
 from .pdf_converter import ImprovedPDFConverter
+from .image_analyzer import create_image_analyzer
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,10 @@ class AgentBasedPDFConverter:
     로컬 LLM 에이전트들을 활용한 고품질 PDF-to-Markdown 변환기
     """
     
-    def __init__(self, output_dir: str = "converted_docs_agent", enable_quality_validation: bool = True):
+    def __init__(self, output_dir: str = "converted_docs_agent", enable_quality_validation: bool = True, enable_image_analysis: bool = True):
         self.output_dir = output_dir
         self.enable_quality_validation = enable_quality_validation
+        self.enable_image_analysis = enable_image_analysis
         
         # 출력 디렉토리 생성
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
@@ -32,6 +34,18 @@ class AgentBasedPDFConverter:
         
         if enable_quality_validation:
             self.quality_agent = QualityValidatorAgent()
+        
+        # 이미지 분석기 초기화 (선택적)
+        if enable_image_analysis:
+            try:
+                self.image_analyzer = create_image_analyzer()
+                logger.info("🖼️ 이미지 분석기 활성화됨")
+            except Exception as e:
+                logger.warning(f"⚠️ 이미지 분석기 초기화 실패: {str(e)}")
+                self.image_analyzer = None
+                self.enable_image_analysis = False
+        else:
+            self.image_analyzer = None
         
         # 기존 변환기 (비교용)
         self.fallback_converter = ImprovedPDFConverter(output_dir=f"{output_dir}_fallback")
@@ -102,7 +116,10 @@ class AgentBasedPDFConverter:
             images_dir = Path(self.output_dir) / "images"
             images_dir.mkdir(parents=True, exist_ok=True)
             
-            # 1단계: 모든 페이지 텍스트 수집
+            # 이미지 정보 저장을 위한 딕셔너리
+            extracted_images = {}  # {page_num: [(image_path, description), ...]}
+            
+            # 1단계: 모든 페이지 텍스트 수집 및 이미지 추출
             page_texts = []
             for page_num in range(doc.page_count):
                 page = doc[page_num]
@@ -114,6 +131,7 @@ class AgentBasedPDFConverter:
                 # 페이지에서 이미지 추출
                 try:
                     image_list = page.get_images(full=True)
+                    page_images = []
                     
                     for img_index, img in enumerate(image_list):
                         xref = img[0]  # xref 번호
@@ -133,17 +151,56 @@ class AgentBasedPDFConverter:
                         
                         logger.info(f"   🖼️  이미지 추출: {image_filename}")
                         
+                        # 이미지 분석 및 설명 생성
+                        image_description = None
+                        if self.enable_image_analysis and self.image_analyzer:
+                            try:
+                                # 페이지 텍스트를 컨텍스트로 사용
+                                context = page_text.strip()[:500] if page_text.strip() else ""
+                                image_description = self.image_analyzer.analyze_image(str(image_path), context)
+                                if image_description:
+                                    logger.info(f"   ✅ 이미지 설명 생성: {len(image_description)}자")
+                                else:
+                                    logger.warning(f"   ⚠️ 이미지 설명 생성 실패: {image_filename}")
+                            except Exception as e:
+                                logger.warning(f"   ⚠️ 이미지 분석 오류: {str(e)}")
+                        
+                        # 상대 경로로 저장 (마크다운에서 사용)
+                        relative_image_path = f"./images/{image_filename}"
+                        page_images.append((relative_image_path, image_description))
+                    
+                    if page_images:
+                        extracted_images[page_num + 1] = page_images
+                        
                 except Exception as e:
                     logger.warning(f"페이지 {page_num + 1} 이미지 추출 실패: {str(e)}")
                     
             doc.close()
             
-            # page_texts를 text_blocks로 변환
+            # 2단계: 추출된 이미지 개수 로깅
+            total_images = sum(len(imgs) for imgs in extracted_images.values())
+            if total_images > 0:
+                logger.info(f"📊 총 {total_images}개 이미지 추출 및 분석 완료")
+            
+            # 3단계: page_texts를 text_blocks로 변환 (이미지 정보 포함)
             text_blocks = []
             for page_num, text in page_texts:
-                # 페이지 헤더 추가 (선택적)
-                text_with_header = f"[페이지 {page_num}]\n{text}"
-                text_blocks.append(text_with_header)
+                # 페이지 헤더와 텍스트 추가
+                block_content = f"[페이지 {page_num}]\n{text}"
+                
+                # 해당 페이지의 이미지가 있으면 추가
+                if page_num in extracted_images:
+                    block_content += "\n\n### 페이지 내 이미지\n"
+                    
+                    for img_path, img_description in extracted_images[page_num]:
+                        block_content += f"\n![이미지]({img_path})\n"
+                        
+                        if img_description:
+                            block_content += f"**이미지 설명**: {img_description}\n"
+                        else:
+                            block_content += f"**이미지**: 페이지 {page_num}의 이미지 {img_path}\n"
+                
+                text_blocks.append(block_content)
             
             if not text_blocks:
                 logger.warning("⚠️ PDF에서 텍스트를 추출할 수 없습니다.")
@@ -164,9 +221,26 @@ class AgentBasedPDFConverter:
         md_filename = f"{pdf_name}.md"
         output_path = os.path.join(self.output_dir, md_filename)
         
-        # 마크다운 파일 저장
+        # 이미지 개수 계산
+        images_dir = Path(self.output_dir) / "images"
+        image_count = 0
+        if images_dir.exists():
+            image_count = len([f for f in images_dir.glob(f"{pdf_name}_page*_img*.*")])
+        
+        # 메타데이터 헤더 생성
+        from datetime import datetime
+        metadata_header = f"""# {pdf_name}
+
+**원본 파일**: {Path(pdf_path).name}
+**변환 시간**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**처리 방법**: 에이전트 기반 변환기
+**추출된 이미지**: {image_count}개
+
+"""
+        
+        # 마크다운 파일 저장 (메타데이터 포함)
         with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+            f.write(metadata_header + content)
         
         # 품질 보고서 저장 (있는 경우)
         if quality_report:

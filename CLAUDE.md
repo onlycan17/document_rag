@@ -510,3 +510,8 @@ RULE: 중복 코드 제거와 가독성을 동시에 추구하라
 🏷️ 2단계: 기능별 분류 (Categorization)
 "비슷한 도구끼리 그룹핑하기"
 ```
+
+
+### 가상환경 설정 (필수)
+ - source venv/bin/activate
+ - streamlit run app.py

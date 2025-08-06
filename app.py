@@ -222,37 +222,240 @@ def display_images_in_response(response_text: str, context_documents: List = Non
     related_images = []
     
     for doc in context_documents:
-        metadata = doc.metadata if hasattr(doc, 'metadata') else {}
-        images = metadata.get('images', [])
+        # doc가 dict인지 Document 객체인지 확인
+        if isinstance(doc, dict):
+            # sources에서 온 dict 데이터
+            images = doc.get('images', [])
+            source_name = doc.get('file_name', 'Unknown')
+        else:
+            # Document 객체에서 온 데이터
+            metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+            images = metadata.get('images', [])
+            source_name = metadata.get('file_name', 'Unknown')
         
         for image_info in images:
             image_path = image_info.get('path', '')
+            filename = image_info.get('filename', 'Unknown')
+            
+            # PDF 파일 제외 및 실제 이미지 파일만 허용
             if os.path.exists(image_path):
-                related_images.append({
-                    'path': image_path,
-                    'filename': image_info.get('filename', 'Unknown'),
-                    'source': metadata.get('file_name', 'Unknown')
-                })
+                # 파일 확장자 확인
+                _, ext = os.path.splitext(filename.lower())
+                if ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
+                    related_images.append({
+                        'path': image_path,
+                        'filename': filename,
+                        'source': source_name
+                    })
     
     # 이미지가 있으면 응답에 추가
     if related_images:
         st.markdown("### 📸 관련 이미지")
         
-        # 이미지를 열로 나누어 표시 (최대 3개씩)
-        cols = st.columns(min(3, len(related_images)))
+        # PNG 이미지를 우선적으로 정렬
+        def image_priority(img_info):
+            filename = img_info['filename'].lower()
+            if filename.endswith('.png'):
+                return 0  # PNG 최우선
+            elif filename.endswith(('.jpg', '.jpeg')):
+                return 1  # JPEG 두 번째
+            else:
+                return 2  # 기타 이미지
+        
+        related_images.sort(key=image_priority)
+        
+        # 라이트박스용 CSS와 JavaScript 추가
+        st.markdown("""
+        <style>
+        /* 이미지 컨테이너 스타일 - 가장 강력한 선택자 사용 */
+        div[onclick*="openLightbox"],
+        .stMarkdown div[onclick*="openLightbox"],
+        [data-testid="stMarkdownContainer"] div[onclick*="openLightbox"],
+        .image-container {
+            width: 300px !important;
+            height: 240px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border: 2px solid #ddd !important;
+            border-radius: 8px !important;
+            margin: 0 auto 8px auto !important;
+            overflow: hidden !important;
+            background-color: #f8f9fa !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            box-sizing: border-box !important;
+        }
+        .image-container:hover {
+            border-color: #1f77b4 !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+            transform: scale(1.02) !important;
+        }
+        .image-thumbnail {
+            max-width: 100% !important;
+            max-height: 100% !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+        }
+        /* Streamlit 기본 이미지 스타일 오버라이드 - 더 강력한 선택자 */
+        div.image-container img,
+        .image-container img,
+        .stMarkdown .image-container img,
+        [data-testid="stMarkdownContainer"] .image-container img {
+            max-width: 100% !important;
+            max-height: 100% !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+            display: block !important;
+        }
+        /* 컨테이너 크기 강제 적용 */
+        div.image-container,
+        .stMarkdown .image-container,
+        [data-testid="stMarkdownContainer"] .image-container {
+            width: 300px !important;
+            height: 240px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            overflow: hidden !important;
+            box-sizing: border-box !important;
+        }
+        .lightbox {
+            display: none;
+            position: fixed;
+            z-index: 999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .lightbox.show {
+            display: block;
+            opacity: 1;
+        }
+        .lightbox-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 90%;
+            max-height: 90%;
+        }
+        .lightbox-image {
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 35px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.3s;
+        }
+        .lightbox-close:hover {
+            color: #ccc;
+        }
+        .lightbox-info {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        /* 사이드바 파일 업로더 레이아웃 수정 */
+        .sidebar .stFileUploader > div > div > div {
+            padding: 8px 12px !important;
+        }
+        .sidebar .stFileUploader [data-testid="stFileUploaderDropzone"] {
+            min-height: 100px !important;
+            padding: 20px 10px !important;
+        }
+        .sidebar .stFileUploader [data-testid="stFileUploaderDropzoneInstructions"] {
+            font-size: 12px !important;
+            text-align: center !important;
+            line-height: 1.4 !important;
+            margin: 0 !important;
+            word-break: keep-all !important;
+        }
+        /* 업로드 버튼과 텍스트 정렬 */
+        .sidebar .stFileUploader button {
+            font-size: 12px !important;
+            padding: 4px 8px !important;
+        }
+        .sidebar .stFileUploader small {
+            font-size: 11px !important;
+            line-height: 1.3 !important;
+        }
+        /* 추가 이미지 크기 제어 */
+        .image-container * {
+            max-width: 100% !important;
+            max-height: 100% !important;
+        }
+        /* Streamlit 컬럼 내 이미지 컨테이너 */
+        .element-container .image-container {
+            width: 300px !important;
+            height: 240px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # 이미지를 열로 나누어 표시 (최대 2개씩으로 조정 - 더 큰 이미지에 맞게)
+        cols = st.columns(min(2, len(related_images)))
         
         for i, image_info in enumerate(related_images[:6]):  # 최대 6개까지만 표시
-            col_idx = i % 3
+            col_idx = i % 2
             
             with cols[col_idx]:
                 image_data_url = serve_image(image_info['path'])
                 if image_data_url:
+                    # 고유한 ID 생성
+                    image_id = f"img_{i}_{hash(image_info['filename']) % 10000}"
+                    
+                    # 파일명에서 불필요한 부분 제거하고 깔끔하게 표시
+                    clean_filename = image_info['filename']
+                    if '+' in clean_filename:
+                        clean_filename = clean_filename.replace('+', ' ')
+                    if '_page' in clean_filename:
+                        # _page002_img031.png -> img031.png
+                        parts = clean_filename.split('_')
+                        if len(parts) > 2:
+                            clean_filename = '_'.join(parts[-2:])  # 마지막 두 부분만 유지
+                    
+                    # 소스 파일명도 깔끔하게
+                    clean_source = image_info['source']
+                    if '.pdf' in clean_source:
+                        clean_source = clean_source.replace('.pdf', '').replace('+', ' ')
+                        if len(clean_source) > 30:
+                            clean_source = clean_source[:27] + "..."
+                    
                     st.markdown(
-                        f'<img src="{image_data_url}" style="width:100%; border-radius:5px; margin-bottom:5px;">',
+                        f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                            <img id="{image_id}" 
+                                src="{image_data_url}" 
+                                class="image-thumbnail">
+                        </div>''',
                         unsafe_allow_html=True
                     )
-                    st.caption(f"📄 {image_info['source']}")
-                    st.caption(f"🖼️ {image_info['filename']}")
+                    st.caption(f"📄 {clean_source}")
+                    st.caption("👆 클릭하여 크게 보기")
     
     return response_text
 
@@ -307,7 +510,7 @@ def main() -> None:
             "문서 업로드 (TXT, MD, PDF, DOCX) 🆕 이미지 추출 지원",
             type=['txt', 'md', 'pdf', 'docx'],
             accept_multiple_files=True,
-            help="📄 PDF: 개선된 변환기로 처리 (문장 연결성 향상, 이미지 자동 추출)\n📝 DOCX: 문단, 표, 이미지 모두 추출\n🖼️ 추출된 이미지는 챗봇 응답에서 자동으로 표시됩니다"
+            help="PDF/DOCX 파일의 이미지도 자동 추출됩니다"
         )
         
         if uploaded_files:
@@ -705,6 +908,153 @@ def main() -> None:
     # 메인 챗 인터페이스
     st.header("💬 챗봇")
     
+    # 전역 CSS 및 JavaScript 추가 (이미지 라이트박스용)
+    st.markdown("""
+        <style>
+        /* 이미지 컨테이너 스타일 - 가장 강력한 선택자 사용 */
+        div[onclick*="openLightbox"],
+        .stMarkdown div[onclick*="openLightbox"],
+        [data-testid="stMarkdownContainer"] div[onclick*="openLightbox"],
+        .image-container {
+            width: 300px !important;
+            height: 240px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border: 2px solid #ddd !important;
+            border-radius: 8px !important;
+            margin: 0 auto 8px auto !important;
+            overflow: hidden !important;
+            background-color: #f8f9fa !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            box-sizing: border-box !important;
+        }
+        .image-container:hover {
+            border-color: #007acc !important;
+            box-shadow: 0 4px 8px rgba(0,122,204,0.2) !important;
+            transform: translateY(-2px) !important;
+        }
+        .image-container img,
+        .image-thumbnail {
+            max-width: 100% !important;
+            max-height: 100% !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+            display: block !important;
+            border-radius: 6px !important;
+        }
+        /* 라이트박스 스타일 */
+        .lightbox {
+            display: none;
+            position: fixed;
+            z-index: 999999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.9);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .lightbox.show {
+            display: block;
+            opacity: 1;
+        }
+        .lightbox-content {
+            position: relative;
+            margin: auto;
+            padding: 0;
+            width: 90%;
+            max-width: 900px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .lightbox-image {
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 35px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.3s;
+        }
+        .lightbox-close:hover {
+            color: #ccc;
+        }
+        .lightbox-info {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        </style>
+        
+        <script>
+        function openLightbox(imgSrc, filename, source) {
+            var lightbox = document.createElement('div');
+            lightbox.className = 'lightbox';
+            lightbox.innerHTML = `
+                <span class="lightbox-close">&times;</span>
+                <div class="lightbox-content">
+                    <img class="lightbox-image" src="${imgSrc}" alt="Image">
+                    <div class="lightbox-info">
+                        <div><strong>📄 ${source}</strong></div>
+                        <div>🖼️ ${filename}</div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(lightbox);
+            
+            setTimeout(function() {
+                lightbox.classList.add('show');
+            }, 10);
+            
+            function closeLightbox() {
+                lightbox.classList.remove('show');
+                setTimeout(function() {
+                    if (lightbox && lightbox.parentNode) {
+                        document.body.removeChild(lightbox);
+                    }
+                }, 300);
+            }
+            
+            lightbox.querySelector('.lightbox-close').onclick = closeLightbox;
+            lightbox.onclick = function(e) {
+                if (e.target === lightbox) {
+                    closeLightbox();
+                }
+            };
+            
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeLightbox();
+                }
+            }, {once: true});
+        }
+        </script>
+        """, unsafe_allow_html=True)
+
     # 현재 사용 중인 모델 및 컨텍스트 사용량 표시
     col1, col2 = st.columns([2, 1])
     
@@ -778,23 +1128,38 @@ def main() -> None:
                 
                 # 이미지 표시
                 if related_images:
+                    # display_images_in_response 함수는 2개 파라미터를 받으므로 기존 방식 유지
                     st.markdown("### 📸 관련 이미지")
                     
-                    # 이미지를 열로 나누어 표시 (최대 3개씩)
-                    cols = st.columns(min(3, len(related_images)))
+                    # 2-column 레이아웃으로 이미지 표시 (최대 6개까지)
+                    images_to_show = related_images[:6]
+                    cols = st.columns(2)
                     
-                    for i, image_info in enumerate(related_images[:6]):  # 최대 6개까지만 표시
-                        col_idx = i % 3
+                    for i, image_info in enumerate(images_to_show):
+                        col_idx = i % 2
                         
                         with cols[col_idx]:
                             image_data_url = serve_image(image_info['path'])
                             if image_data_url:
+                                # 고정 크기 컨테이너로 이미지 표시
+                                clean_filename = image_info.get('filename', 'Unknown').replace('+', ' ')
+                                clean_source = image_info.get('source', 'Unknown').replace('+', ' ')
+                                if len(clean_source) > 35:
+                                    clean_source = clean_source[:32] + "..."
+                                
+                                image_id = f"image_{hash(image_info['path'])}"
+                                
+                                # CSS 스타일과 JavaScript는 이미 정의되어 있음
                                 st.markdown(
-                                    f'<img src="{image_data_url}" style="width:100%; border-radius:5px; margin-bottom:5px;">',
+                                    f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                        <img id="{image_id}" 
+                                            src="{image_data_url}" 
+                                            class="image-thumbnail">
+                                    </div>''',
                                     unsafe_allow_html=True
                                 )
-                                st.caption(f"📄 {image_info['source']}")
-                                st.caption(f"🖼️ {image_info['filename']}")
+                                st.caption(f"📄 {clean_source}")
+                                st.caption("👆 클릭하여 크게 보기")
             
             # 출처 정보 표시
             if "sources" in message and message["sources"]:
@@ -907,7 +1272,61 @@ def main() -> None:
                     
                     # 스트리밍 완료 후 관련 이미지 표시
                     if response_status == "success" and response_sources:
-                        display_images_in_response(full_response, response_sources)
+                        # 이미지 정보 수집
+                        related_images = []
+                        for source in response_sources:
+                            # source가 dict인지 확인하고 images 필드 찾기
+                            if isinstance(source, dict):
+                                images = source.get('images', [])
+                                source_name = source.get('file_name', 'Unknown')
+                            else:
+                                # Document 객체인 경우 metadata에서 찾기
+                                metadata = getattr(source, 'metadata', {})
+                                images = metadata.get('images', [])
+                                source_name = metadata.get('file_name', 'Unknown')
+                            
+                            for image_info in images:
+                                image_path = image_info.get('path', '')
+                                if os.path.exists(image_path):
+                                    related_images.append({
+                                        'path': image_path,
+                                        'filename': image_info.get('filename', 'Unknown'),
+                                        'source': source_name
+                                    })
+                        
+                        # 이미지 표시
+                        if related_images:
+                            st.markdown("### 📸 관련 이미지")
+                            
+                            # 2-column 레이아웃으로 이미지 표시 (최대 6개까지)
+                            images_to_show = related_images[:6]
+                            cols = st.columns(2)
+                            
+                            for i, image_info in enumerate(images_to_show):
+                                col_idx = i % 2
+                                
+                                with cols[col_idx]:
+                                    image_data_url = serve_image(image_info['path'])
+                                    if image_data_url:
+                                        # 고정 크기 컨테이너로 이미지 표시
+                                        clean_filename = image_info.get('filename', 'Unknown').replace('+', ' ')
+                                        clean_source = image_info.get('source', 'Unknown').replace('+', ' ')
+                                        if len(clean_source) > 35:
+                                            clean_source = clean_source[:32] + "..."
+                                        
+                                        image_id = f"image_{hash(image_info['path'])}"
+                                        
+                                        # CSS 스타일과 JavaScript는 이미 정의되어 있음
+                                        st.markdown(
+                                            f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                                <img id="{image_id}" 
+                                                    src="{image_data_url}" 
+                                                    class="image-thumbnail">
+                                            </div>''',
+                                            unsafe_allow_html=True
+                                        )
+                                        st.caption(f"📄 {clean_source}")
+                                        st.caption("👆 클릭하여 크게 보기")
                     
                 except Exception as e:
                     # 스트리밍 에러 처리
@@ -944,7 +1363,61 @@ def main() -> None:
                     
                     # 관련 이미지 표시
                     if 'sources' in response and response['sources']:
-                        display_images_in_response(response["answer"], response['sources'])
+                        # 이미지 정보 수집
+                        related_images = []
+                        for source in response['sources']:
+                            # source가 dict인지 확인하고 images 필드 찾기
+                            if isinstance(source, dict):
+                                images = source.get('images', [])
+                                source_name = source.get('file_name', 'Unknown')
+                            else:
+                                # Document 객체인 경우 metadata에서 찾기
+                                metadata = getattr(source, 'metadata', {})
+                                images = metadata.get('images', [])
+                                source_name = metadata.get('file_name', 'Unknown')
+                            
+                            for image_info in images:
+                                image_path = image_info.get('path', '')
+                                if os.path.exists(image_path):
+                                    related_images.append({
+                                        'path': image_path,
+                                        'filename': image_info.get('filename', 'Unknown'),
+                                        'source': source_name
+                                    })
+                        
+                        # 이미지 표시
+                        if related_images:
+                            st.markdown("### 📸 관련 이미지")
+                            
+                            # 2-column 레이아웃으로 이미지 표시 (최대 6개까지)
+                            images_to_show = related_images[:6]
+                            cols = st.columns(2)
+                            
+                            for i, image_info in enumerate(images_to_show):
+                                col_idx = i % 2
+                                
+                                with cols[col_idx]:
+                                    image_data_url = serve_image(image_info['path'])
+                                    if image_data_url:
+                                        # 고정 크기 컨테이너로 이미지 표시
+                                        clean_filename = image_info.get('filename', 'Unknown').replace('+', ' ')
+                                        clean_source = image_info.get('source', 'Unknown').replace('+', ' ')
+                                        if len(clean_source) > 35:
+                                            clean_source = clean_source[:32] + "..."
+                                        
+                                        image_id = f"image_{hash(image_info['path'])}"
+                                        
+                                        # CSS 스타일과 JavaScript는 이미 정의되어 있음
+                                        st.markdown(
+                                            f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                                <img id="{image_id}" 
+                                                    src="{image_data_url}" 
+                                                    class="image-thumbnail">
+                                            </div>''',
+                                            unsafe_allow_html=True
+                                        )
+                                        st.caption(f"📄 {clean_source}")
+                                        st.caption("👆 클릭하여 크게 보기")
                 else:
                     st.error(response["answer"])
                 
@@ -1018,23 +1491,38 @@ def main() -> None:
                     
                     # 이미지 표시
                     if related_images:
+                        # display_images_in_response 함수는 2개 파라미터를 받으므로 기존 방식 유지
                         st.markdown("### 📸 관련 이미지")
                         
-                        # 이미지를 열로 나누어 표시 (최대 3개씩)
-                        cols = st.columns(min(3, len(related_images)))
+                        # 2-column 레이아웃으로 이미지 표시 (최대 6개까지)
+                        images_to_show = related_images[:6]
+                        cols = st.columns(2)
                         
-                        for i, image_info in enumerate(related_images[:6]):  # 최대 6개까지만 표시
-                            col_idx = i % 3
+                        for i, image_info in enumerate(images_to_show):
+                            col_idx = i % 2
                             
                             with cols[col_idx]:
                                 image_data_url = serve_image(image_info['path'])
                                 if image_data_url:
+                                    # 고정 크기 컨테이너로 이미지 표시
+                                    clean_filename = image_info.get('filename', 'Unknown').replace('+', ' ')
+                                    clean_source = image_info.get('source', 'Unknown').replace('+', ' ')
+                                    if len(clean_source) > 35:
+                                        clean_source = clean_source[:32] + "..."
+                                    
+                                    image_id = f"image_{hash(image_info['path'])}"
+                                    
+                                    # CSS 스타일과 JavaScript는 이미 정의되어 있음
                                     st.markdown(
-                                        f'<img src="{image_data_url}" style="width:100%; border-radius:5px; margin-bottom:5px;">',
+                                        f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                            <img id="{image_id}" 
+                                                src="{image_data_url}" 
+                                                class="image-thumbnail">
+                                        </div>''',
                                         unsafe_allow_html=True
                                     )
-                                    st.caption(f"📄 {image_info['source']}")
-                                    st.caption(f"🖼️ {image_info['filename']}")
+                                    st.caption(f"📄 {clean_source}")
+                                    st.caption("👆 클릭하여 크게 보기")
                 
                 # 출처 정보 표시
                 if response["sources"]:

@@ -698,7 +698,9 @@ class RAGChain:
                 "content_preview": doc.page_content[:150] + "..." if len(doc.page_content) > 150 else doc.page_content,
                 "extraction_method": doc.metadata.get('extraction_method', 'unknown'),
                 "processing_method": doc.metadata.get('processing_method', 'unknown'),
-                "chunk_info": f"{doc.metadata.get('chunk_index', 0) + 1}/{doc.metadata.get('total_chunks', 1)}"
+                "chunk_info": f"{doc.metadata.get('chunk_index', 0) + 1}/{doc.metadata.get('total_chunks', 1)}",
+                # 이미지 메타데이터 추가
+                "images": doc.metadata.get('images', [])
             }
             sources.append(source_info)
         
