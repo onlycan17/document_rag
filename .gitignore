@@ -108,3 +108,17 @@ test_*.html
 # Debug and development files
 debug_*.py
 temp_*.py
+
+# Test directories in project root (should not be tracked)
+test_output/
+test_intelligent_output/
+test_intelligent_real_output/
+
+# Specific test files in root
+test_*.py
+test_korean*.txt
+test_korean*.html
+test_small.pdf
+
+# Test extraction outputs in tests/outputs/
+tests/outputs/*/
