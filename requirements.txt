@@ -17,19 +17,23 @@ chromadb==0.4.24
 # Embeddings and ML
 sentence-transformers==3.3.0
 torch>=2.0.0
-transformers>=4.35.0
+transformers>=4.53.0  # Updated for Gemma-3n support
+accelerate>=0.27.0  # For efficient model loading
+bitsandbytes>=0.42.0  # For 4-bit quantization support
 
 # PDF Processing
 pypdf==5.1.0
 PyPDF2==3.0.1
 pdf2image[jpeg]==1.17.0  # Includes JPEG support for better compatibility
 pytesseract==0.3.13
+PyMuPDF==1.25.2  # For advanced PDF processing and image extraction
 
 # DOCX Processing
 python-docx==1.1.2
 
 # Image Processing
 pillow>=7.1.0,<11
+opencv-python==4.10.0.84  # For advanced image analysis and classification
 
 # API Clients
 google-generativeai==0.8.3
@@ -48,6 +52,12 @@ requests>=2.28.0
 
 # Protocol Buffers (for various dependencies)
 protobuf==4.25.8
+
+# Local Model Support
+llama-cpp-python>=0.2.88  # For GGUF model loading (Midm-2.0)
+huggingface-hub>=0.23.0  # For downloading models from HuggingFace
+safetensors>=0.4.0  # For safe model loading
+sentencepiece>=0.2.0  # For tokenization
 
 # Note: System dependencies (installed via apt/brew):
 # - tesseract-ocr (for OCR functionality)

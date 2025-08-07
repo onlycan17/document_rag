@@ -59,7 +59,12 @@ if 'rag_chain' not in st.session_state:
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'document_loader' not in st.session_state:
-    st.session_state.document_loader = DocumentLoader(use_ocr=True, use_agent_preprocessing=False, enable_postprocessing=False)
+    st.session_state.document_loader = DocumentLoader(
+        use_ocr=True, 
+        use_agent_preprocessing=False, 
+        enable_postprocessing=False,
+        use_intelligent_image_extraction=False
+    )
 if 'current_provider' not in st.session_state:
     st.session_state.current_provider = settings.llm_provider
 if 'current_model' not in st.session_state:
@@ -498,6 +503,13 @@ def main() -> None:
             disabled=False
         )
         
+        # 지능형 이미지 추출 옵션 (새로 추가)
+        use_intelligent_extraction = st.checkbox(
+            "🧠 지능형 이미지 추출 (실험적)", 
+            value=False,
+            help="로컬 AI 모델을 사용한 지능형 이미지 추출:\n• 문서 주제와 관련된 이미지만 추출\n• 텍스트 이미지는 OCR로 자동 변환\n• Midm-2.0 한국어 모델 사용\n• Gemma-2 멀티모달 모델 사용\n⚠️ 모델 다운로드 필요 (약 12GB)"
+        )
+        
         # 현재 설정 상태 표시
         if use_agent_mode:
             st.info("🤖 **에이전트 모드 활성화**: 고품질 전처리 사용 중")
@@ -584,11 +596,13 @@ def main() -> None:
                             # DocumentLoader 설정 업데이트
                             current_ocr = getattr(st.session_state.document_loader, 'use_ocr', True)
                             current_agent = getattr(st.session_state.document_loader, 'use_agent_preprocessing', False)
+                            current_intelligent = getattr(st.session_state.document_loader, 'use_intelligent_image_extraction', False)
                             
-                            if current_ocr != use_ocr or current_agent != use_agent_mode:
+                            if current_ocr != use_ocr or current_agent != use_agent_mode or current_intelligent != use_intelligent_extraction:
                                 st.session_state.document_loader = DocumentLoader(
                                     use_ocr=use_ocr, 
-                                    use_agent_preprocessing=use_agent_mode
+                                    use_agent_preprocessing=use_agent_mode,
+                                    use_intelligent_image_extraction=use_intelligent_extraction
                                 )
                             
                             # 벡터 DB에 추가하기 전 청크 수 확인
@@ -597,14 +611,34 @@ def main() -> None:
                             # 문서 로드
                             documents = st.session_state.document_loader.load_document(temp_path, update_progress)
                             
-                            if documents:
-                                # 벡터 DB에 추가
-                                update_progress(0.95, "벡터 데이터베이스에 저장 중...")
-                                st.session_state.vector_db.add_documents(documents)
-                                
-                                # 저장 후 청크 수 확인 (품질 검증)
-                                after_count = st.session_state.vector_db.get_document_count()
-                                saved_chunks = after_count - before_count
+                            # 지능형 이미지 추출 결과 확인
+                            image_extraction_success = False
+                            extracted_images_count = 0
+                            if use_intelligent_extraction:
+                                # 이미지 추출 결과 확인
+                                from pathlib import Path
+                                pdf_name = Path(uploaded_file.name).stem
+                                images_dir = Path(f"data/extracted_images/{pdf_name}/images")
+                                if images_dir.exists():
+                                    extracted_images = list(images_dir.glob("*.jpeg")) + list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.png"))
+                                    extracted_images_count = len(extracted_images)
+                                    if extracted_images_count > 0:
+                                        image_extraction_success = True
+                            
+                            # 문서가 있거나 이미지 추출이 성공한 경우
+                            if documents or image_extraction_success:
+                                # 문서가 있으면 벡터 DB에 추가
+                                if documents:
+                                    # 벡터 DB에 추가
+                                    update_progress(0.95, "벡터 데이터베이스에 저장 중...")
+                                    st.session_state.vector_db.add_documents(documents)
+                                    
+                                    # 저장 후 청크 수 확인 (품질 검증)
+                                    after_count = st.session_state.vector_db.get_document_count()
+                                    saved_chunks = after_count - before_count
+                                else:
+                                    # 이미지만 추출된 경우
+                                    saved_chunks = 0
                                 
                                 # 처리 완료
                                 processing_time = time.time() - start_time
@@ -612,12 +646,13 @@ def main() -> None:
                                 
                                 # 통계 업데이트
                                 processed_files += 1
-                                total_chunks += len(documents)
+                                if documents:
+                                    total_chunks += len(documents)
                                 total_processing_time += processing_time
                                 
                                 # 청크 분석
-                                chunk_analysis = analyze_chunks(documents)
-                                pdf_metadata = get_pdf_metadata(documents)
+                                chunk_analysis = analyze_chunks(documents) if documents else None
+                                pdf_metadata = get_pdf_metadata(documents) if documents else None
                                 
                                 # 성공 메시지와 상세 정보 표시
                                 success_col1, success_col2 = st.columns([2, 1])
@@ -625,8 +660,11 @@ def main() -> None:
                                 with success_col1:
                                     st.success(f"✅ {uploaded_file.name} 처리 완료")
                                     
+                                    # 지능형 이미지 추출 정보 표시
+                                    if image_extraction_success and not documents:
+                                        st.caption(f"**처리 정보:** 지능형 이미지 추출 | {extracted_images_count}개 이미지 추출")
                                     # 처리 정보 표시
-                                    if pdf_metadata:
+                                    elif pdf_metadata:
                                         info_text = f"**처리 정보:** {pdf_metadata['extraction_method']}"
                                         if pdf_metadata['page_count']:
                                             info_text += f" | {pdf_metadata['page_count']}페이지"
@@ -664,10 +702,13 @@ def main() -> None:
                                         st.metric("최대 크기", f"{chunk_analysis['max_size']}자")
                                 
                                 # 품질 검증 결과
-                                if len(documents) == saved_chunks:
-                                    st.info(f"💾 품질 검증: 모든 청크({len(documents)}개)가 성공적으로 저장됨")
-                                else:
-                                    st.warning(f"⚠️ 품질 검증: 로드된 청크({len(documents)}개) vs 저장된 청크({saved_chunks}개)")
+                                if documents:
+                                    if len(documents) == saved_chunks:
+                                        st.info(f"💾 품질 검증: 모든 청크({len(documents)}개)가 성공적으로 저장됨")
+                                    else:
+                                        st.warning(f"⚠️ 품질 검증: 로드된 청크({len(documents)}개) vs 저장된 청크({saved_chunks}개)")
+                                elif image_extraction_success:
+                                    st.info(f"🖼️ 이미지 추출: {extracted_images_count}개 이미지가 성공적으로 추출됨")
                                 
                                 # 검색 품질 테스트
                                 search_results = test_search_quality(st.session_state.vector_db, uploaded_file.name)
@@ -681,7 +722,10 @@ def main() -> None:
                                                 else:
                                                     st.caption(f"'{keyword}': {result_count}")
                                 
-                                logger.info(f"문서 처리 완료: {uploaded_file.name} - {len(documents)} 청크, 처리시간: {processing_time:.1f}초")
+                                if documents:
+                                    logger.info(f"문서 처리 완료: {uploaded_file.name} - {len(documents)} 청크, 처리시간: {processing_time:.1f}초")
+                                else:
+                                    logger.info(f"이미지 추출 완료: {uploaded_file.name} - {extracted_images_count} 이미지, 처리시간: {processing_time:.1f}초")
                             
                             else:
                                 failed_files += 1

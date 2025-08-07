@@ -1,0 +1,63 @@
+{
+  "pdf_file": "data/documents/백제 토기의 범주.pdf",
+  "document_topic": {
+    "error": "Model not loaded"
+  },
+  "images": [
+    {
+      "page": 1,
+      "index": 3,
+      "size": "368x500",
+      "type": "document_image",
+      "relevance_score": 0.8,
+      "is_text_only": false,
+      "description": "페이지 1의 이미지",
+      "image_file": "data/extracted_images/백제 토기의 범주/images/백제 토기의 범주_p001_i003.jpeg",
+      "saved": true
+    },
+    {
+      "page": 2,
+      "index": 2,
+      "size": "491x500",
+      "type": "document_image",
+      "relevance_score": 0.8,
+      "is_text_only": false,
+      "description": "페이지 2의 이미지",
+      "image_file": "data/extracted_images/백제 토기의 범주/images/백제 토기의 범주_p002_i002.jpeg",
+      "saved": true
+    },
+    {
+      "page": 2,
+      "index": 3,
+      "size": "327x500",
+      "type": "document_image",
+      "relevance_score": 0.8,
+      "is_text_only": false,
+      "description": "페이지 2의 이미지",
+      "image_file": "data/extracted_images/백제 토기의 범주/images/백제 토기의 범주_p002_i003.jpeg",
+      "saved": true
+    },
+    {
+      "page": 3,
+      "index": 2,
+      "size": "500x477",
+      "type": "document_image",
+      "relevance_score": 0.8,
+      "is_text_only": false,
+      "description": "페이지 3의 이미지",
+      "image_file": "data/extracted_images/백제 토기의 범주/images/백제 토기의 범주_p003_i002.jpeg",
+      "saved": true
+    }
+  ],
+  "statistics": {
+    "total_pages": 3,
+    "total_images_found": 8,
+    "relevant_images_saved": 4,
+    "irrelevant_images_skipped": 0,
+    "text_images_converted": 0,
+    "ocr_text_extracted": 0,
+    "small_images_skipped": 4,
+    "errors": 0,
+    "processing_time": 0.0343012809753418
+  }
+}

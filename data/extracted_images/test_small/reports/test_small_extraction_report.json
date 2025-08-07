@@ -1,0 +1,18 @@
+{
+  "pdf_file": "data/documents/test_small.pdf",
+  "document_topic": {
+    "error": "Model not loaded"
+  },
+  "images": [],
+  "statistics": {
+    "total_pages": 1,
+    "total_images_found": 0,
+    "relevant_images_saved": 0,
+    "irrelevant_images_skipped": 0,
+    "text_images_converted": 0,
+    "ocr_text_extracted": 0,
+    "small_images_skipped": 0,
+    "errors": 0,
+    "processing_time": 0.004487752914428711
+  }
+}

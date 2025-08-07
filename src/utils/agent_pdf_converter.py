@@ -132,6 +132,7 @@ class AgentBasedPDFConverter:
                 try:
                     image_list = page.get_images(full=True)
                     page_images = []
+                    MIN_IMAGE_SIZE = 50  # 최소 이미지 크기 (픽셀)
                     
                     for img_index, img in enumerate(image_list):
                         xref = img[0]  # xref 번호
@@ -141,6 +142,17 @@ class AgentBasedPDFConverter:
                         image_bytes = base_image["image"]
                         image_ext = base_image["ext"]
                         
+                        # 이미지 크기 확인을 위해 PIL 사용
+                        from PIL import Image
+                        import io
+                        img_pil = Image.open(io.BytesIO(image_bytes))
+                        width, height = img_pil.size
+                        
+                        # 너무 작은 이미지는 건너뛰기
+                        if width < MIN_IMAGE_SIZE or height < MIN_IMAGE_SIZE:
+                            logger.info(f"   ⚠️  너무 작은 이미지 건너뛰기: {width}x{height} (페이지 {page_num + 1})")
+                            continue
+                        
                         # 이미지 파일명 생성
                         image_filename = f"{pdf_stem}_page{page_num + 1:03d}_img{img_index + 1:03d}.{image_ext}"
                         image_path = images_dir / image_filename
@@ -149,7 +161,7 @@ class AgentBasedPDFConverter:
                         with open(image_path, "wb") as img_file:
                             img_file.write(image_bytes)
                         
-                        logger.info(f"   🖼️  이미지 추출: {image_filename}")
+                        logger.info(f"   🖼️  이미지 추출 성공: {image_filename} ({width}x{height})")
                         
                         # 이미지 분석 및 설명 생성
                         image_description = None

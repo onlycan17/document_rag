@@ -6,6 +6,8 @@ gatherUsageStats = false
 # 서버 설정
 port = 8501
 headless = true
+# 최대 업로드 파일 크기 (MB)
+maxUploadSize = 300
 
 [theme]
 # 다크 테마 설정 (선택사항)

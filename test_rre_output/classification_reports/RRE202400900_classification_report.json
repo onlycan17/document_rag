@@ -1,0 +1,2074 @@
+{
+  "pdf_file": "data/documents/RRE202400900.pdf",
+  "processing_date": "2025-08-06T22:29:06.170859",
+  "statistics": {
+    "total_images_found": 71,
+    "text_images_converted": 18,
+    "actual_images_preserved": 53,
+    "classification_errors": 0,
+    "total_extracted_text_length": 4599,
+    "processing_time": 0.0
+  },
+  "classification_results": {
+    "page1_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.95,
+          "text_area_ratio": 0.6459459459459459,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.95)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page1_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.95,
+          "text_area_ratio": 0.5630630630630631,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.95)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page1_img3": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.95,
+          "text_area_ratio": 0.5252252252252252,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.95)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page1_img4": {
+      "is_text_only": true,
+      "confidence": 0.8,
+      "text_content": ", Qusesnenie Korea Institute for Curriculum and Evaluation",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": ", Qusesnenie Korea Institute for Curriculum and Evaluation",
+          "text_length": 58,
+          "avg_confidence": 0.9028571428571429,
+          "text_area_ratio": 0.005854810727200519,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.8620689655172413,
+          "has_meaningful_text": true,
+          "word_count": 8
+        },
+        "decision_factors": {
+          "ocr": "텍스트 58자, OCR 신뢰도 0.90",
+          "classification": "OCR 기반 텍스트 분류"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page1_img5": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page1_img6": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page1_img7": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page2_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.95,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.95)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page2_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page2_img3": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "IN 1!!!",
+          "text_length": 7,
+          "avg_confidence": 0.7714285714285714,
+          "text_area_ratio": 0.18444193548387097,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.2857142857142857,
+          "has_meaningful_text": false,
+          "word_count": 2
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (7자) 또는 낮은 신뢰도 (0.77)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page5_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page51_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "글 자료 수집 글 자료 검수 정제",
+          "text_length": 18,
+          "avg_confidence": 0.9470000000000001,
+          "text_area_ratio": 0.6708525426271313,
+          "korean_ratio": 0.6666666666666666,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 7
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (18자) 또는 낮은 신뢰도 (0.95)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page51_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "ox 본 Hu",
+          "text_length": 7,
+          "avg_confidence": 0.8,
+          "text_area_ratio": 0.6712735636781839,
+          "korean_ratio": 0.14285714285714285,
+          "english_ratio": 0.5714285714285714,
+          "has_meaningful_text": false,
+          "word_count": 3
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (7자) 또는 낮은 신뢰도 (0.80)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page51_img3": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "탈락 (수집 제외)",
+          "text_length": 10,
+          "avg_confidence": 0.94,
+          "text_area_ratio": 1.0,
+          "korean_ratio": 0.6,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 3
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (10자) 또는 낮은 신뢰도 (0.94)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page51_img4": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "na KO 410 K",
+          "text_length": 11,
+          "avg_confidence": 0.7979999999999999,
+          "text_area_ratio": 0.008062437505829446,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.45454545454545453,
+          "has_meaningful_text": false,
+          "word_count": 4
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (11자) 또는 낮은 신뢰도 (0.80)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page52_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "글쓰기 자료 채점 인공지능학습데이터구축 809 [채점 수행] [데이터 주석] 연구진 개인 프로필 a 새점 결과 메타정보 40 0 악신 0 To aa 주석 구조확인 SH ae 채점 참여자",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "글쓰기 자료 채점 인공지능학습데이터구축 809 [채점 수행] [데이터 주석] 연구진 개인 프로필 a 새점 결과 메타정보 40 0 악신 0 To aa 주석 구조확인 SH ae 채점 참여자",
+          "text_length": 103,
+          "avg_confidence": 0.7242857142857143,
+          "text_area_ratio": 0.575050409369936,
+          "korean_ratio": 0.5436893203883495,
+          "english_ratio": 0.08737864077669903,
+          "has_meaningful_text": true,
+          "word_count": 28
+        },
+        "decision_factors": {
+          "ocr": "텍스트 103자, OCR 신뢰도 0.72",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page52_img2": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "4 [채점 모니터링] [학습데이터 구축] 연구진 NSDevil 채점 결과 자동주석 JSON 인공지능 수합 채점 피드백 지원 파일 O -학습데이터 프로그램 변환 구축 실시간 채점 결과 모니터링 분석",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "4 [채점 모니터링] [학습데이터 구축] 연구진 NSDevil 채점 결과 자동주석 JSON 인공지능 수합 채점 피드백 지원 파일 O -학습데이터 프로그램 변환 구축 실시간 채점 결과 모니터링 분석",
+          "text_length": 109,
+          "avg_confidence": 0.8785,
+          "text_area_ratio": 0.07332088988893723,
+          "korean_ratio": 0.5963302752293578,
+          "english_ratio": 0.11009174311926606,
+          "has_meaningful_text": true,
+          "word_count": 27
+        },
+        "decision_factors": {
+          "ocr": "텍스트 109자, OCR 신뢰도 0.88",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page52_img3": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "데이터 획득 준비 쓰기 데이터 획득 점 데이터 생성 A 데이터 가공 MAI 모델 활용 평가 환경 구축 데이터 제공자 협약 채점 전문성 교육 데이터 가공 모델 설계 데이터 획득 방법 수립 채점자 워크숍 가공 도구 개발 씨 모델 검증 데이터저장방안수립 쓰기 자료 수집 쓰기 자료 채점 데이터 라벨링 데이터 선정 평가 문향및 답안 양식결정 씨 모델 활용 데이터 전처리 편집 데이터 품질 평가 데이터 검수 Sure 등 형식 요소 통일 제3 전문가 재채점 업 지침서 제작 홍보영상제작 u 원시 데이터 저장 I 채점 데이터 저장",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "데이터 획득 준비 쓰기 데이터 획득 점 데이터 생성 A 데이터 가공 MAI 모델 활용 평가 환경 구축 데이터 제공자 협약 채점 전문성 교육 데이터 가공 모델 설계 데이터 획득 방법 수립 채점자 워크숍 가공 도구 개발 씨 모델 검증 데이터저장방안수립 쓰기 자료 수집 쓰기 자료 채점 데이터 라벨링 데이터 선정 평가 문향및 답안 양식결정 씨 모델 활용 데이터 전처리 편집 데이터 품질 평가 데이터 검수 Sure 등 형식 요소 통일 제3 전문가 재채점 업 지침서 제작 홍보영상제작 u 원시 데이터 저장 I 채점 데이터 저장",
+          "text_length": 289,
+          "avg_confidence": 0.8941322314049587,
+          "text_area_ratio": 0.31552857997687805,
+          "korean_ratio": 0.6678200692041523,
+          "english_ratio": 0.03460207612456748,
+          "has_meaningful_text": true,
+          "word_count": 86
+        },
+        "decision_factors": {
+          "ocr": "텍스트 289자, OCR 신뢰도 0.89",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page53_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "글쓰기 원자료 획득 데이터 제공자 모집 동의서 작성 글쓰기 원자료 수집 데이터 검수 원시 데이터 저장 데이터 정제 채점 자료 생성 데이터 가공 데이터 정제 기준 설정 채점자 모집 부적합 데이터 선별 BM] 자료 채점 데이터 자동 정제 채점 자료 생성 데이터 수동 정제 채점 신뢰도 검수 원천 데이터 저장 데이터 주석 BW 설계 데이터 주석 프로그램 개발 데이터 가공 데이터 검수 투 학습 데이터 저장",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "글쓰기 원자료 획득 데이터 제공자 모집 동의서 작성 글쓰기 원자료 수집 데이터 검수 원시 데이터 저장 데이터 정제 채점 자료 생성 데이터 가공 데이터 정제 기준 설정 채점자 모집 부적합 데이터 선별 BM] 자료 채점 데이터 자동 정제 채점 자료 생성 데이터 수동 정제 채점 신뢰도 검수 원천 데이터 저장 데이터 주석 BW 설계 데이터 주석 프로그램 개발 데이터 가공 데이터 검수 투 학습 데이터 저장",
+          "text_length": 223,
+          "avg_confidence": 0.9248235294117647,
+          "text_area_ratio": 0.11716423282137105,
+          "korean_ratio": 0.6860986547085202,
+          "english_ratio": 0.017937219730941704,
+          "has_meaningful_text": true,
+          "word_count": 66
+        },
+        "decision_factors": {
+          "ocr": "텍스트 223자, OCR 신뢰도 0.92",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page54_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "가공 정제 zl 가 RO 에 ak 80 KI KO zp 매 aK Ru 된 me oI pe of sar WHO ON Rw 80 x0 zo zm 0 ou zo ok al 때 hl OIRO aK eid 브 ign DH oH If 7 il z 샐 aK x ak aK 30 20 aa RS ary Uo 가온 ir ROOF bia a 대주 해 ox 내 b F Qj 을 내 He iu 로 메 모니터링 고 a ar K 하 배 a 으 z gt ul a ax",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "가공 정제 zl 가 RO 에 ak 80 KI KO zp 매 aK Ru 된 me oI pe of sar WHO ON Rw 80 x0 zo zm 0 ou zo ok al 때 hl OIRO aK eid 브 ign DH oH If 7 il z 샐 aK x ak aK 30 20 aa RS ary Uo 가온 ir ROOF bia a 대주 해 ox 내 b F Qj 을 내 He iu 로 메 모니터링 고 a ar K 하 배 a 으 z gt ul a ax",
+          "text_length": 246,
+          "avg_confidence": 0.6940677966101696,
+          "text_area_ratio": 0.07595635269032987,
+          "korean_ratio": 0.11788617886178862,
+          "english_ratio": 0.483739837398374,
+          "has_meaningful_text": true,
+          "word_count": 88
+        },
+        "decision_factors": {
+          "ocr": "텍스트 246자, OCR 신뢰도 0.69",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page57_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "oo 데이터 전처리 - 수집한 학습용 글쓰기 데이터에서 누락된 값, 이상치 등을 제거 - 시 학습용 데이터로서의 품질을 향상시키는 과정 (630 누락된 점수나 등급, 피드백 등을 보완하거나 해당 데이터 제거, 비정상적으로 점수가 높거나 낮은 데이터 제거 등 다즈 츠추 AAA feature) 추출 - 전처리한 글 데이터에서 유용하고 의미있는 AWS 추출 - 추출한 채점자질은 모델 학습에 사용 (ex) 글의 길이, 문장의 수, 문장의 복작성, 단어의 다양성, 문법 오류 등 FHA! feature) 선택 - 추출된 채점자질 중에서 가장 유용한 자질을 선택하는 과정 - 이를 통해 불필요한 자질을 제거하고 모델의 성능과 s 속 (ex) SHEA, 회귀분석 등의 방법으로 유의미한 채점자질만 선택 ASAE (feature) 변환 - 선택된 채점자질들을 모델링에 적합한 형태로 변환하는 과정 - 모델의 성능을 최적화하는 데에 도움 (ex) 채점자질 스케일을 조정하여 정규화, 범주형 om 00 o Pal Hu 또 ra ain",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "oo 데이터 전처리 - 수집한 학습용 글쓰기 데이터에서 누락된 값, 이상치 등을 제거 - 시 학습용 데이터로서의 품질을 향상시키는 과정 (630 누락된 점수나 등급, 피드백 등을 보완하거나 해당 데이터 제거, 비정상적으로 점수가 높거나 낮은 데이터 제거 등 다즈 츠추 AAA feature) 추출 - 전처리한 글 데이터에서 유용하고 의미있는 AWS 추출 - 추출한 채점자질은 모델 학습에 사용 (ex) 글의 길이, 문장의 수, 문장의 복작성, 단어의 다양성, 문법 오류 등 FHA! feature) 선택 - 추출된 채점자질 중에서 가장 유용한 자질을 선택하는 과정 - 이를 통해 불필요한 자질을 제거하고 모델의 성능과 s 속 (ex) SHEA, 회귀분석 등의 방법으로 유의미한 채점자질만 선택 ASAE (feature) 변환 - 선택된 채점자질들을 모델링에 적합한 형태로 변환하는 과정 - 모델의 성능을 최적화하는 데에 도움 (ex) 채점자질 스케일을 조정하여 정규화, 범주형 om 00 o Pal Hu 또 ra ain",
+          "text_length": 514,
+          "avg_confidence": 0.8820161290322581,
+          "text_area_ratio": 0.41412881816562336,
+          "korean_ratio": 0.5680933852140078,
+          "english_ratio": 0.11673151750972763,
+          "has_meaningful_text": true,
+          "word_count": 129
+        },
+        "decision_factors": {
+          "ocr": "텍스트 514자, OCR 신뢰도 0.88",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page68_img1": {
+      "is_text_only": true,
+      "confidence": 0.8,
+      "text_content": "1만2502 12000 419만 9918 008만 4400 2017년 2018 2019 2020 2021 자료 통계청패법원 The JoongAng",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "1만2502 12000 419만 9918 008만 4400 2017년 2018 2019 2020 2021 자료 통계청패법원 The JoongAng",
+          "text_length": 81,
+          "avg_confidence": 0.8355555555555556,
+          "text_area_ratio": 0.7038623113854595,
+          "korean_ratio": 0.14814814814814814,
+          "english_ratio": 0.13580246913580246,
+          "has_meaningful_text": true,
+          "word_count": 15
+        },
+        "decision_factors": {
+          "ocr": "텍스트 81자, OCR 신뢰도 0.84",
+          "classification": "OCR 기반 텍스트 분류"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page73_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "채식 유형별 부족하기 쉬운 영양소 A198 ae ee maze ieee ae ESLee eee 8h. ome 오메가3 육류 어패류 베지테리언 ga Sa we. HERD sia jamomm aa] SE,S0ts 육류 어패류 철분, 오메가 3 Be. Sx 비타민0 이연 단백질 Het 유제품 비타민82 순수 채식",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "채식 유형별 부족하기 쉬운 영양소 A198 ae ee maze ieee ae ESLee eee 8h. ome 오메가3 육류 어패류 베지테리언 ga Sa we. HERD sia jamomm aa] SE,S0ts 육류 어패류 철분, 오메가 3 Be. Sx 비타민0 이연 단백질 Het 유제품 비타민82 순수 채식",
+          "text_length": 172,
+          "avg_confidence": 0.7014516129032258,
+          "text_area_ratio": 0.1484589983489268,
+          "korean_ratio": 0.31976744186046513,
+          "english_ratio": 0.3488372093023256,
+          "has_meaningful_text": true,
+          "word_count": 42
+        },
+        "decision_factors": {
+          "ocr": "텍스트 172자, OCR 신뢰도 0.70",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page74_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "단백질 100gEt 평균 온실가스 배출량 (2018, Poore and Nemecek, 사이언스) 소(밀집 사육) 49.89kg oF 19.85kg 양식 새우 18.19kg 소방목) 16.87kg 치즈 10.82kg 우유 9.5kg 돼지 7.61kg 양식 생선 669 5.98kg 가금류 5.7kg 달갈 99 A.21kg 곡물 (단위 0060(이산화탄소 slat 랜209 등가환산량-온실가스 종류별 두부 fl 1.98kg 지구온난화 기여도를 대표적인 땅콩 61.2310 온실가스인 이산화탄소의 완두콩 0.44109 ae ae 육식이 환경에 미치는 영향 축산업의 비효율성 전체 경작지의 83 이상을 차지하지만 칼로리의 18 , 단백질의 37 만 제공. 온실가스 기여는 58 수질오염의 57 를 차지 킬리 07ㄱㅠ2 18 Ch, 0 37 온실가스 이 Ls 58 PLoS ㅁㅁㅁ 57 축산업이 발생하는 온실가스 배출량 연간 71기가 Ｌ 모든 인위적 온실가스 배출량의 14.5 차지 4 0, 2013년 통계)",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "단백질 100gEt 평균 온실가스 배출량 (2018, Poore and Nemecek, 사이언스) 소(밀집 사육) 49.89kg oF 19.85kg 양식 새우 18.19kg 소방목) 16.87kg 치즈 10.82kg 우유 9.5kg 돼지 7.61kg 양식 생선 669 5.98kg 가금류 5.7kg 달갈 99 A.21kg 곡물 (단위 0060(이산화탄소 slat 랜209 등가환산량-온실가스 종류별 두부 fl 1.98kg 지구온난화 기여도를 대표적인 땅콩 61.2310 온실가스인 이산화탄소의 완두콩 0.44109 ae ae 육식이 환경에 미치는 영향 축산업의 비효율성 전체 경작지의 83 이상을 차지하지만 칼로리의 18 , 단백질의 37 만 제공. 온실가스 기여는 58 수질오염의 57 를 차지 킬리 07ㄱㅠ2 18 Ch, 0 37 온실가스 이 Ls 58 PLoS ㅁㅁㅁ 57 축산업이 발생하는 온실가스 배출량 연간 71기가 Ｌ 모든 인위적 온실가스 배출량의 14.5 차지 4 0, 2013년 통계)",
+          "text_length": 504,
+          "avg_confidence": 0.8436499999999999,
+          "text_area_ratio": 0.3151337247227658,
+          "korean_ratio": 0.3948412698412698,
+          "english_ratio": 0.12103174603174603,
+          "has_meaningful_text": true,
+          "word_count": 111
+        },
+        "decision_factors": {
+          "ocr": "텍스트 504자, OCR 신뢰도 0.84",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page97_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "(km) Y 16 12",
+          "text_length": 12,
+          "avg_confidence": 0.92,
+          "text_area_ratio": 0.016652532923530635,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.25,
+          "has_meaningful_text": false,
+          "word_count": 4
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (12자) 또는 낮은 신뢰도 (0.92)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page97_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "12 20 40 (분)",
+          "text_length": 12,
+          "avg_confidence": 0.8214285714285714,
+          "text_area_ratio": 0.018853612785737956,
+          "korean_ratio": 0.08333333333333333,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 4
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (12자) 또는 낮은 신뢰도 (0.82)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page104_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "꼬마전구 그",
+          "text_length": 6,
+          "avg_confidence": 0.782,
+          "text_area_ratio": 0.18389696946680845,
+          "korean_ratio": 0.8333333333333334,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 2
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (6자) 또는 낮은 신뢰도 (0.78)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page106_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.95,
+          "text_area_ratio": 0.531069695777603,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.95)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page106_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.95,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.95)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page108_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page108_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.95,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.95)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page109_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page111_img1": {
+      "is_text_only": true,
+      "confidence": 0.8,
+      "text_content": "지진 ㅅ 화산 해령 지진대ㆍ 양 지진 } 알프스ㆍㅎ말라야 판의 경계 판의 이동 판 방향",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "지진 ㅅ 화산 해령 지진대ㆍ 양 지진 } 알프스ㆍㅎ말라야 판의 경계 판의 이동 판 방향",
+          "text_length": 48,
+          "avg_confidence": 0.850625,
+          "text_area_ratio": 0.3992662559364601,
+          "korean_ratio": 0.6041666666666666,
+          "english_ratio": 0.0,
+          "has_meaningful_text": true,
+          "word_count": 15
+        },
+        "decision_factors": {
+          "ocr": "텍스트 48자, OCR 신뢰도 0.85",
+          "classification": "OCR 기반 텍스트 분류"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page111_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.95,
+          "text_area_ratio": 0.9830508474576272,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.95)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page126_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "Be AURE Upload CSV or Excel File Upload Keyword File File uploaded successfully. Click Start Analysis to proceed. Start Analysis Start Keyword Analysis Merge Keyword Morphs Home 업로드 된 파일의 상위 57H 데이터 사슴은 빠르다 AS... MBE 12분동안 저음구간과 두번째 사슴은 처음 12분 사슴은 산쪽으로12. Copyright 6 (주)문화소프트 2024",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "Be AURE Upload CSV or Excel File Upload Keyword File File uploaded successfully. Click Start Analysis to proceed. Start Analysis Start Keyword Analysis Merge Keyword Morphs Home 업로드 된 파일의 상위 57H 데이터 사슴은 빠르다 AS... MBE 12분동안 저음구간과 두번째 사슴은 처음 12분 사슴은 산쪽으로12. Copyright 6 (주)문화소프트 2024",
+          "text_length": 281,
+          "avg_confidence": 0.9090588235294118,
+          "text_area_ratio": 0.09933989543476356,
+          "korean_ratio": 0.1708185053380783,
+          "english_ratio": 0.5836298932384342,
+          "has_meaningful_text": true,
+          "word_count": 49
+        },
+        "decision_factors": {
+          "ocr": "텍스트 281자, OCR 신뢰도 0.91",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page128_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "Be 시대 File Upload Random Forest Tain Size 00.1 0.9) 08 Test Size (0.1 0.9) 02 Fain Your Mode! Save Tained Model Save Test Data Score Prediction Home Copyright (주)",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "Be 시대 File Upload Random Forest Tain Size 00.1 0.9) 08 Test Size (0.1 0.9) 02 Fain Your Mode! Save Tained Model Save Test Data Score Prediction Home Copyright (주)",
+          "text_length": 162,
+          "avg_confidence": 0.8027777777777777,
+          "text_area_ratio": 0.0398329651559074,
+          "korean_ratio": 0.018518518518518517,
+          "english_ratio": 0.6604938271604939,
+          "has_meaningful_text": true,
+          "word_count": 30
+        },
+        "decision_factors": {
+          "ocr": "텍스트 162자, OCR 신뢰도 0.80",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page164_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "대리 투표 대리투표 선거 투표권 대리인 0.15 010 0.05 0.00 0.05 SHAP value (impact on model output) 0.10 High Low Feature value",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "대리 투표 대리투표 선거 투표권 대리인 0.15 010 0.05 0.00 0.05 SHAP value (impact on model output) 0.10 High Low Feature value",
+          "text_length": 109,
+          "avg_confidence": 0.9376923076923077,
+          "text_area_ratio": 0.4087736842105263,
+          "korean_ratio": 0.14678899082568808,
+          "english_ratio": 0.43119266055045874,
+          "has_meaningful_text": true,
+          "word_count": 22
+        },
+        "decision_factors": {
+          "ocr": "텍스트 109자, OCR 신뢰도 0.94",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page164_img2": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "대리투표 투표권 법 다른 나라 제도 대리인 권리 oui Agere 00s tees 이이 be se OSA oe came doe eee aie eee Ongow on 0.1 0.0 01 0.2 SHAP value (impact on model output) 0.3 High Low Feature value",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "대리투표 투표권 법 다른 나라 제도 대리인 권리 oui Agere 00s tees 이이 be se OSA oe came doe eee aie eee Ongow on 0.1 0.0 01 0.2 SHAP value (impact on model output) 0.3 High Low Feature value",
+          "text_length": 169,
+          "avg_confidence": 0.7193333333333334,
+          "text_area_ratio": 0.22837631578947368,
+          "korean_ratio": 0.1242603550295858,
+          "english_ratio": 0.5443786982248521,
+          "has_meaningful_text": true,
+          "word_count": 39
+        },
+        "decision_factors": {
+          "ocr": "텍스트 169자, OCR 신뢰도 0.72",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page179_img1": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "기계학습에서 채점자질의 중요성 관련 장 1절, WA 2절, 3절 재점자질 자동 추출 프로그램 고도화 재점자질과 시를 통한 인공지능 모델 예측의 타당성 검토 관련 장 1절, Wa 4절 (2) 재점자질에 기반한 생성형 시의 H 자동채점 활용 방안 탐색",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "기계학습에서 채점자질의 중요성 관련 장 1절, WA 2절, 3절 재점자질 자동 추출 프로그램 고도화 재점자질과 시를 통한 인공지능 모델 예측의 타당성 검토 관련 장 1절, Wa 4절 (2) 재점자질에 기반한 생성형 시의 H 자동채점 활용 방안 탐색",
+          "text_length": 138,
+          "avg_confidence": 0.8965853658536586,
+          "text_area_ratio": 0.23429633054373783,
+          "korean_ratio": 0.6231884057971014,
+          "english_ratio": 0.036231884057971016,
+          "has_meaningful_text": true,
+          "word_count": 37
+        },
+        "decision_factors": {
+          "ocr": "텍스트 138자, OCR 신뢰도 0.90",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page179_img2": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "학습용 데이터 구축 절차의 중요성 관련 장 3절, 장 1절, 2절 자동채점 인공지능 모델의 작동 예측 결과 해석 관련 장 2절, lla 3절 학습용 데이터 설계의 중요성 관련 장 3절, ila 1절, 2절 구축 과정 및 절차 체계화 원리 및 0 화요 바아 학교 현장에서 자동채점 BSS 위한 그 OL 지침 및 지원 체제 마련 현련 바아 교과별 인공지능 학습용 데이터 wee 구축을 위한 협력 방안 마련",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "학습용 데이터 구축 절차의 중요성 관련 장 3절, 장 1절, 2절 자동채점 인공지능 모델의 작동 예측 결과 해석 관련 장 2절, lla 3절 학습용 데이터 설계의 중요성 관련 장 3절, ila 1절, 2절 구축 과정 및 절차 체계화 원리 및 0 화요 바아 학교 현장에서 자동채점 BSS 위한 그 OL 지침 및 지원 체제 마련 현련 바아 교과별 인공지능 학습용 데이터 wee 구축을 위한 협력 방안 마련",
+          "text_length": 224,
+          "avg_confidence": 0.8816379310344827,
+          "text_area_ratio": 0.21595148857329832,
+          "korean_ratio": 0.5803571428571429,
+          "english_ratio": 0.0625,
+          "has_meaningful_text": true,
+          "word_count": 67
+        },
+        "decision_factors": {
+          "ocr": "텍스트 224자, OCR 신뢰도 0.88",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page180_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page180_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page180_img3": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page180_img4": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page180_img5": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page180_img6": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page185_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page185_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page185_img3": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page185_img4": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page185_img5": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page185_img6": {
+      "is_text_only": true,
+      "confidence": 0.9,
+      "text_content": "Coh-Metrix Text Easability Assessor Enter text here Secretary of State John Kerry delivered prepared remarks whether or not the United States wil respond Wel, for the last several days, President Obama a entice national security team have been reviewing the situation in Syria. And today, want to provide the use of chemical weapons. What we saw in Syria last week should shock the conscience ofthe world. It defies any code of morality. Let me be clear The indiscriminate slaughter of civilians, the killing of women and chidren ang innocent bystande s by Chemical weapons is 2 moral obscenity. By any standard, is nexcsabe and - despite the excuses and [Flesch Kincaid Grade Level -8.8(8-9) equivocations that some have manufactured itis undeniable. , This tot is low in narativty which indicates that iti less storytke and may have less familiar ve meaning ofthis atack goes beyond the confit in words. Less story-like texts are usually harder to comprehend. tt is low in both referential and deep cohesion, suggesting that the reader may have to infer the relationships between sen 에에 k ideas. If the has insufficient prior knowledge, these gaps can be challenging.",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "Coh-Metrix Text Easability Assessor Enter text here Secretary of State John Kerry delivered prepared remarks whether or not the United States wil respond Wel, for the last several days, President Obama a entice national security team have been reviewing the situation in Syria. And today, want to provide the use of chemical weapons. What we saw in Syria last week should shock the conscience ofthe world. It defies any code of morality. Let me be clear The indiscriminate slaughter of civilians, the killing of women and chidren ang innocent bystande s by Chemical weapons is 2 moral obscenity. By any standard, is nexcsabe and - despite the excuses and [Flesch Kincaid Grade Level -8.8(8-9) equivocations that some have manufactured itis undeniable. , This tot is low in narativty which indicates that iti less storytke and may have less familiar ve meaning ofthis atack goes beyond the confit in words. Less story-like texts are usually harder to comprehend. tt is low in both referential and deep cohesion, suggesting that the reader may have to infer the relationships between sen 에에 k ideas. If the has insufficient prior knowledge, these gaps can be challenging.",
+          "text_length": 1169,
+          "avg_confidence": 0.7549746192893402,
+          "text_area_ratio": 1.0,
+          "korean_ratio": 0.001710863986313088,
+          "english_ratio": 0.8075278015397775,
+          "has_meaningful_text": true,
+          "word_count": 192
+        },
+        "decision_factors": {
+          "ocr": "텍스트 1169자, OCR 신뢰도 0.75",
+          "classification": "OCR 기반 텍스트 분류",
+          "boost": "긴 텍스트 + 높은 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page185_img7": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page189_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page189_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page189_img3": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page189_img4": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page189_img5": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page189_img6": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page194_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page194_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page194_img3": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page194_img4": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page194_img5": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page194_img6": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page198_img1": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page198_img2": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page198_img3": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page198_img4": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page198_img5": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    },
+    "page198_img6": {
+      "is_text_only": false,
+      "confidence": 0.7,
+      "text_content": "",
+      "analysis_details": {
+        "ocr_analysis": {
+          "text": "",
+          "text_length": 0,
+          "avg_confidence": 0.0,
+          "text_area_ratio": 0.0,
+          "korean_ratio": 0.0,
+          "english_ratio": 0.0,
+          "has_meaningful_text": false,
+          "word_count": 0
+        },
+        "decision_factors": {
+          "ocr": "텍스트 부족 (0자) 또는 낮은 신뢰도 (0.00)",
+          "classification": "이미지로 분류",
+          "penalty": "짧은 텍스트 또는 낮은 OCR 신뢰도"
+        },
+        "analysis_mode": "basic_ocr_only"
+      }
+    }
+  },
+  "text_images": [
+    {
+      "page": 1,
+      "index": 3,
+      "text_length": 58,
+      "confidence": 0.8
+    },
+    {
+      "page": 52,
+      "index": 0,
+      "text_length": 103,
+      "confidence": 0.9
+    },
+    {
+      "page": 52,
+      "index": 1,
+      "text_length": 109,
+      "confidence": 0.9
+    },
+    {
+      "page": 52,
+      "index": 2,
+      "text_length": 289,
+      "confidence": 0.9
+    },
+    {
+      "page": 53,
+      "index": 0,
+      "text_length": 223,
+      "confidence": 0.9
+    },
+    {
+      "page": 54,
+      "index": 0,
+      "text_length": 246,
+      "confidence": 0.9
+    },
+    {
+      "page": 57,
+      "index": 0,
+      "text_length": 514,
+      "confidence": 0.9
+    },
+    {
+      "page": 68,
+      "index": 0,
+      "text_length": 81,
+      "confidence": 0.8
+    },
+    {
+      "page": 73,
+      "index": 0,
+      "text_length": 172,
+      "confidence": 0.9
+    },
+    {
+      "page": 74,
+      "index": 0,
+      "text_length": 504,
+      "confidence": 0.9
+    },
+    {
+      "page": 111,
+      "index": 0,
+      "text_length": 48,
+      "confidence": 0.8
+    },
+    {
+      "page": 126,
+      "index": 0,
+      "text_length": 281,
+      "confidence": 0.9
+    },
+    {
+      "page": 128,
+      "index": 0,
+      "text_length": 162,
+      "confidence": 0.9
+    },
+    {
+      "page": 164,
+      "index": 0,
+      "text_length": 109,
+      "confidence": 0.9
+    },
+    {
+      "page": 164,
+      "index": 1,
+      "text_length": 169,
+      "confidence": 0.9
+    },
+    {
+      "page": 179,
+      "index": 0,
+      "text_length": 138,
+      "confidence": 0.9
+    },
+    {
+      "page": 179,
+      "index": 1,
+      "text_length": 224,
+      "confidence": 0.9
+    },
+    {
+      "page": 185,
+      "index": 5,
+      "text_length": 1169,
+      "confidence": 0.9
+    }
+  ],
+  "actual_images": [
+    {
+      "page": 1,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page001_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 1,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page001_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 1,
+      "index": 2,
+      "file": "test_rre_output/images/RRE202400900_page001_img003.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 1,
+      "index": 4,
+      "file": "test_rre_output/images/RRE202400900_page001_img005.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 1,
+      "index": 5,
+      "file": "test_rre_output/images/RRE202400900_page001_img006.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 1,
+      "index": 6,
+      "file": "test_rre_output/images/RRE202400900_page001_img007.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 2,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page002_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 2,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page002_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 2,
+      "index": 2,
+      "file": "test_rre_output/images/RRE202400900_page002_img003.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 5,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page005_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 51,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page051_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 51,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page051_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 51,
+      "index": 2,
+      "file": "test_rre_output/images/RRE202400900_page051_img003.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 51,
+      "index": 3,
+      "file": "test_rre_output/images/RRE202400900_page051_img004.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 97,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page097_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 97,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page097_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 104,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page104_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 106,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page106_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 106,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page106_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 108,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page108_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 108,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page108_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 109,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page109_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 111,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page111_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 180,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page180_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 180,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page180_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 180,
+      "index": 2,
+      "file": "test_rre_output/images/RRE202400900_page180_img003.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 180,
+      "index": 3,
+      "file": "test_rre_output/images/RRE202400900_page180_img004.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 180,
+      "index": 4,
+      "file": "test_rre_output/images/RRE202400900_page180_img005.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 180,
+      "index": 5,
+      "file": "test_rre_output/images/RRE202400900_page180_img006.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 185,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page185_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 185,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page185_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 185,
+      "index": 2,
+      "file": "test_rre_output/images/RRE202400900_page185_img003.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 185,
+      "index": 3,
+      "file": "test_rre_output/images/RRE202400900_page185_img004.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 185,
+      "index": 4,
+      "file": "test_rre_output/images/RRE202400900_page185_img005.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 185,
+      "index": 6,
+      "file": "test_rre_output/images/RRE202400900_page185_img007.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 189,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page189_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 189,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page189_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 189,
+      "index": 2,
+      "file": "test_rre_output/images/RRE202400900_page189_img003.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 189,
+      "index": 3,
+      "file": "test_rre_output/images/RRE202400900_page189_img004.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 189,
+      "index": 4,
+      "file": "test_rre_output/images/RRE202400900_page189_img005.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 189,
+      "index": 5,
+      "file": "test_rre_output/images/RRE202400900_page189_img006.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 194,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page194_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 194,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page194_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 194,
+      "index": 2,
+      "file": "test_rre_output/images/RRE202400900_page194_img003.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 194,
+      "index": 3,
+      "file": "test_rre_output/images/RRE202400900_page194_img004.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 194,
+      "index": 4,
+      "file": "test_rre_output/images/RRE202400900_page194_img005.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 194,
+      "index": 5,
+      "file": "test_rre_output/images/RRE202400900_page194_img006.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 198,
+      "index": 0,
+      "file": "test_rre_output/images/RRE202400900_page198_img001.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 198,
+      "index": 1,
+      "file": "test_rre_output/images/RRE202400900_page198_img002.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 198,
+      "index": 2,
+      "file": "test_rre_output/images/RRE202400900_page198_img003.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 198,
+      "index": 3,
+      "file": "test_rre_output/images/RRE202400900_page198_img004.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 198,
+      "index": 4,
+      "file": "test_rre_output/images/RRE202400900_page198_img005.png",
+      "confidence": 0.7
+    },
+    {
+      "page": 198,
+      "index": 5,
+      "file": "test_rre_output/images/RRE202400900_page198_img006.png",
+      "confidence": 0.7
+    }
+  ]
+}

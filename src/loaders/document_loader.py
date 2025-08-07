@@ -30,12 +30,18 @@ class EnhancedDocumentLoader:
     - 한국어 문서 최적화
     - 마크다운 특화 처리 (CLI 스크립트와 동일한 로직)
     - 다양한 청킹 전략 지원
+    - 지능형 이미지 추출 지원
     """
     
-    def __init__(self, use_ocr: bool = True, use_agent_preprocessing: bool = False, enable_postprocessing: bool = False):
+    def __init__(self, use_ocr: bool = True, use_agent_preprocessing: bool = False, 
+                 enable_postprocessing: bool = False, use_intelligent_image_extraction: bool = False):
         self.use_ocr = use_ocr
         self.use_agent_preprocessing = use_agent_preprocessing
         self.enable_postprocessing = enable_postprocessing
+        self.use_intelligent_image_extraction = use_intelligent_image_extraction
+        
+        # 지능형 이미지 추출 메타데이터 저장용
+        self.image_extraction_metadata = None
         
         # 기본 텍스트 분할기 (기존 방식)
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -311,18 +317,41 @@ class EnhancedDocumentLoader:
                 except Exception as e:
                     logger.warning(f"PDF 이미지 이동 실패: {str(e)}")
         
+        # 기본 메타데이터 생성
+        base_metadata = {
+            'source': str(file_path),
+            'file_name': Path(file_path).name,
+            'file_type': '.pdf',
+            'processing_method': processing_method,
+            'image_count': image_count or len(extracted_images),
+            'images': extracted_images,
+            'conversion_status': 'success'
+        }
+        
+        # 지능형 이미지 추출 정보가 있으면 병합
+        if hasattr(self, 'image_extraction_metadata') and self.image_extraction_metadata:
+            # 지능형 추출 정보 병합
+            base_metadata.update({
+                'intelligent_extraction_completed': True,
+                'document_topic': self.image_extraction_metadata.get('document_topic', {}),
+                'total_images': self.image_extraction_metadata.get('total_images', 0),
+                'relevant_images': self.image_extraction_metadata.get('relevant_images', 0),
+                'text_images_converted': self.image_extraction_metadata.get('text_images_converted', 0),
+                'extracted_images': self.image_extraction_metadata.get('extracted_images', []),
+                'image_extraction_dir': self.image_extraction_metadata.get('image_extraction_dir', ''),
+            })
+            
+            # 이미지 추출 내용을 PDF 텍스트 내용 앞에 추가
+            image_content = self.image_extraction_metadata.get('image_markdown_content', '')
+            if image_content:
+                markdown_content = f"{image_content}\n\n---\n\n# PDF 텍스트 내용\n\n{markdown_content}"
+            
+            logger.info(f"   ✅ 지능형 이미지 추출 정보 병합 완료 ({self.image_extraction_metadata.get('relevant_images', 0)}개 이미지)")
+        
         # 마크다운 내용을 Document 객체로 변환
         document = Document(
             page_content=markdown_content,
-            metadata={
-                'source': str(file_path),
-                'file_name': Path(file_path).name,
-                'file_type': '.pdf',
-                'processing_method': processing_method,
-                'image_count': image_count or len(extracted_images),
-                'images': extracted_images,
-                'conversion_status': 'success'
-            }
+            metadata=base_metadata
         )
         
         method_name = "에이전트 기반 변환기" if "agent" in processing_method else "개선된 PDF 변환기"
@@ -398,7 +427,118 @@ class EnhancedDocumentLoader:
         return [document]
     
     def _load_pdf_file(self, file_path: str, progress_callback=None) -> List[Document]:
-        """PDF 파일 로딩 - 에이전트 모드 또는 개선된 PDF 변환기 사용"""
+        """PDF 파일 로딩 - 에이전트 모드, 지능형 이미지 추출, 또는 개선된 PDF 변환기 사용"""
+        
+        # 각 파일 처리 시작 시 메타데이터 초기화
+        self.image_extraction_metadata = None
+        
+        # 지능형 이미지 추출이 활성화된 경우
+        if self.use_intelligent_image_extraction:
+            try:
+                if progress_callback:
+                    progress_callback(0.1, "🧠 지능형 이미지 추출 중...")
+                
+                # 지능형 이미지 추출기 임포트
+                from ..utils.intelligent_image_extractor_korean import IntelligentImageExtractorKorean
+                
+                # 영구 출력 디렉토리 사용
+                from pathlib import Path
+                
+                # PDF 파일명 기반으로 출력 디렉토리 생성
+                pdf_name = Path(file_path).stem
+                output_base_dir = Path("data/extracted_images")
+                output_dir = output_base_dir / pdf_name
+                output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # 지능형 이미지 추출기 초기화
+                extractor = IntelligentImageExtractorKorean(
+                    output_dir=str(output_dir),
+                    relevance_threshold=0.6,
+                    enable_ocr=self.use_ocr,
+                    use_local_models=True  # 로컬 모델 사용
+                )
+                
+                # PDF 처리 및 이미지 추출
+                extraction_results = extractor.process_pdf(file_path, progress_callback)
+                
+                # 추출된 텍스트와 관련 이미지 정보를 Document로 변환
+                if extraction_results and extraction_results.get('images'):
+                    # 저장된 이미지 정보 수집
+                    saved_images = []
+                    extracted_texts = []
+                    
+                    for img in extraction_results['images']:
+                        if img.get('saved'):
+                            # 이미지 정보 저장
+                            saved_images.append({
+                                'filename': Path(img['image_file']).name,
+                                'path': img['image_file'],
+                                'page': img['page'],
+                                'type': img.get('type', 'unknown'),
+                                'relevance_score': img.get('relevance_score', 0),
+                                'description': img.get('description', '')
+                            })
+                        
+                        # OCR로 추출된 텍스트 수집
+                        if img.get('extracted_text'):
+                            extracted_texts.append(img['extracted_text'])
+                    
+                    # 보고서 생성을 위한 마크다운 콘텐츠
+                    markdown_content = f"# {Path(file_path).name}\n\n"
+                    markdown_content += f"**문서 주제**: {extraction_results.get('document_topic', {}).get('main_topic', '알 수 없음')}\n\n"
+                    
+                    if saved_images:
+                        markdown_content += "## 추출된 이미지\n\n"
+                        for img_info in saved_images:
+                            markdown_content += f"- 페이지 {img_info['page']}: {img_info['filename']} (관련도: {img_info['relevance_score']:.2f})\n"
+                        markdown_content += "\n"
+                    
+                    if extracted_texts:
+                        markdown_content += "## OCR 추출 텍스트\n\n"
+                        markdown_content += "\n\n".join(extracted_texts)
+                    
+                    # 메타데이터 생성
+                    metadata = {
+                        'source': file_path,
+                        'processing_method': 'intelligent_extraction',
+                        'document_topic': extraction_results.get('document_topic', {}),
+                        'total_images': extraction_results.get('statistics', {}).get('total_images_found', 0),
+                        'relevant_images': extraction_results.get('statistics', {}).get('relevant_images_saved', 0),
+                        'text_images_converted': extraction_results.get('statistics', {}).get('text_images_converted', 0),
+                        'extracted_images': saved_images,
+                        'image_extraction_dir': str(output_dir)
+                    }
+                    
+                    # 이미지 추출 정보를 메타데이터에 저장 (나중에 병합용)
+                    image_extraction_metadata = {
+                        'intelligent_extraction_completed': True,
+                        'document_topic': extraction_results.get('document_topic', {}),
+                        'total_images': extraction_results.get('statistics', {}).get('total_images_found', 0),
+                        'relevant_images': extraction_results.get('statistics', {}).get('relevant_images_saved', 0),
+                        'text_images_converted': extraction_results.get('statistics', {}).get('text_images_converted', 0),
+                        'extracted_images': saved_images,
+                        'image_extraction_dir': str(output_dir),
+                        'image_markdown_content': markdown_content
+                    }
+                    
+                    # 추출 보고서 로그
+                    logger.info(f"✅ 지능형 이미지 추출 완료: {file_path}")
+                    logger.info(f"   📁 이미지 저장 위치: {output_dir}")
+                    logger.info(f"   🖼️  관련 이미지: {len(saved_images)}개 저장됨")
+                    
+                    if progress_callback:
+                        progress_callback(0.3, f"지능형 이미지 추출 완료! (관련 이미지 {len(saved_images)}개), PDF 텍스트 처리 중...")
+                    
+                    # 이미지 추출 정보를 저장하고 텍스트 처리 계속
+                    self.image_extraction_metadata = image_extraction_metadata
+                
+                logger.info("지능형 이미지 추출 완료, 기존 방식으로 텍스트 추출 진행")
+                
+            except ImportError as e:
+                logger.warning(f"지능형 이미지 추출기를 사용할 수 없습니다: {str(e)}")
+                logger.info("모델을 다운로드하려면 'python scripts/download_models.py'를 실행하세요")
+            except Exception as e:
+                logger.warning(f"지능형 이미지 추출 실패, 기존 방식으로 폴백: {str(e)}")
         
         # 에이전트 모드가 활성화된 경우
         if self.use_agent_preprocessing:

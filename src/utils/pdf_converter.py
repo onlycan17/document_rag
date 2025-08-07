@@ -515,6 +515,7 @@ class ImprovedPDFConverter:
         image_references = []
         total_images = sum(len(images) for _, images in page_images)
         processed_images = 0
+        MIN_IMAGE_SIZE = 50  # 최소 이미지 크기 (픽셀)
         
         for page_num, image_list in page_images:
             for img_index, img in enumerate(image_list):
@@ -528,8 +529,15 @@ class ImprovedPDFConverter:
                     xref = img[0]
                     pix = fitz.Pixmap(doc, xref)
                     
+                    # 이미지 크기 확인 - 너무 작은 이미지는 건너뛰기
+                    if pix.width < MIN_IMAGE_SIZE or pix.height < MIN_IMAGE_SIZE:
+                        logger.info(f"   ⚠️  너무 작은 이미지 건너뛰기: {pix.width}x{pix.height} (페이지 {page_num})")
+                        pix = None
+                        processed_images += 1
+                        continue
+                    
                     # PNG로 변환
-                    image_filename = f"{pdf_path.stem}_page{page_num}_img{img_index+1}.png"
+                    image_filename = f"{pdf_path.stem}_page{page_num:03d}_img{img_index+1:03d}.png"
                     image_path = self.images_dir / image_filename
                     
                     if pix.n - pix.alpha < 4:  # GRAY or RGB
@@ -539,6 +547,7 @@ class ImprovedPDFConverter:
                         pix1.save(str(image_path))
                         pix1 = None
                     
+                    logger.info(f"   ✅ 이미지 추출 성공: {image_filename} ({pix.width}x{pix.height})")
                     pix = None
                     
                     # 마크다운 참조 생성
