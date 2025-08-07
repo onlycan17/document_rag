@@ -76,6 +76,10 @@ test_output/
 test_parallel_output/
 test_quick_output/
 test_quick_output_fallback/
+test_*_output/
+test_fixed_classifier_output/
+test_intelligent_real_output/
+test_rre_output/
 
 # Processed docs
 processed_docs/
@@ -84,3 +88,23 @@ docs/
 # Python virtual environment
 ragtest_env/
 .cursor/
+
+# Streamlit cache (but keep config.toml)
+.streamlit/secrets.toml
+
+# Image extraction outputs
+data/extracted_images/
+
+# AI model cache
+.cache/
+*.cache
+
+# Temporary test files
+백제*.pdf
+test_*.txt
+test_*.html
+*_processed.md
+
+# Debug and development files
+debug_*.py
+temp_*.py
