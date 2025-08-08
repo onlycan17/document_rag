@@ -452,13 +452,17 @@ def display_images_in_response(response_text: str, context_documents: List = Non
                             clean_source = clean_source[:27] + "..."
                     
                     st.markdown(
-                        f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                        f'''<div class="image-container" onclick="openLightbox('{image_data_url}', '{clean_filename}', '{clean_source}')" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
                             <img id="{image_id}" 
                                 src="{image_data_url}" 
                                 class="image-thumbnail">
                         </div>''',
                         unsafe_allow_html=True
                     )
+                    # 이미지 설명 및 출처 캡션 표시 (메타데이터에 description이 있으면 함께 표시)
+                    desc = image_info.get('description') if isinstance(image_info, dict) else None
+                    if desc:
+                        st.caption(desc)
                     st.caption(f"📄 {clean_source}")
                     st.caption("👆 클릭하여 크게 보기")
     
@@ -529,11 +533,13 @@ def main() -> None:
             if st.button("문서 처리 및 저장"):
                 # DocumentLoader를 현재 옵션으로 재초기화
                 if (use_agent_mode != st.session_state.document_loader.use_agent_preprocessing or
-                    enable_postprocessing != getattr(st.session_state.document_loader, 'enable_postprocessing', False)):
+                    enable_postprocessing != getattr(st.session_state.document_loader, 'enable_postprocessing', False) or
+                    use_intelligent_extraction != getattr(st.session_state.document_loader, 'use_intelligent_image_extraction', False)):
                     st.session_state.document_loader = DocumentLoader(
                         use_ocr=st.session_state.document_loader.use_ocr,
                         use_agent_preprocessing=use_agent_mode,
-                        enable_postprocessing=enable_postprocessing
+                        enable_postprocessing=enable_postprocessing,
+                        use_intelligent_image_extraction=use_intelligent_extraction
                     )
                 
                 # 디렉토리 준비
@@ -1167,7 +1173,8 @@ def main() -> None:
                             related_images.append({
                                 'path': image_path,
                                 'filename': image_info.get('filename', 'Unknown'),
-                                'source': source_name
+                                'source': source_name,
+                                'description': image_info.get('description')
                             })
                 
                 # 이미지 표시
@@ -1195,13 +1202,16 @@ def main() -> None:
                                 
                                 # CSS 스타일과 JavaScript는 이미 정의되어 있음
                                 st.markdown(
-                                    f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                    f'''<div class="image-container" onclick="openLightbox('{image_data_url}', '{clean_filename}', '{clean_source}')" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
                                         <img id="{image_id}" 
                                             src="{image_data_url}" 
                                             class="image-thumbnail">
                                     </div>''',
                                     unsafe_allow_html=True
                                 )
+                                # 설명 캡션
+                                if image_info.get('description'):
+                                    st.caption(image_info.get('description'))
                                 st.caption(f"📄 {clean_source}")
                                 st.caption("👆 클릭하여 크게 보기")
             
@@ -1335,7 +1345,8 @@ def main() -> None:
                                     related_images.append({
                                         'path': image_path,
                                         'filename': image_info.get('filename', 'Unknown'),
-                                        'source': source_name
+                                        'source': source_name,
+                                        'description': image_info.get('description')
                                     })
                         
                         # 이미지 표시
@@ -1362,13 +1373,15 @@ def main() -> None:
                                         
                                         # CSS 스타일과 JavaScript는 이미 정의되어 있음
                                         st.markdown(
-                                            f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                            f'''<div class="image-container" onclick="openLightbox('{image_data_url}', '{clean_filename}', '{clean_source}')" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
                                                 <img id="{image_id}" 
                                                     src="{image_data_url}" 
                                                     class="image-thumbnail">
                                             </div>''',
                                             unsafe_allow_html=True
                                         )
+                                        if image_info.get('description'):
+                                            st.caption(image_info.get('description'))
                                         st.caption(f"📄 {clean_source}")
                                         st.caption("👆 클릭하여 크게 보기")
                     
@@ -1426,7 +1439,8 @@ def main() -> None:
                                     related_images.append({
                                         'path': image_path,
                                         'filename': image_info.get('filename', 'Unknown'),
-                                        'source': source_name
+                                        'source': source_name,
+                                        'description': image_info.get('description')
                                     })
                         
                         # 이미지 표시
@@ -1452,16 +1466,18 @@ def main() -> None:
                                         image_id = f"image_{hash(image_info['path'])}"
                                         
                                         # CSS 스타일과 JavaScript는 이미 정의되어 있음
-                                        st.markdown(
-                                            f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
-                                                <img id="{image_id}" 
-                                                    src="{image_data_url}" 
-                                                    class="image-thumbnail">
-                                            </div>''',
-                                            unsafe_allow_html=True
-                                        )
-                                        st.caption(f"📄 {clean_source}")
-                                        st.caption("👆 클릭하여 크게 보기")
+                                    st.markdown(
+                                        f'''<div class="image-container" onclick="openLightbox('{image_data_url}', '{clean_filename}', '{clean_source}')" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                            <img id="{image_id}" 
+                                                src="{image_data_url}" 
+                                                class="image-thumbnail">
+                                        </div>''',
+                                        unsafe_allow_html=True
+                                    )
+                                    if image_info.get('description'):
+                                        st.caption(image_info.get('description'))
+                                    st.caption(f"📄 {clean_source}")
+                                    st.caption("👆 클릭하여 크게 보기")
                 else:
                     st.error(response["answer"])
                 

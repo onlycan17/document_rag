@@ -7,7 +7,7 @@ load_dotenv()
 
 class Settings(BaseSettings):
     # LLM 제공자 설정
-    llm_provider: str = "openai"  # "openai", "google", "anthropic", "local"
+    llm_provider: str = "local"  # "openai", "google", "anthropic", "local"
     
     # OpenAI 설정
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     
     # 로컬 LLM 설정 (OpenAI 호환 API)
     local_llm_base_url: str = os.getenv("LOCAL_LLM_BASE_URL", "http://localhost:1234")
-    local_llm_model: str = os.getenv("LOCAL_LLM_MODEL", "local-model")
+    local_llm_model: str = os.getenv("LOCAL_LLM_MODEL", "midm-2.0-base-instruct")
     local_llm_api_key: str = os.getenv("LOCAL_LLM_API_KEY", "not-needed")  # 일부 로컬 서버는 API 키 필요
     local_llm_max_tokens: int = int(os.getenv("LOCAL_LLM_MAX_TOKENS", "512"))  # 로컬 모델 최대 토큰 (더 보수적으로)
     local_llm_context_window: int = int(os.getenv("LOCAL_LLM_CONTEXT_WINDOW", "4096"))  # 로컬 모델 컨텍스트 윈도우
