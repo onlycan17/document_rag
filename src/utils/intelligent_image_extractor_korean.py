@@ -21,6 +21,7 @@ import shutil
 
 from .korean_text_model import KoreanTextModel
 from .gemma_multimodal import GemmaMultimodalModel
+from .text_processing import TextProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -353,7 +354,9 @@ class IntelligentImageExtractorKorean:
             # 관련 이미지 저장
             elif relevance_score >= self.relevance_threshold:
                 # 최종 위치로 이동
-                final_filename = f"{pdf_path.stem}_p{page_num:03d}_i{img_index+1:03d}.{image_ext}"
+                # macOS NFD로 인해 분리되는 한글 파일명을 NFC로 정규화하고 위험 문자를 제거
+                safe_stem = TextProcessor.sanitize_filename(pdf_path.stem)
+                final_filename = f"{safe_stem}_p{page_num:03d}_i{img_index+1:03d}.{image_ext}"
                 final_path = self.images_dir / final_filename
                 
                 shutil.move(str(temp_path), str(final_path))

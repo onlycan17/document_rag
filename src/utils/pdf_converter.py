@@ -16,6 +16,7 @@ import re
 from datetime import datetime
 from typing import Tuple, Optional, Callable, List, Dict
 import logging
+from .text_processing import TextProcessor
 
 # 의미 기반 청킹 모듈 import
 try:
@@ -537,7 +538,9 @@ class ImprovedPDFConverter:
                         continue
                     
                     # PNG로 변환
-                    image_filename = f"{pdf_path.stem}_page{page_num:03d}_img{img_index+1:03d}.png"
+                    # 파일명 NFC 정규화 및 안전화
+                    safe_stem = TextProcessor.sanitize_filename(pdf_path.stem)
+                    image_filename = f"{safe_stem}_page{page_num:03d}_img{img_index+1:03d}.png"
                     image_path = self.images_dir / image_filename
                     
                     if pix.n - pix.alpha < 4:  # GRAY or RGB

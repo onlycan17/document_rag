@@ -282,9 +282,18 @@ class EnhancedDocumentLoader:
         # 이미지 디렉토리에서 해당 PDF의 이미지들 찾기
         images_dir = Path(temp_output_dir) / "images"
         if images_dir.exists():
-            for img_path in images_dir.glob(f"{pdf_stem}_page*_img*.png"):
+            # 파일명 정규화가 적용되도록 안전화된 스템으로 매칭 폭을 넓힘
+            for img_path in images_dir.glob(f"*_page*_img*.png"):
                 try:
                     stat = img_path.stat()
+                    # 페이지/인덱스 파싱
+                    page_num = None
+                    try:
+                        m = re.search(r"_page(\d+)_img(\d+)", img_path.name)
+                        if m:
+                            page_num = int(m.group(1))
+                    except Exception:
+                        page_num = None
                     image_info = {
                         'filename': img_path.name,
                         'path': str(img_path),
@@ -292,7 +301,9 @@ class EnhancedDocumentLoader:
                         'size': stat.st_size,
                         'format': 'PNG',
                         'content_type': 'image/png',
-                        'extracted_at': datetime.fromtimestamp(stat.st_ctime).isoformat()
+                        'extracted_at': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                        'page': page_num,
+                        'description': f"페이지 {page_num} 이미지" if page_num else "추출된 이미지"
                     }
                     extracted_images.append(image_info)
                 except Exception as e:
@@ -340,6 +351,29 @@ class EnhancedDocumentLoader:
                 'extracted_images': self.image_extraction_metadata.get('extracted_images', []),
                 'image_extraction_dir': self.image_extraction_metadata.get('image_extraction_dir', ''),
             })
+
+            # UI 표시를 위해 지능형 추출 이미지들을 공통 'images' 필드에도 병합
+            try:
+                intelligent_images = self.image_extraction_metadata.get('extracted_images', []) or []
+                if intelligent_images:
+                    merged_images = list(base_metadata.get('images', []))
+                    existing_paths = {img.get('path') for img in merged_images if isinstance(img, dict)}
+                    for img in intelligent_images:
+                        # intelligent_images 항목은 {'image_file': ..., 'filename': ..., 'description': ...} 형태
+                        image_path = img.get('image_file') or img.get('path')
+                        filename = img.get('filename') or (os.path.basename(image_path) if image_path else None)
+                        if image_path and image_path not in existing_paths:
+                            merged_images.append({
+                                'filename': filename or 'image',
+                                'path': image_path,
+                                'page': img.get('page'),
+                                'type': img.get('type', 'unknown'),
+                                'relevance_score': img.get('relevance_score', 0),
+                                'description': img.get('description', '')
+                            })
+                    base_metadata['images'] = merged_images
+            except Exception as merge_err:
+                logger.warning(f"지능형 이미지 메타데이터 병합 중 경고: {str(merge_err)}")
             
             # 이미지 추출 내용을 PDF 텍스트 내용 앞에 추가
             image_content = self.image_extraction_metadata.get('image_markdown_content', '')

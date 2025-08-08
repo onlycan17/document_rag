@@ -79,7 +79,10 @@ class RAGChain:
             provider = settings.llm_provider
         
         # 실제 사용할 모델명 결정
-        actual_model = model or getattr(settings, f"{provider}_model", None)
+        if provider == "local":
+            actual_model = model or settings.local_llm_model
+        else:
+            actual_model = model or getattr(settings, f"{provider}_model", None)
         
         # 모델별 최대 토큰 수 가져오기
         max_tokens = self._get_max_tokens_for_model(provider, actual_model) if actual_model else settings.max_tokens

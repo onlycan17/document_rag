@@ -2,6 +2,7 @@
 from typing import List, Set, Dict, Optional
 import re
 import logging
+import unicodedata
 from .keyword_expander import KeywordExpander
 
 logger = logging.getLogger(__name__)
@@ -247,3 +248,23 @@ class TextProcessor:
         
         cleaned = TextProcessor.clean_text(text)
         return len(cleaned) >= min_length
+
+    @staticmethod
+    def sanitize_filename(name: str) -> str:
+        """
+        파일명 안전화 및 한글 정규화 (macOS NFD 문제 방지)
+        - Unicode를 NFC로 정규화하여 자모 분리 현상 방지
+        - 제어 문자, 위험 문자를 제거
+        - 공백은 그대로 두되, 연속 공백은 하나로 축소
+        """
+        if not name:
+            return ""
+        # 유니코드 정규화 (NFC)
+        name = unicodedata.normalize('NFC', name)
+        # 불필요한 제어 문자 제거
+        name = re.sub(r"[\x00-\x1F\x7F]", "", name)
+        # 파일명에 부적합한 문자 제거 (경로 구분자, 일부 특수문자)
+        name = re.sub(r"[\\/:*?\"<>|]", "_", name)
+        # 연속 공백 축소
+        name = re.sub(r"\s+", " ", name).strip()
+        return name
