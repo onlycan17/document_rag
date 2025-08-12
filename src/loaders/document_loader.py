@@ -11,6 +11,7 @@ from ..utils.pdf_converter import ImprovedPDFConverter
 from ..utils.agent_pdf_converter import AgentBasedPDFConverter
 from ..utils.md_postprocessor import MDPostProcessor
 from ..utils.quality_checker import QualityChecker
+from ..utils.text_processing import TextProcessor
 import logging
 import tempfile
 from datetime import datetime
@@ -463,6 +464,12 @@ class EnhancedDocumentLoader:
     def _load_pdf_file(self, file_path: str, progress_callback=None) -> List[Document]:
         """PDF 파일 로딩 - 에이전트 모드, 지능형 이미지 추출, 또는 개선된 PDF 변환기 사용"""
         
+        # 중복 업로드 대비: 동일 문서의 기존 이미지 정리
+        try:
+            self._cleanup_existing_images_for_pdf(file_path)
+        except Exception as _cleanup_err:
+            logger.warning(f"기존 이미지 정리 중 경고: {str(_cleanup_err)}")
+
         # 각 파일 처리 시작 시 메타데이터 초기화
         self.image_extraction_metadata = None
         
@@ -682,6 +689,41 @@ class EnhancedDocumentLoader:
             })
         
         return documents
+
+    def _cleanup_existing_images_for_pdf(self, file_path: str) -> None:
+        """동일 PDF 문서 재업로드 시 기존 이미지를 정리"""
+        try:
+            from pathlib import Path
+            import shutil
+            pdf_name = Path(file_path).stem
+            # 파일명 정규화 규칙에 맞춘 프리픽스 생성
+            safe_stem = TextProcessor.sanitize_filename(pdf_name)
+
+            # 1) 정적 이미지 저장소(static/images/pdf) 정리
+            pdf_images_dir = Path("static/images/pdf")
+            removed_pdf_images = 0
+            if pdf_images_dir.exists():
+                for img_path in pdf_images_dir.glob(f"{safe_stem}_page*_img*.*"):
+                    try:
+                        img_path.unlink()
+                        removed_pdf_images += 1
+                    except Exception:
+                        pass
+            if removed_pdf_images > 0:
+                logger.info(f"🧹 기존 PDF 이미지 정리: {removed_pdf_images}개 삭제 (static/images/pdf)")
+
+            # 2) 지능형 이미지 추출 디렉토리 정리 (data/extracted_images/<pdf_name>)
+            extracted_dir = Path("data/extracted_images") / pdf_name
+            if extracted_dir.exists():
+                try:
+                    shutil.rmtree(extracted_dir)
+                    logger.info(f"🧹 기존 지능형 추출 디렉토리 삭제: {extracted_dir}")
+                except Exception as e:
+                    logger.warning(f"지능형 추출 디렉토리 삭제 실패: {e}")
+
+        except Exception as e:
+            # 치명적이지 않으므로 경고로만 기록
+            logger.warning(f"이미지 정리 중 예외 발생: {str(e)}")
     
     def _load_docx_file(self, file_path: str, progress_callback=None) -> List[Document]:
         """DOCX 파일 로딩 및 이미지 추출"""

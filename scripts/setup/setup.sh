@@ -14,6 +14,12 @@ source venv/bin/activate
 echo "📚 필요한 패키지 설치 중..."
 pip install -r requirements.txt
 
+# 선택적: Upstage 클라이언트 개별 설치 (deps 충돌 방지)
+if ! python -c "import importlib; importlib.import_module('langchain_upstage')" >/dev/null 2>&1; then
+    echo "📦 langchain-upstage를 별도로 설치합니다 (--no-deps)"
+    pip install --no-deps langchain-upstage==0.7.1 || true
+fi
+
 # .env 파일 생성
 if [ ! -f .env ]; then
     echo "📝 .env 파일 생성..."

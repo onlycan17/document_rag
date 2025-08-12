@@ -49,6 +49,20 @@ MODELS = {
         "description": "Google의 효율적인 2B 멀티모달 모델",
         "local_path": models_dir / "multimodal" / "gemma-2-2b-it"
     }
+    ,
+    "ax-4.0-vl-light": {
+        "repo_id": "skt/A.X-4.0-VL-Light",
+        "size": "~8GB",
+        "description": "SKT A.X 4.0 VL Light 멀티모달 모델",
+        "local_path": models_dir / "multimodal" / "A.X-4.0-VL-Light",
+    }
+    ,
+    "exaone-4.0-32b": {
+        "repo_id": "LGAI-EXAONE/EXAONE-4.0-32B",
+        "size": "~70GB",
+        "description": "EXAONE-4.0-32B 텍스트 생성 모델",
+        "local_path": models_dir / "local" / "exaone-4.0-32b"
+    }
 }
 
 
@@ -166,6 +180,32 @@ def download_gemma_multimodal_model() -> bool:
     )
 
 
+def download_ax_vl_light_model() -> bool:
+    """A.X 4.0 VL Light 모델 다운로드"""
+    info = MODELS["ax-4.0-vl-light"]
+    logger.info(f"\n🖼️ A.X 4.0 VL Light 다운로드: {info['repo_id']}")
+    logger.info(f"   설명: {info['description']}")
+    logger.info(f"   크기: {info['size']}")
+    return download_huggingface_model(
+        info["repo_id"],
+        info["local_path"],
+        files=[],
+    )
+
+
+def download_exaone_model() -> bool:
+    """EXAONE 4.0 32B 다운로드"""
+    info = MODELS["exaone-4.0-32b"]
+    logger.info(f"\n🧠 EXAONE 모델 다운로드: {info['repo_id']}")
+    logger.info(f"   설명: {info['description']}")
+    logger.info(f"   크기: {info['size']}")
+    return download_huggingface_model(
+        info["repo_id"],
+        info["local_path"],
+        files=[],
+    )
+
+
 def verify_models() -> bool:
     """다운로드된 모델 검증"""
     logger.info("\n🔍 모델 검증 중...")
@@ -181,13 +221,13 @@ def verify_models() -> bool:
         logger.error(f"❌ Midm-2.0 모델이 없습니다: {midm_path}")
         all_valid = False
     
-    # Gemma 검증
-    gemma_dir = MODELS["gemma-3n-e4b"]["local_path"]
-    if gemma_dir.exists() and (gemma_dir / "config.json").exists():
-        files = list(gemma_dir.glob("*"))
-        logger.info(f"✅ Gemma 모델: {len(files)} 파일")
+    # A.X 4.0 VL Light 검증
+    ax_dir = MODELS["ax-4.0-vl-light"]["local_path"]
+    if ax_dir.exists() and (ax_dir / "config.json").exists():
+        files = list(ax_dir.glob("*"))
+        logger.info(f"✅ A.X 4.0 VL Light 모델: {len(files)} 파일")
     else:
-        logger.error(f"❌ Gemma 모델이 없습니다: {gemma_dir}")
+        logger.error(f"❌ A.X 4.0 VL Light 모델이 없습니다: {ax_dir}")
         all_valid = False
     
     return all_valid
@@ -205,8 +245,9 @@ def main():
     # 사용자 확인
     print("\n다음 모델들을 다운로드합니다:")
     print("1. Midm-2.0-Base-Instruct (6.66GB) - 한국어 텍스트 처리")
-    print("2. Gemma-2-2b-it (~5GB) - 멀티모달 이미지 분석")
-    print(f"\n총 필요 공간: 약 12GB")
+    print("2. A.X-4.0-VL-Light (~8GB) - 멀티모달 이미지 분석")
+    print("3. EXAONE-4.0-32B (~70GB) - 대형 텍스트 생성 모델")
+    print(f"\n총 필요 공간: 약 80GB 이상")
     
     response = input("\n계속하시겠습니까? (y/n): ")
     if response.lower() != 'y':
@@ -220,8 +261,11 @@ def main():
     if not download_midm_korean_model():
         success = False
     
-    # 2. 멀티모달 모델
-    if not download_gemma_multimodal_model():
+    # 2. 멀티모달 모델 (A.X 4.0 VL Light)
+    if not download_ax_vl_light_model():
+        success = False
+    # 3. EXAONE 모델
+    if not download_exaone_model():
         success = False
     
     # 모델 검증

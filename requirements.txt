@@ -7,8 +7,13 @@ langchain-community==0.3.14
 langchain-openai==0.3.1
 langchain-google-genai==2.0.7
 langchain-anthropic==0.3.0
+transformers>=4.53.0
+tokenizers>=0.21,<0.22
+accelerate>=0.27.0
+timm>=1.0.8
 langchain-chroma==0.1.4
-langchain-upstage==0.2.0
+# 주의: langchain-upstage는 tokenizers<0.21을 요구하여 최신 transformers(tokenizers>=0.21)와 충돌합니다.
+# 설치 스크립트에서 `--no-deps`로 별도 설치합니다. (requirements에서 제외)
 
 # Vector Databases
 faiss-cpu==1.9.0.post1
@@ -17,14 +22,13 @@ chromadb==0.4.24
 # Embeddings and ML
 sentence-transformers==3.3.0
 torch>=2.0.0
-transformers>=4.53.0  # Updated for Gemma-3n support
 accelerate>=0.27.0  # For efficient model loading
 bitsandbytes>=0.42.0  # For 4-bit quantization support
 
 # PDF Processing
-pypdf==5.1.0
+pypdf>=4.2.0,<5.0.0
 PyPDF2==3.0.1
-pdf2image[jpeg]==1.17.0  # Includes JPEG support for better compatibility
+pdf2image==1.17.0  # pdf2image에는 'jpeg' extra가 없습니다
 pytesseract==0.3.13
 PyMuPDF==1.25.2  # For advanced PDF processing and image extraction
 
@@ -57,7 +61,9 @@ protobuf==4.25.8
 llama-cpp-python>=0.2.88  # For GGUF model loading (Midm-2.0)
 huggingface-hub>=0.23.0  # For downloading models from HuggingFace
 safetensors>=0.4.0  # For safe model loading
-sentencepiece>=0.2.0  # For tokenization
+# sentencepiece builds from source on macOS and fails without system deps; not used in code.
+# If needed later, install via `pip install sentencepiece-binary` or brew install sentencepiece
+# sentencepiece>=0.2.0  # For tokenization
 
 # Note: System dependencies (installed via apt/brew):
 # - tesseract-ocr (for OCR functionality)

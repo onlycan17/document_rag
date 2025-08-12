@@ -17,6 +17,7 @@ from PIL import Image
 import pytesseract
 from datetime import datetime
 import json
+import unicodedata
 import shutil
 
 from .korean_text_model import KoreanTextModel
@@ -83,13 +84,20 @@ class IntelligentImageExtractorKorean:
                 n_threads=4
             )
             
-            # 멀티모달 모델
-            logger.info("   2/2 멀티모달 모델 로딩...")
-            self.multimodal_model = GemmaMultimodalModel(
-                device="auto",
-                load_in_4bit=True,
-                max_memory_gb=8
-            )
+            # 멀티모달 모델 (A.X 4.0 VL Light)
+            logger.info("   2/2 멀티모달 모델 로딩 (A.X 4.0 VL Light)...")
+            from src.utils.model_bootstrap import get_ax_vl_dir
+            from src.utils.ax_multimodal import AXMultimodalModel
+            ax_dir = get_ax_vl_dir()
+            if ax_dir.exists():
+                self.multimodal_model = AXMultimodalModel(
+                    model_path=str(ax_dir),
+                    device="auto",
+                    max_memory_gb=8,
+                )
+            else:
+                logger.warning("A.X 4.0 VL Light 디렉토리를 찾을 수 없어 이미지 분석을 비활성화합니다.")
+                self.multimodal_model = None
             
             logger.info("✅ 모든 모델 초기화 완료!")
             
@@ -149,10 +157,34 @@ class IntelligentImageExtractorKorean:
             
             # 한국어 모델로 주제 추출
             topic_info = self.korean_model.extract_document_topic(combined_text)
-            
+
+            # 방어 로직: topic_info가 문자열(JSON)인 경우 딕셔너리로 변환 시도
+            if isinstance(topic_info, str):
+                try:
+                    topic_info = json.loads(topic_info)
+                except Exception:
+                    # 문자열인 경우 최소 구조로 래핑
+                    topic_info = {
+                        "main_topic": Path(pdf_path).stem,
+                        "keywords": [],
+                        "raw_response": topic_info
+                    }
+
+            # 키워드 방어 로직: 비어있으면 파일명 기반 기본 키워드로 보강
+            keywords = topic_info.get('keywords', []) if isinstance(topic_info, dict) else []
+            if not keywords:
+                basic = self._extract_basic_topic(pdf_path, max_pages)
+                keywords = basic.get('keywords', [])
+                if isinstance(topic_info, dict):
+                    topic_info['keywords'] = keywords
+
+            # 로깅용 키워드 정제 (문자열만, 공백 제거, 상위 5개)
+            safe_keywords = [kw.strip() for kw in keywords if isinstance(kw, str) and kw.strip()]
+            keywords_for_log = ", ".join(safe_keywords[:5]) if safe_keywords else "없음"
+
             logger.info(f"📚 문서 주제: {topic_info.get('main_topic', 'Unknown')}")
-            logger.info(f"   키워드: {', '.join(topic_info.get('keywords', [])[:5])}")
-            
+            logger.info(f"   키워드: {keywords_for_log}")
+
             return topic_info
             
         except Exception as e:
@@ -161,7 +193,9 @@ class IntelligentImageExtractorKorean:
     
     def _extract_basic_topic(self, pdf_path: str, max_pages: int = 5) -> Dict[str, Any]:
         """기본 주제 추출 (모델 없이)"""
-        pdf_name = Path(pdf_path).stem
+        # macOS 파일명 한글 정규화(NFD) 문제를 방지하기 위해 NFC로 통일
+        pdf_name_raw = Path(pdf_path).stem
+        pdf_name = unicodedata.normalize('NFC', pdf_name_raw)
         
         # 파일명에서 키워드 추출
         keywords = []

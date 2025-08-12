@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional, Generator
 from langchain_openai import ChatOpenAI
+from langchain_community.llms import LlamaCpp, HuggingFacePipeline
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_anthropic import ChatAnthropic
 from langchain.prompts import PromptTemplate
@@ -63,6 +64,13 @@ class RAGChain:
                 settings.local_llm_max_tokens,
                 settings.local_llm_context_window
             )
+            # 채팅 기본 모델을 EXAONE로 자동 지정 (로컬 경로가 있으면)
+            try:
+                from src.utils.model_bootstrap import get_exaone_dir
+                if get_exaone_dir().exists():
+                    settings.local_llm_model = "exaone-4.0-32b"
+            except Exception:
+                pass
     
     def _initialize_llm(self, provider: Optional[str] = None, model: Optional[str] = None):
         """일반 LLM 초기화 (비스트리밍)"""
@@ -129,8 +137,97 @@ class RAGChain:
             )
         
         elif provider == "local":
-            # OpenAI 호환 API를 사용하는 로컬 모델
+            """로컬 모델 경로 우선 사용.
+            - midm-2.0-gguf: llama.cpp(GGUF)
+            - exaone-4.0-32b: HF Transformers 파이프라인
+            - 그 외: 기존 OpenAI 호환 서버로 폴백 (settings.local_llm_base_url)
+            """
+            import os
+            from pathlib import Path
             from src.constants import LOCAL_MODEL_TIMEOUT
+            
+            model_lower = (actual_model or "").lower()
+            project_root = Path(__file__).parent.parent.parent
+
+            # 1) Midm-2.0 또는 Gemma-3n GGUF (llama.cpp)
+            if model_lower in [
+                "midm-2.0-gguf",
+                "midm-2.0-base-instruct",
+                "gemma-3n-gguf",
+                settings.local_llm_model.lower() if settings.local_llm_model else "",
+            ]:
+                # 기본 GGUF 경로
+                gguf_path = os.getenv(
+                    "LOCAL_LLM_GGUF_PATH",
+                    "",
+                )
+                if not gguf_path:
+                    # 자동 탐색: model_bootstrap 사용
+                    try:
+                        from src.utils.model_bootstrap import get_midm_path
+                        gguf_path = str(get_midm_path())
+                    except Exception:
+                        # Gemma GGUF 후보 탐색
+                        from glob import glob
+                        candidates = glob(str(project_root / "local_models" / "**" / "*.gguf"), recursive=True)
+                        for c in candidates:
+                            name = c.lower()
+                            if "gemma" in name:
+                                gguf_path = c
+                                break
+                if gguf_path and os.path.exists(gguf_path):
+                    return LlamaCpp(
+                        model_path=gguf_path,
+                        n_ctx=settings.local_llm_context_window,
+                        temperature=settings.temperature,
+                        max_tokens=max_tokens,
+                    )
+
+            # 2) EXAONE 4.0 32B (Transformers)
+            if model_lower in ["exaone-4.0-32b", "lgai-exaone/exaone-4.0-32b"]:
+                try:
+                    from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
+                    import torch
+                    from transformers import pipeline
+
+                    # 로컬 탐색 우선 (model_bootstrap → 재귀 탐색 폴백)
+                    import os
+                    local_dir = None
+                    try:
+                        from src.utils.model_bootstrap import get_exaone_dir
+                        d = get_exaone_dir()
+                        if d.exists():
+                            local_dir = d
+                    except Exception:
+                        pass
+                    if local_dir is None or not local_dir.exists():
+                        from glob import glob
+                        candidates = glob(str(project_root / "local_models" / "**" / "*exaone*"), recursive=True)
+                        for c in candidates:
+                            if (Path(c) / "config.json").exists():
+                                local_dir = Path(c)
+                                break
+                    model_id = str(local_dir) if local_dir and local_dir.exists() else "LGAI-EXAONE/EXAONE-4.0-32B"
+
+                    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+                    model = AutoModelForCausalLM.from_pretrained(
+                        model_id,
+                        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+                        device_map="auto" if torch.cuda.is_available() else None,
+                        trust_remote_code=True,
+                    )
+                    text_gen = pipeline(
+                        task="text-generation",
+                        model=model,
+                        tokenizer=tokenizer,
+                        max_new_tokens=max_tokens,
+                        temperature=settings.temperature,
+                    )
+                    return HuggingFacePipeline(pipeline=text_gen)
+                except Exception as e:
+                    logger.warning(f"EXAONE 로컬 로딩 실패, HTTP 폴백 시도: {e}")
+
+            # 3) 폴백: OpenAI 호환 로컬 서버
             return ChatOpenAI(
                 openai_api_key=settings.local_llm_api_key,
                 openai_api_base=settings.local_llm_base_url + "/v1",
@@ -139,7 +236,7 @@ class RAGChain:
                 max_tokens=max_tokens,
                 streaming=streaming,
                 callbacks=callbacks,
-                request_timeout=LOCAL_MODEL_TIMEOUT  # 로컬 모델용 타임아웃 설정
+                request_timeout=LOCAL_MODEL_TIMEOUT,
             )
         
         else:
@@ -750,12 +847,28 @@ class RAGChain:
     def get_available_models(self) -> Dict[str, List[Dict[str, str]]]:
         """사용 가능한 모델 목록 반환"""
         models = ModelRegistry.get_all_models()
-        
-        # 로컬 모델이 실행 중인 경우, 실제 모델 목록 가져오기
-        local_models = self._get_local_models()
-        if local_models:
-            models["local"] = local_models
-        
+
+        # 로컬 서버(LM Studio 등)에서 노출되는 모델과 병합 (있으면 추가)
+        try:
+            server_local_models = self._get_local_models()
+        except Exception:
+            server_local_models = []
+
+        # 오프라인 로컬 모델 후보 (GGUF / Transformers)
+        offline_local_models = [
+            {"name": "Midm-2.0 GGUF (llama.cpp)", "model": "midm-2.0-gguf", "description": "로컬 GGUF 모델"},
+            {"name": "EXAONE-4.0-32B (Transformers)", "model": "exaone-4.0-32b", "description": "로컬 Transformers 모델"},
+        ]
+
+        # 병합
+        existing = {m["model"] for m in models.get("local", [])}
+        merged = list(models.get("local", []))
+        for m in offline_local_models + server_local_models:
+            if m.get("model") not in existing:
+                merged.append(m)
+                existing.add(m.get("model"))
+
+        models["local"] = merged
         return models
     
     def _get_local_models(self) -> List[Dict[str, str]]:

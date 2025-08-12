@@ -148,6 +148,27 @@ class ModelRegistry:
             "max_tokens": 512,  # 기본값, 설정에서 오버라이드 가능
             "context_window": 4096,  # 기본값, 설정에서 오버라이드 가능
             "description": "로컬 LLM"
+        },
+        # 로컬: Midm-2.0 GGUF (laama.cpp)
+        "midm-2.0-gguf": {
+            "provider": "local",
+            "max_tokens": 512,
+            "context_window": 4096,
+            "description": "Midm-2.0-Base-Instruct (GGUF, llama.cpp)"
+        },
+        # 로컬: EXAONE 4.0 32B (Transformers)
+        "exaone-4.0-32b": {
+            "provider": "local",
+            "max_tokens": 1024,
+            "context_window": 32768,
+            "description": "LGAI-EXAONE/EXAONE-4.0-32B (Transformers)"
+        },
+        # 로컬: Gemma 3n GGUF (llama.cpp)
+        "gemma-3n-gguf": {
+            "provider": "local",
+            "max_tokens": 1024,
+            "context_window": 4096,
+            "description": "Gemma-3n-E4B-it (GGUF, llama.cpp)"
         }
     }
     

@@ -27,9 +27,28 @@ class ImageAnalyzer:
         """
         self.model_provider = model_provider.lower()
         self.api_key = self._get_api_key()
+        self.local_model = None  # Gemma 멀티모달 모델 (로컬)
         
-        if not self.api_key:
-            logger.warning(f"⚠️ {model_provider} API 키가 설정되지 않았습니다. 이미지 분석 기능이 비활성화됩니다.")
+        if self.model_provider == "local":
+            # 로컬 멀티모달 모델(A.X) 초기화 시도
+            try:
+                from src.utils.model_bootstrap import get_ax_vl_dir
+                from src.utils.ax_multimodal import AXMultimodalModel
+                ax_dir = get_ax_vl_dir()
+                if ax_dir and ax_dir.exists():
+                    self.local_model = AXMultimodalModel(
+                        model_path=str(ax_dir),
+                        device="auto",
+                        max_memory_gb=8,
+                    )
+                    logger.info("🧠 로컬 A.X 4.0 VL Light 모델 활성화됨 (이미지 설명용)")
+                else:
+                    logger.warning("로컬 A.X 4.0 VL Light 디렉토리를 찾을 수 없어 이미지 분석 로컬 모드를 비활성화합니다.")
+            except Exception as e:
+                logger.warning(f"로컬 멀티모달 모델 초기화 실패: {e}")
+        else:
+            if not self.api_key:
+                logger.warning(f"⚠️ {model_provider} API 키가 설정되지 않았습니다. 이미지 분석 기능이 비활성화됩니다.")
         
         logger.info(f"🤖 이미지 분석기 초기화 완료 - 모델: {self.model_provider}")
     
@@ -153,15 +172,47 @@ class ImageAnalyzer:
         except Exception as e:
             logger.error(f"OpenAI 이미지 분석 실패: {str(e)}")
             return None
+
+    def analyze_image_local(self, image_path: str, context: str = "") -> Optional[str]:
+        """로컬 Gemma 멀티모달 모델을 사용한 이미지 분석"""
+        try:
+            if self.local_model is None:
+                logger.warning("로컬 멀티모달 모델이 초기화되지 않았습니다.")
+                return None
+
+            # 문맥 정보를 document_topic으로 최소 전달
+            document_topic = {
+                "main_topic": "",
+                "keywords": []
+            }
+
+            analysis = self.local_model.analyze_image(
+                image_path,
+                document_topic,
+                context or ""
+            )
+
+            description = (analysis or {}).get("content_description", "").strip()
+            if description:
+                logger.info(f"✅ 이미지 분석 완료: {len(description)}자")
+                return description
+            else:
+                logger.warning("이미지 분석 결과를 받지 못했습니다.")
+                return None
+
+        except Exception as e:
+            logger.error(f"로컬 이미지 분석 실패: {str(e)}")
+            return None
     
     def analyze_image_google(self, image_path: str, context: str = "") -> Optional[str]:
         """Google Gemini Vision을 사용한 이미지 분석"""
         try:
-            import google.generativeai as genai
-            
+            # 동적 임포트로 린터/환경 의존성 문제 회피
+            genai = __import__("google.generativeai", fromlist=["generativeai"])
+
             # API 키 설정
             genai.configure(api_key=self.api_key)
-            
+
             # 모델 초기화
             model = genai.GenerativeModel('gemini-1.5-flash')
             
@@ -205,9 +256,10 @@ class ImageAnalyzer:
         Returns:
             이미지 설명 텍스트 또는 None
         """
-        if not self.api_key:
-            logger.warning("API 키가 없어 이미지 분석을 건너뜁니다.")
-            return None
+        if self.model_provider != "local":
+            if not self.api_key:
+                logger.warning("API 키가 없어 이미지 분석을 건너뜁니다.")
+                return None
         
         if not os.path.exists(image_path):
             logger.error(f"이미지 파일을 찾을 수 없습니다: {image_path}")
@@ -221,6 +273,8 @@ class ImageAnalyzer:
                 description = self.analyze_image_openai(image_path, context)
             elif self.model_provider == "google":
                 description = self.analyze_image_google(image_path, context)
+            elif self.model_provider == "local":
+                description = self.analyze_image_local(image_path, context)
             else:
                 logger.error(f"지원하지 않는 모델 제공업체: {self.model_provider}")
                 return None
@@ -287,6 +341,15 @@ def create_image_analyzer(model_provider: str = None) -> ImageAnalyzer:
         ImageAnalyzer 인스턴스
     """
     if model_provider is None:
+        # 로컬 Gemma가 있으면 최우선 사용
+        try:
+            from src.utils.model_bootstrap import get_gemma_dir
+            gemma_dir = get_gemma_dir(prefer_3n=True)
+            if gemma_dir and gemma_dir.exists():
+                return ImageAnalyzer(model_provider="local")
+        except Exception:
+            pass
+
         # 환경 변수에서 사용 가능한 모델 확인
         if os.getenv("OPENAI_API_KEY"):
             model_provider = "openai"
@@ -295,8 +358,8 @@ def create_image_analyzer(model_provider: str = None) -> ImageAnalyzer:
         elif os.getenv("ANTHROPIC_API_KEY"):
             model_provider = "anthropic"
         else:
-            logger.warning("어떤 Vision API 키도 설정되지 않았습니다.")
-            model_provider = "openai"  # 기본값
+            # 기본은 로컬 시도 (사용자 요구: 로컬 우선)
+            model_provider = "local"
     
     return ImageAnalyzer(model_provider=model_provider)
 

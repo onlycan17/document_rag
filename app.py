@@ -37,6 +37,14 @@ from src.constants import (
 setup_logging(logging.INFO)
 logger = get_logger(__name__)
 
+# 서버 기동 시 모델 확보 및 사전 로드
+try:
+    from src.utils.model_bootstrap import ensure_models_available, preload_models
+    ensure_models_available(download_exaone=False)
+    preload_models()
+except Exception as e:
+    logger.warning(f"모델 부트스트랩 중 경고: {e}")
+
 # 페이지 설정
 st.set_page_config(
     page_title=settings.app_title,
@@ -886,6 +894,21 @@ def main() -> None:
         # 선택된 제공자의 모델 목록
         if selected_provider in available_models:
             model_options = available_models[selected_provider]
+            # 로컬 LLM은 EXAONE만 표시 (요청 사항)
+            if selected_provider == "local":
+                def is_exaone(entry: dict) -> bool:
+                    model_id = str(entry.get('model', '')).lower()
+                    name = str(entry.get('name', '')).lower()
+                    return ("exaone" in model_id) or ("exaone" in name)
+
+                filtered_options = [m for m in model_options if is_exaone(m)]
+                if not filtered_options:
+                    filtered_options = [{
+                        "name": "EXAONE-4.0-32B (Transformers)",
+                        "model": "exaone-4.0-32b",
+                        "description": "로컬 Transformers 모델"
+                    }]
+                model_options = filtered_options
             
             # 모델 선택
             selected_model_info = st.selectbox(

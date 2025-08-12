@@ -32,7 +32,15 @@ class KoreanTextModel:
             n_threads: CPU 스레드 수
             n_gpu_layers: GPU로 옮길 레이어 수 (0=CPU only)
         """
-        self.model_path = self._get_model_path(model_path)
+        # 최적화: model_bootstrap에서 확정 경로를 우선 사용
+        if model_path:
+            self.model_path = Path(model_path)
+        else:
+            try:
+                from src.utils.model_bootstrap import get_midm_path
+                self.model_path = get_midm_path()
+            except Exception:
+                self.model_path = self._get_model_path(None)
         self.n_ctx = n_ctx
         self.n_threads = n_threads
         self.n_gpu_layers = n_gpu_layers
@@ -62,7 +70,7 @@ class KoreanTextModel:
                 logger.error(f"❌ 모델 파일을 찾을 수 없습니다: {self.model_path}")
                 return
             
-            logger.info(f"🔄 한국어 모델 로딩 중: {self.model_path.name}")
+            logger.info(f"🔄 한국어 모델 로딩 중: {self.model_path}")
             logger.info(f"   컨텍스트 크기: {self.n_ctx} 토큰")
             logger.info(f"   CPU 스레드: {self.n_threads}")
             

@@ -1,8 +1,9 @@
 """
 Gemma 멀티모달 모델 - 이미지 분석 및 주제 관련성 판단
 
-이 모듈은 Google의 Gemma-2-2b-it 모델을 사용하여
+이 모듈은 Google의 Gemma-3n-e4b 모델을 우선 사용하여
 이미지를 분석하고 문서 주제와의 관련성을 판단합니다.
+로컬 경로가 없으면 HuggingFace의 `google/gemma-3n-e4b`를 사용합니다.
 """
 
 import os
@@ -13,10 +14,17 @@ import torch
 from PIL import Image
 import numpy as np
 from transformers import (
-    AutoProcessor, 
-    AutoModelForVision2Seq,
-    BitsAndBytesConfig
+    AutoProcessor,
+    BitsAndBytesConfig,
+    AutoConfig,
 )
+try:  # transformers >= 4.52
+    from transformers import AutoModelForImageTextToText as _AutoMMModel
+except Exception:  # pragma: no cover - fallback for older versions
+    try:
+        from transformers import AutoModelForVision2Seq as _AutoMMModel
+    except Exception:  # last resort: define placeholder to raise later
+        _AutoMMModel = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +62,27 @@ class GemmaMultimodalModel:
         
         # 기본 경로
         project_root = Path(__file__).parent.parent.parent
-        default_path = project_root / "models" / "multimodal" / "gemma-2-2b-it"
+        # /local_models 지원
+        # 최적화: model_bootstrap 헬퍼를 통해 확정 경로 사용
+        try:
+            from src.utils.model_bootstrap import get_gemma_dir
+            g = get_gemma_dir(prefer_3n=True)
+            # 디렉토리 내에 config.json이 있으면 MLX 여부와 관계없이 허용 (Transformers 호환)
+            if g.exists():
+                if g.is_dir() and (g / "config.json").exists():
+                    return g
+                # 파일(.gguf)은 멀티모달에 부적합 → 폴백
+        except Exception:
+            pass
+        local_root = Path(os.getenv("LOCAL_MODELS_DIR", "/local_models"))
+        if (local_root / "multimodal" / "gemma-3n-e4b").exists():
+            return local_root / "multimodal" / "gemma-3n-e4b"
+        default_path = project_root / "models" / "multimodal" / "gemma-3n-e4b"
         
         # HuggingFace 모델 ID로 폴백
         if not default_path.exists():
             logger.info("로컬 모델이 없습니다. HuggingFace에서 직접 로드합니다.")
-            return Path("google/gemma-2-2b-it")  # HF 모델 ID
+            return Path("google/gemma-3n-e4b")  # HF 모델 ID
             
         return default_path
     
@@ -77,28 +100,108 @@ class GemmaMultimodalModel:
                 return "cpu"
         return device
     
+    def _rebuild_index_if_needed(self, model_dir: Path) -> None:
+        """로컬 샤드 파일 개수/이름과 index.json이 불일치하면 index를 재생성합니다.
+
+        - safetensors의 메타데이터만 읽어 파라미터 키 목록을 수집합니다.
+        - 각 키를 해당 샤드 파일로 매핑하여 weight_map을 구성합니다.
+        - 총 파일 크기 합을 total_size로 기록합니다.
+        """
+        try:
+            index_path = model_dir / "model.safetensors.index.json"
+            shard_files = sorted([p for p in model_dir.glob("model-*-of-*.safetensors")])
+            if not shard_files:
+                return
+
+            # 현재 index가 존재하고, 그 안의 샤드 이름과 실제 파일명이 모두 일치하면 종료
+            if index_path.exists():
+                try:
+                    import json
+                    data = json.loads(index_path.read_text(encoding="utf-8"))
+                    mapped_files = set(data.get("weight_map", {}).values())
+                    actual_files = set(f.name for f in shard_files)
+                    # 매핑된 파일이 전부 실제에 포함되면 유지
+                    if mapped_files and mapped_files.issubset(actual_files):
+                        return
+                except Exception:
+                    pass
+
+            # 재생성
+            try:
+                from safetensors import safe_open  # 메타만 읽기
+            except Exception:
+                logger.warning("safetensors가 설치되지 않아 index 재생성을 건너뜁니다")
+                return
+
+            weight_map: Dict[str, str] = {}
+            for sf in shard_files:
+                try:
+                    with safe_open(str(sf), framework="pt") as f:
+                        for key in f.keys():
+                            weight_map[key] = sf.name
+                except Exception as e:
+                    logger.warning(f"샤드 키 스캔 실패({sf.name}): {e}")
+
+            if not weight_map:
+                return
+
+            import json, os
+            total_size = 0
+            for sf in shard_files:
+                try:
+                    total_size += os.path.getsize(sf)
+                except Exception:
+                    pass
+
+            rebuilt = {
+                "metadata": {"total_size": total_size},
+                "weight_map": weight_map,
+            }
+            index_path.write_text(json.dumps(rebuilt, ensure_ascii=False), encoding="utf-8")
+            logger.info("   model.safetensors.index.json을 로컬 샤드에 맞게 재생성했습니다")
+        except Exception as e:
+            logger.warning(f"index 재생성 실패(무시): {e}")
+
     def _load_model(self):
         """모델과 프로세서 로드"""
         try:
             model_id = str(self.model_path)
             
-            # 로컬 경로가 존재하지 않으면 HuggingFace ID 사용
+            # 로컬 경로가 디렉토리/파일로 존재하지 않으면 HuggingFace ID 사용
             if not self.model_path.exists():
-                model_id = "google/gemma-2-2b-it"
+                model_id = "google/gemma-3n-e4b"
                 logger.info(f"🔄 HuggingFace에서 모델 로드: {model_id}")
             else:
                 logger.info(f"🔄 로컬 모델 로드: {model_id}")
             
+            # GGUF 또는 비-Transformers 디렉토리 가드
+            # GGUF 파일(.gguf)인 경우, 현재 구현은 Transformers 멀티모달 로더와 호환되지 않으므로 에러 로그 후 종료
+            p = Path(model_id)
+            if p.is_file() and p.suffix == ".gguf":
+                logger.error("지정된 경로는 GGUF 파일입니다. 현재 멀티모달 로더는 Transformers 형식만 지원합니다.")
+                self.model = None
+                self.processor = None
+                return
+            if p.is_dir() and not (p / "config.json").exists():
+                # Transformers 형식이 아니면 원격으로 폴백
+                logger.warning("지정된 Gemma 경로에 config.json이 없습니다. HuggingFace 원격 모델로 폴백합니다.")
+                model_id = "google/gemma-3n-e4b"
+
             # 양자화 설정
             quantization_config = None
-            if self.load_in_4bit and self.device != "cpu":
-                quantization_config = BitsAndBytesConfig(
-                    load_in_4bit=True,
-                    bnb_4bit_compute_dtype=torch.float16,
-                    bnb_4bit_use_double_quant=True,
-                    bnb_4bit_quant_type="nf4"
-                )
-                logger.info("   4비트 양자화 활성화")
+            # bitsandbytes는 CUDA에서만 지원. MPS/CPU는 비활성화
+            if self.load_in_4bit and self.device == "cuda":
+                try:
+                    quantization_config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_use_double_quant=True,
+                        bnb_4bit_quant_type="nf4"
+                    )
+                    logger.info("   4비트 양자화 활성화 (CUDA)")
+                except Exception as qe:
+                    logger.warning(f"bitsandbytes 구성이 불가하여 4bit 비활성화: {qe}")
+                    quantization_config = None
             
             # 프로세서 로드
             self.processor = AutoProcessor.from_pretrained(
@@ -109,21 +212,56 @@ class GemmaMultimodalModel:
             # 모델 로드
             load_kwargs = {
                 "trust_remote_code": True,
-                "torch_dtype": torch.float16 if self.device != "cpu" else torch.float32,
+                "torch_dtype": torch.float16 if self.device == "cuda" else torch.float32,
                 "low_cpu_mem_usage": True,
+                "use_safetensors": True,
             }
             
             if quantization_config:
                 load_kwargs["quantization_config"] = quantization_config
             
-            if self.device != "cpu":
+            if self.device == "cuda":
                 load_kwargs["device_map"] = "auto"
                 load_kwargs["max_memory"] = {0: f"{self.max_memory_gb}GB", "cpu": f"{self.max_memory_gb * 2}GB"}
             
-            self.model = AutoModelForVision2Seq.from_pretrained(
-                model_id,
-                **load_kwargs
-            )
+            if _AutoMMModel is None:
+                raise RuntimeError("적합한 멀티모달 AutoModel 클래스를 찾지 못했습니다. transformers 버전을 업데이트 해주세요.")
+
+            # 구성 불러와서 비호환 quantization 설정 제거 (MLX-4bit 등)
+            config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+            # 비호환 quantization 설정이 모델 구성에 저장된 경우 제거
+            try:
+                if hasattr(config, "quantization_config"):
+                    try:
+                        delattr(config, "quantization_config")
+                        logger.info("   모델 config의 quantization_config 제거")
+                    except Exception:
+                        setattr(config, "quantization_config", None)
+                        logger.info("   모델 config의 quantization_config를 None으로 설정")
+            except Exception:
+                pass
+
+            # CPU/MPS에서 안전한 주의집중 구현
+            if self.device != "cuda":
+                load_kwargs["attn_implementation"] = "eager"
+
+            try:
+                self.model = _AutoMMModel.from_pretrained(
+                    model_id,
+                    config=config,
+                    **load_kwargs
+                )
+            except (OSError, FileNotFoundError) as missing_err:
+                # 샤드 불일치 가능성 → index 재생성 후 한 번 더 시도
+                p = Path(model_id)
+                if p.is_dir():
+                    logger.warning(f"로컬 샤드 불일치 감지: {missing_err}. index 재생성 시도")
+                    self._rebuild_index_if_needed(p)
+                    self.model = _AutoMMModel.from_pretrained(
+                        model_id,
+                        config=config,
+                        **load_kwargs
+                    )
             
             if self.device == "cpu":
                 self.model = self.model.to(self.device)

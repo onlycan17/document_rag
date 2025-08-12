@@ -44,6 +44,19 @@ class AgentBasedPDFConverter:
                 logger.warning(f"⚠️ 이미지 분석기 초기화 실패: {str(e)}")
                 self.image_analyzer = None
                 self.enable_image_analysis = False
+
+            # 로컬 멀티모달(Gemma) 직접 연결 옵션: 이미지 추출에서 사용하는 것과 동일한 모델 재사용
+            self.local_multimodal = None
+            try:
+                from src.utils.model_bootstrap import get_gemma_dir
+                from src.utils.gemma_multimodal import GemmaMultimodalModel
+                gemma_path = get_gemma_dir(prefer_3n=True)
+                if gemma_path and gemma_path.exists():
+                    # 동일 경로로 멀티모달 인스턴스 구성 (GGUF/로컬 구성이더라도 래퍼가 처리)
+                    self.local_multimodal = GemmaMultimodalModel(model_path=str(gemma_path), device="auto", load_in_4bit=False, max_memory_gb=8)
+                    logger.info("🔗 로컬 Gemma 멀티모달을 이미지 설명에도 재사용합니다")
+            except Exception as e:
+                logger.warning(f"로컬 멀티모달 연결 건너뜀: {e}")
         else:
             self.image_analyzer = None
         
@@ -165,17 +178,28 @@ class AgentBasedPDFConverter:
                         
                         # 이미지 분석 및 설명 생성
                         image_description = None
-                        if self.enable_image_analysis and self.image_analyzer:
-                            try:
-                                # 페이지 텍스트를 컨텍스트로 사용
-                                context = page_text.strip()[:500] if page_text.strip() else ""
-                                image_description = self.image_analyzer.analyze_image(str(image_path), context)
-                                if image_description:
-                                    logger.info(f"   ✅ 이미지 설명 생성: {len(image_description)}자")
-                                else:
-                                    logger.warning(f"   ⚠️ 이미지 설명 생성 실패: {image_filename}")
-                            except Exception as e:
-                                logger.warning(f"   ⚠️ 이미지 분석 오류: {str(e)}")
+                        if self.enable_image_analysis:
+                            # 우선 로컬 멀티모달을 사용하고, 실패 시 image_analyzer로 폴백
+                            context = page_text.strip()[:500] if page_text.strip() else ""
+                            desc_ok = False
+                            if getattr(self, 'local_multimodal', None):
+                                try:
+                                    analysis = self.local_multimodal.analyze_image(str(image_path), {"main_topic": "", "keywords": []}, context)
+                                    image_description = (analysis or {}).get("content_description")
+                                    if image_description:
+                                        logger.info(f"   ✅ 이미지 설명 생성: {len(image_description)}자")
+                                        desc_ok = True
+                                except Exception as e:
+                                    logger.warning(f"   ⚠️ 로컬 멀티모달 설명 실패: {e}")
+                            if not desc_ok and self.image_analyzer:
+                                try:
+                                    image_description = self.image_analyzer.analyze_image(str(image_path), context)
+                                    if image_description:
+                                        logger.info(f"   ✅ 이미지 설명 생성: {len(image_description)}자")
+                                    else:
+                                        logger.warning(f"   ⚠️ 이미지 설명 생성 실패: {image_filename}")
+                                except Exception as e:
+                                    logger.warning(f"   ⚠️ 이미지 분석 오류: {str(e)}")
                         
                         # 상대 경로로 저장 (마크다운에서 사용)
                         relative_image_path = f"./images/{image_filename}"
