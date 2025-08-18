@@ -515,3 +515,9 @@ RULE: 중복 코드 제거와 가독성을 동시에 추구하라
 ### 가상환경 설정 (필수)
  - source venv/bin/activate
  - streamlit run app.py
+
+
+ ### streamlit 실행 테스트 
+  - 모델들이 로드 되는 시간이 있으니까 대락 2분정도 대기하고 잘 실행 되었는지 파악할 것.
+
+### 항상 Ultra-think 모드를 활성화 해서 작업을 진행할 것.

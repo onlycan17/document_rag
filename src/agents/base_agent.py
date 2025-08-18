@@ -83,22 +83,26 @@ class LocalLLMAgent(ABC):
             return
 
         try:
-            # 1) 환경변수 경로 우선
-            gguf_path = os.getenv("LOCAL_LLM_GGUF_PATH")
-            if not gguf_path:
-                # 2) 로컬 모델 디렉토리 자동 탐색 (사용자 구성 경로)
-                from src.utils.model_bootstrap import get_midm_path
-                gguf_path = str(get_midm_path())
+            # 1) 환경변수/자동 탐색으로 GGUF 경로 해석
+            from src.utils.model_bootstrap import get_gguf_path
+            gguf = get_gguf_path()
+            gguf_path = str(gguf)
 
             if not os.path.exists(gguf_path):
                 logger.info(f"로컬 GGUF 모델을 찾지 못했습니다: {gguf_path}")
                 return
 
             logger.info("🚀 로컬 GGUF 모델 백엔드 초기화 시도...")
+            # 메모리 보호: 과도한 n_ctx는 상한으로 캡핑
+            from config import settings as _settings
+            n_ctx_used = min(self.context_window, getattr(_settings, 'local_llm_max_context_cap', self.context_window))
+            if n_ctx_used < self.context_window:
+                logger.warning(f"n_ctx {self.context_window} -> {n_ctx_used} (LOCAL_LLM_MAX_CONTEXT_CAP 적용)")
             self._llama = Llama(
                 model_path=gguf_path,
-                n_ctx=self.context_window,
-                n_threads=int(os.getenv("LOCAL_LLM_THREADS", "4")),
+                n_ctx=n_ctx_used,
+                n_threads=getattr(_settings, 'local_llm_threads', 8),
+                n_gpu_layers=getattr(_settings, 'local_llm_n_gpu_layers', 0),
                 verbose=False,
             )
             logger.info("✅ 로컬 GGUF 모델 백엔드 활성화 완료")
@@ -130,9 +134,16 @@ class LocalLLMAgent(ABC):
                 text = response.get("choices", [{}])[0].get("text", "").strip()
                 if text:
                     return text
-                # 비어있으면 안전하게 폴백
-                logger.warning("⚠️ GGUF 응답이 비어 있습니다. HTTP 모드로 폴백합니다.")
+                # 비어있으면 설정에 따라 처리
+                msg = "⚠️ GGUF 응답이 비어 있습니다."
+                if settings.disable_http_fallback:
+                    logger.warning(f"{msg} HTTP 폴백 비활성화로 중단")
+                    raise Exception("GGUF empty response and HTTP fallback disabled")
+                logger.warning(f"{msg} HTTP 모드로 폴백합니다.")
             except Exception as e:  # pragma: no cover
+                if settings.disable_http_fallback:
+                    logger.warning(f"⚠️ GGUF 호출 실패, HTTP 폴백 비활성화로 중단: {e}")
+                    raise
                 logger.warning(f"⚠️ GGUF 호출 실패, HTTP 모드 폴백: {e}")
 
         # 2) HTTP 폴백 (기존 동작)
@@ -143,6 +154,9 @@ class LocalLLMAgent(ABC):
             "max_tokens": max_tokens,
             "stream": False,
         }
+
+        if settings.disable_http_fallback:
+            raise Exception("HTTP fallback disabled")
 
         try:
             response = requests.post(

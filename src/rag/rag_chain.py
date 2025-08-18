@@ -19,6 +19,7 @@ from src.constants import (
 import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import os
 
 # 새로운 컨텍스트 분할 모듈 임포트
 from .context_chunker import ContextChunker, ContextChunk
@@ -36,6 +37,10 @@ class RAGChain:
         else:
             self.vector_db = VectorDatabase()
         
+        # 로컬 GGUF 세부 동작 제어 플래그 (Qwen/Midm 특화 프롬프트/샘플링)
+        self.is_qwen_gguf = False
+        self.is_midm_gguf = False
+
         self.llm = self._initialize_llm(provider, model)
         self.streaming_llm = self._initialize_streaming_llm(provider, model)  # 스트리밍용 LLM
         self.prompt_template = self._create_prompt_template()
@@ -64,13 +69,8 @@ class RAGChain:
                 settings.local_llm_max_tokens,
                 settings.local_llm_context_window
             )
-            # 채팅 기본 모델을 EXAONE로 자동 지정 (로컬 경로가 있으면)
-            try:
-                from src.utils.model_bootstrap import get_exaone_dir
-                if get_exaone_dir().exists():
-                    settings.local_llm_model = "exaone-4.0-32b"
-            except Exception:
-                pass
+            # 로컬 기본 모델명을 일관되게 사용 (혼란 방지)
+            settings.local_llm_model = "local-model"
     
     def _initialize_llm(self, provider: Optional[str] = None, model: Optional[str] = None):
         """일반 LLM 초기화 (비스트리밍)"""
@@ -92,8 +92,13 @@ class RAGChain:
         else:
             actual_model = model or getattr(settings, f"{provider}_model", None)
         
-        # 모델별 최대 토큰 수 가져오기
+        # 모델별 최대 토큰 수 가져오기 (로컬은 설정값 우선)
         max_tokens = self._get_max_tokens_for_model(provider, actual_model) if actual_model else settings.max_tokens
+        if provider == "local":
+            try:
+                max_tokens = int(getattr(settings, 'local_llm_max_tokens', max_tokens))
+            except Exception:
+                pass
         
         logger.info(f"LLM 초기화: provider={provider}, model={actual_model}, max_tokens={max_tokens}, streaming={streaming}")
         
@@ -149,39 +154,78 @@ class RAGChain:
             model_lower = (actual_model or "").lower()
             project_root = Path(__file__).parent.parent.parent
 
-            # 1) Midm-2.0 또는 Gemma-3n GGUF (llama.cpp)
-            if model_lower in [
-                "midm-2.0-gguf",
-                "midm-2.0-base-instruct",
-                "gemma-3n-gguf",
-                settings.local_llm_model.lower() if settings.local_llm_model else "",
-            ]:
-                # 기본 GGUF 경로
-                gguf_path = os.getenv(
-                    "LOCAL_LLM_GGUF_PATH",
-                    "",
+            # 1) 임의 GGUF (llama.cpp) – local_models 내 탐색
+            try:
+                from src.utils.model_bootstrap import get_gguf_path
+                # Qwen 우선 사용을 위해 키워드 가중치 부여
+                gguf_path = str(get_gguf_path(preferred_keywords=["qwen", "qwen2.5"]))
+            except Exception:
+                gguf_path = os.getenv("LOCAL_LLM_GGUF_PATH", "")
+
+            # 디렉토리가 전달된 경우 내부에서 *.gguf 파일 탐색
+            from glob import glob
+            if gguf_path and os.path.isdir(gguf_path):
+                candidates = glob(os.path.join(gguf_path, "*.gguf"))
+                # Qwen 우선, EXAONE 제외
+                qwen_pref = [c for c in candidates if "qwen" in os.path.basename(c).lower()]
+                non_exa = [c for c in candidates if "exaone" not in os.path.basename(c).lower()]
+                if qwen_pref:
+                    gguf_path = qwen_pref[0]
+                elif non_exa:
+                    gguf_path = non_exa[0]
+                elif candidates:
+                    gguf_path = candidates[0]
+
+            # EXAONE GGUF는 llama.cpp에서 미지원 아키텍처일 수 있어 제외
+            if gguf_path and "exaone" in os.path.basename(gguf_path).lower():
+                # 프로젝트 전체에서 대안 검색
+                candidates = glob(str(project_root / "local_models" / "**" / "*.gguf"), recursive=True)
+                qwen_pref = [c for c in candidates if "qwen" in os.path.basename(c).lower()]
+                non_exa = [c for c in candidates if "exaone" not in os.path.basename(c).lower()]
+                if qwen_pref:
+                    gguf_path = qwen_pref[0]
+                elif non_exa:
+                    gguf_path = non_exa[0]
+
+            if gguf_path and os.path.isfile(gguf_path):
+                logger.info(f"로컬 GGUF 모델 선택: {gguf_path}")
+                # 모델 유형 판단 (샘플링/프롬프트 특화)
+                base_name = os.path.basename(gguf_path).lower()
+                self.is_qwen_gguf = ("qwen" in base_name)
+                self.is_midm_gguf = ("midm" in base_name)
+                # 메모리 보호용 n_ctx 상한 적용
+                n_ctx_used = min(settings.local_llm_context_window, getattr(settings, 'local_llm_max_context_cap', settings.local_llm_context_window))
+                if n_ctx_used < settings.local_llm_context_window:
+                    logger.warning(f"n_ctx {settings.local_llm_context_window} -> {n_ctx_used} (LOCAL_LLM_MAX_CONTEXT_CAP 적용)")
+                # Qwen 전용 샘플링 파라미터
+                qwen_kwargs = {}
+                if self.is_qwen_gguf:
+                    qwen_kwargs = {
+                        "top_p": 0.9,
+                        "top_k": 50,
+                        "repeat_penalty": 1.18,
+                        "repeat_last_n": 256,
+                        "stop": ["<|im_end|>"]
+                    }
+                # Midm 전용 샘플링/스톱(일반 instruct 스타일)
+                midm_kwargs = {}
+                if self.is_midm_gguf:
+                    midm_kwargs = {
+                        "top_p": 0.9,
+                        "top_k": 50,
+                        "repeat_penalty": 1.12,
+                        "repeat_last_n": 256,
+                        "stop": ["</answer>", "\n\n\n"]
+                    }
+                return LlamaCpp(
+                    model_path=gguf_path,
+                    n_ctx=n_ctx_used,
+                    n_threads=getattr(settings, 'local_llm_threads', 8),
+                    n_gpu_layers=getattr(settings, 'local_llm_n_gpu_layers', 0),
+                    temperature=settings.temperature,
+                    max_tokens=max_tokens,
+                    **({} | qwen_kwargs | midm_kwargs),
                 )
-                if not gguf_path:
-                    # 자동 탐색: model_bootstrap 사용
-                    try:
-                        from src.utils.model_bootstrap import get_midm_path
-                        gguf_path = str(get_midm_path())
-                    except Exception:
-                        # Gemma GGUF 후보 탐색
-                        from glob import glob
-                        candidates = glob(str(project_root / "local_models" / "**" / "*.gguf"), recursive=True)
-                        for c in candidates:
-                            name = c.lower()
-                            if "gemma" in name:
-                                gguf_path = c
-                                break
-                if gguf_path and os.path.exists(gguf_path):
-                    return LlamaCpp(
-                        model_path=gguf_path,
-                        n_ctx=settings.local_llm_context_window,
-                        temperature=settings.temperature,
-                        max_tokens=max_tokens,
-                    )
 
             # 2) EXAONE 4.0 32B (Transformers)
             if model_lower in ["exaone-4.0-32b", "lgai-exaone/exaone-4.0-32b"]:
@@ -227,7 +271,12 @@ class RAGChain:
                 except Exception as e:
                     logger.warning(f"EXAONE 로컬 로딩 실패, HTTP 폴백 시도: {e}")
 
-            # 3) 폴백: OpenAI 호환 로컬 서버
+            # 3) 폴백: OpenAI 호환 로컬 서버 (옵션)
+            if getattr(settings, 'disable_http_fallback', False):
+                raise ValueError(
+                    "로컬 LLM 오프라인 모델을 찾을 수 없고 HTTP 폴백이 비활성화되어 있습니다. "
+                    "LOCAL_LLM_GGUF_PATH를 설정하거나 local_models에 GGUF/Transformers 모델을 배치하세요."
+                )
             return ChatOpenAI(
                 openai_api_key=settings.local_llm_api_key,
                 openai_api_base=settings.local_llm_base_url + "/v1",
@@ -243,8 +292,29 @@ class RAGChain:
             raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
     
     def _create_prompt_template(self) -> PromptTemplate:
-        """프롬프트 템플릿 생성"""
-        template = """당신은 국사의 전문적인 지식을 초등학교 학생들도 알기쉽게 친절하게 전달하는 AI 어시스턴트입니다. 
+        """프롬프트 템플릿 생성 (Qwen GGUF는 ChatML 형식 사용)"""
+        if getattr(self, 'is_qwen_gguf', False):
+            template = (
+                "<|im_start|>system\n"
+                "당신은 국사의 전문적인 지식을 초등학교 학생들도 알기쉽게 친절하게 전달하는 AI 어시스턴트입니다.\n"
+                "상세하고 정확한 정보를 제공하면서도, 초등학생들도 이해할 수 있도록 쉽게 설명하는 것이 당신의 역할입니다.\n\n"
+                "답변 시 반드시 지켜야 할 규칙:\n"
+                "1) 상세하고 풍부한 정보 제공 (숫자/날짜/발견사항 포함)\n"
+                "2) 한자/전문 용어는 한글 독음과 의미를 함께 표기하고 처음에 쉬운 설명 추가\n"
+                "3) 구조화된 답변(섹션/번호/불릿)\n"
+                "4) 정확성과 신뢰성(문서 근거, 출처 언급)\n"
+                "5) 종합적 답변(핵심→맥락)\n"
+                "6) 한국어 전용 출력: 반드시 한글만 사용하고, 영어 표현은 한국어로 풀어쓰세요.\n"
+                "7) 답변은 반드시 완결된 문장으로 끝내세요. 다 쓰지 못했다면 이어서 완성한 뒤 종료하세요.\n"
+                "<|im_end|>\n"
+                "<|im_start|>user\n"
+                "다음은 검색된 관련 문서들입니다:\n{context}\n\n"
+                "위 문서들을 참고하여 다음 질문에 한국어로 답변하세요:\n{question}\n"
+                "<|im_end|>\n"
+                "<|im_start|>assistant\n"
+            )
+        else:
+            template = """당신은 국사의 전문적인 지식을 초등학교 학생들도 알기쉽게 친절하게 전달하는 AI 어시스턴트입니다. 
 상세하고 정확한 정보를 제공하면서도, 초등학생들도 이해할 수 있도록 쉽게 설명하는 것이 당신의 역할입니다.
 
 다음은 검색된 관련 문서들입니다:
@@ -286,8 +356,15 @@ class RAGChain:
    - 그 다음 관련된 부가 정보와 맥락을 상세히 설명하세요
    - 가능한 한 많은 관련 정보를 포함하여 완전한 답변을 만드세요
 
+6. **한국어 전용 출력**:
+   - 반드시 한국어만 사용하세요. 영어 단어/문장 사용을 피하고, 필요한 경우 한국어로 풀어써서 설명하세요.
+   - 모델이 영어로 응답하려는 경우에도 한국어 표현으로 변환하여 답변하세요.
+
+7. **완결성**:
+   - 답변은 반드시 완결된 문장으로 끝내세요. 다 쓰지 못했다면 이어서 완성한 뒤 종료하세요.
+
 답변:"""
-        
+
         return PromptTemplate(
             input_variables=["context", "question"],
             template=template
@@ -345,11 +422,10 @@ class RAGChain:
         max_context = MODEL_MAX_CONTEXT["default"]
         
         # 모델별 특별 제한
-        if provider == "local":
-            max_context = MODEL_MAX_CONTEXT["local"]
-        elif provider == "openai" and model and "gpt-3.5" in model:
+        # 로컬 모델은 설정/레지스트리 기반 계산값을 그대로 활용 (별도 상수 제한 제거)
+        if provider == "openai" and model and "gpt-3.5" in model:
             max_context = MODEL_MAX_CONTEXT["gpt-3.5"]
-            
+        
         return max(min_context, min(max_context, max_context_chars))
     
     def _format_documents(self, documents: List[tuple], query: str = "") -> str:
@@ -831,8 +907,12 @@ class RAGChain:
     
     def update_llm(self, provider: str, model: Optional[str] = None):
         """LLM 제공자 및 모델 변경"""
+        # LLM 재초기화 (이 시점에 is_qwen_gguf / is_midm_gguf 플래그가 갱신됨)
         self.llm = self._initialize_llm(provider, model)
         self.streaming_llm = self._initialize_streaming_llm(provider, model)
+        # 템플릿도 플래그에 맞춰 재생성 (Qwen/Midm 특화 템플릿 반영)
+        self.prompt_template = self._create_prompt_template()
+        # 체인 재생성
         self.chain = self._create_chain()
         self.streaming_chain = self._create_streaming_chain()
         self.current_provider = provider
@@ -855,8 +935,21 @@ class RAGChain:
             server_local_models = []
 
         # 오프라인 로컬 모델 후보 (GGUF / Transformers)
+        # 오프라인 로컬 모델 후보 (GGUF / Transformers)
+        gguf_name = "Local GGUF (llama.cpp)"
+        gguf_desc = "local_models 내 GGUF 자동 탐색"
+        try:
+            from src.utils.model_bootstrap import get_gguf_path
+            p = str(get_gguf_path(preferred_keywords=["qwen", "qwen2.5"]))
+            base = os.path.basename(p).lower()
+            if "qwen" in base and ("1m" in base or "1m" in gguf_desc):
+                gguf_name = "Local GGUF (Qwen 1M)"
+                gguf_desc = os.path.basename(p)
+        except Exception:
+            pass
+
         offline_local_models = [
-            {"name": "Midm-2.0 GGUF (llama.cpp)", "model": "midm-2.0-gguf", "description": "로컬 GGUF 모델"},
+            {"name": gguf_name, "model": "local-gguf", "description": gguf_desc},
             {"name": "EXAONE-4.0-32B (Transformers)", "model": "exaone-4.0-32b", "description": "로컬 Transformers 모델"},
         ]
 

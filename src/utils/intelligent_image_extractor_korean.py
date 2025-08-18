@@ -21,7 +21,7 @@ import unicodedata
 import shutil
 
 from .korean_text_model import KoreanTextModel
-from .gemma_multimodal import GemmaMultimodalModel
+from .ax_multimodal import AXMultimodalModel
 from .text_processing import TextProcessor
 
 logger = logging.getLogger(__name__)

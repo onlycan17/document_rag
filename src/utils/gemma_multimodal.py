@@ -60,31 +60,47 @@ class GemmaMultimodalModel:
         if model_path:
             return Path(model_path)
         
-        # 기본 경로
-        project_root = Path(__file__).parent.parent.parent
-        # /local_models 지원
-        # 최적화: model_bootstrap 헬퍼를 통해 확정 경로 사용
+        # 1. 환경변수 GEMMA_MULTIMODAL_DIR 최우선 확인
+        env_dir = os.getenv("GEMMA_MULTIMODAL_DIR")
+        if env_dir:
+            env_path = Path(env_dir)
+            if env_path.exists() and env_path.is_dir() and (env_path / "config.json").exists():
+                logger.info(f"🎯 환경변수에서 모델 경로 사용: {env_path}")
+                return env_path
+        
+        # 2. model_bootstrap을 통한 자동 탐색
         try:
             from src.utils.model_bootstrap import get_gemma_dir
             g = get_gemma_dir(prefer_3n=True)
             # 디렉토리 내에 config.json이 있으면 MLX 여부와 관계없이 허용 (Transformers 호환)
             if g.exists():
                 if g.is_dir() and (g / "config.json").exists():
+                    logger.info(f"🔍 model_bootstrap에서 모델 경로 발견: {g}")
                     return g
                 # 파일(.gguf)은 멀티모달에 부적합 → 폴백
-        except Exception:
-            pass
-        local_root = Path(os.getenv("LOCAL_MODELS_DIR", "/local_models"))
-        if (local_root / "multimodal" / "gemma-3n-e4b").exists():
-            return local_root / "multimodal" / "gemma-3n-e4b"
-        default_path = project_root / "models" / "multimodal" / "gemma-3n-e4b"
+        except Exception as e:
+            logger.warning(f"model_bootstrap 사용 실패: {e}")
         
-        # HuggingFace 모델 ID로 폴백
-        if not default_path.exists():
-            logger.info("로컬 모델이 없습니다. HuggingFace에서 직접 로드합니다.")
-            return Path("google/gemma-3n-e4b")  # HF 모델 ID
-            
-        return default_path
+        # 3. 기본 경로들 확인
+        project_root = Path(__file__).parent.parent.parent
+        local_root = Path(os.getenv("LOCAL_MODELS_DIR", "/local_models"))
+        
+        # 기본 경로 후보들
+        default_paths = [
+            local_root / "multimodal" / "gemma-3n-e4b",
+            project_root / "models" / "multimodal" / "gemma-3n-e4b",
+            local_root / "multimodal" / "A.X-4.0-VL-Light",
+            project_root / "local_models" / "multimodal" / "A.X-4.0-VL-Light"
+        ]
+        
+        for path in default_paths:
+            if path.exists() and path.is_dir() and (path / "config.json").exists():
+                logger.info(f"✅ 로컬 모델 경로 발견: {path}")
+                return path
+        
+        # 4. HuggingFace 모델 ID로 폴백
+        logger.info("로컬 모델이 없습니다. HuggingFace에서 직접 로드합니다.")
+        return Path("google/gemma-3n-e4b")  # HF 모델 ID
     
     def _setup_device(self, device: str) -> str:
         """디바이스 설정"""
@@ -203,11 +219,31 @@ class GemmaMultimodalModel:
                     logger.warning(f"bitsandbytes 구성이 불가하여 4bit 비활성화: {qe}")
                     quantization_config = None
             
-            # 프로세서 로드
-            self.processor = AutoProcessor.from_pretrained(
-                model_id,
-                trust_remote_code=True
-            )
+            # 프로세서 로드 (trust_remote_code를 조건부로 설정)
+            processor_kwargs = {"trust_remote_code": True}
+            
+            # A.X-4.0-VL-Light 모델의 경우 특별 처리
+            if "A.X-4.0-VL-Light" in str(model_id):
+                logger.info("🎯 A.X-4.0-VL-Light 전용 프로세서 로드")
+                # 모델 디렉토리를 sys.path에 임시 추가
+                import sys
+                model_dir = str(Path(model_id).resolve())
+                if model_dir not in sys.path:
+                    sys.path.insert(0, model_dir)
+                
+                try:
+                    self.processor = AutoProcessor.from_pretrained(
+                        model_id, 
+                        **processor_kwargs
+                    )
+                finally:
+                    if model_dir in sys.path:
+                        sys.path.remove(model_dir)
+            else:
+                self.processor = AutoProcessor.from_pretrained(
+                    model_id,
+                    **processor_kwargs
+                )
             
             # 모델 로드
             load_kwargs = {
@@ -246,11 +282,57 @@ class GemmaMultimodalModel:
                 load_kwargs["attn_implementation"] = "eager"
 
             try:
-                self.model = _AutoMMModel.from_pretrained(
-                    model_id,
-                    config=config,
-                    **load_kwargs
-                )
+                # 모델 아키텍처 확인하여 적절한 로더 선택
+                if hasattr(config, 'architectures') and config.architectures:
+                    arch = config.architectures[0]
+                    logger.info(f"🏗️ 감지된 모델 아키텍처: {arch}")
+                    
+                    if arch == "AX4VLForConditionalGeneration":
+                        # A.X-4.0-VL-Light 모델용 사용자 정의 로더
+                        logger.info("🎯 A.X-4.0-VL-Light 모델 로드 중...")
+                        
+                        # 모델 디렉토리를 Python 경로에 추가하여 사용자 정의 모듈 임포트 활성화
+                        import sys
+                        model_dir = str(Path(model_id).resolve())
+                        if model_dir not in sys.path:
+                            sys.path.insert(0, model_dir)
+                        
+                        try:
+                            # 사용자 정의 모델 클래스 직접 임포트
+                            from modeling_ax4vl import AX4VLForConditionalGeneration
+                            logger.info("✅ 사용자 정의 모델 클래스 임포트 성공")
+                            
+                            self.model = AX4VLForConditionalGeneration.from_pretrained(
+                                model_id,
+                                config=config,
+                                **load_kwargs
+                            )
+                        except ImportError as import_err:
+                            logger.warning(f"사용자 정의 클래스 임포트 실패, AutoModel 사용: {import_err}")
+                            from transformers import AutoModel
+                            self.model = AutoModel.from_pretrained(
+                                model_id,
+                                config=config,
+                                **load_kwargs
+                            )
+                        finally:
+                            # Python 경로에서 모델 디렉토리 제거
+                            if model_dir in sys.path:
+                                sys.path.remove(model_dir)
+                    else:
+                        # 기본 Gemma 멀티모달 모델 로더
+                        self.model = _AutoMMModel.from_pretrained(
+                            model_id,
+                            config=config,
+                            **load_kwargs
+                        )
+                else:
+                    # 아키텍처 정보가 없는 경우 기본 로더 사용
+                    self.model = _AutoMMModel.from_pretrained(
+                        model_id,
+                        config=config,
+                        **load_kwargs
+                    )
             except (OSError, FileNotFoundError) as missing_err:
                 # 샤드 불일치 가능성 → index 재생성 후 한 번 더 시도
                 p = Path(model_id)

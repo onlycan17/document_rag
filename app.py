@@ -19,6 +19,56 @@ import streamlit as st
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY"] = "False"
 
+# PyTorch torch.classes 경고 메시지 전역 억제 (A.X 모델용) - 강화된 버전
+os.environ["TORCH_LOG_LEVEL"] = "ERROR"
+os.environ["PYTORCH_JIT_LOG_LEVEL"] = "ERROR"
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
+os.environ["PYTORCH_KERNEL_WARN"] = "0"
+os.environ["TORCH_SHOW_CPP_STACKTRACES"] = "0"
+
+import warnings
+import logging
+
+# 전체 PyTorch 및 transformers 경고 억제
+warnings.filterwarnings("ignore", message=".*torch.classes.*")
+warnings.filterwarnings("ignore", message=".*torch.ops.*")
+warnings.filterwarnings("ignore", message=".*torch.jit.*")
+warnings.filterwarnings("ignore", message=".*__path__._path.*")
+warnings.filterwarnings("ignore", message=".*Examining the path.*")
+warnings.filterwarnings("ignore", message=".*Tried to instantiate class.*")
+warnings.filterwarnings("ignore", category=UserWarning, message=".*classes.*")
+warnings.filterwarnings("ignore", category=UserWarning, message=".*ops.*")
+warnings.filterwarnings("ignore", category=FutureWarning, message=".*torch.load.*")
+warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*torch.*")
+
+# PyTorch 관련 로거 억제
+logging.getLogger("torch").setLevel(logging.ERROR)
+logging.getLogger("torch.jit").setLevel(logging.ERROR)
+logging.getLogger("torch.fx").setLevel(logging.ERROR)
+logging.getLogger("torch._C").setLevel(logging.ERROR)
+logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+logging.getLogger("transformers.tokenization_utils").setLevel(logging.ERROR)
+
+# Streamlit에서 torch.classes 경고를 원천 차단
+try:
+    import torch
+    import torch._C
+    # JIT 경고 완전 비활성화
+    if hasattr(torch._C, '_jit_set_emit_warnings'):
+        torch._C._jit_set_emit_warnings(False)
+    if hasattr(torch._C, '_set_print_stacktraces_on_fatal_signal'):
+        torch._C._set_print_stacktraces_on_fatal_signal(False)
+    
+    # torch.classes 관련 내부 경고 시스템 비활성화
+    if hasattr(torch, '_C') and hasattr(torch._C, '_set_print_warn'):
+        try:
+            torch._C._set_print_warn(False)
+        except:
+            pass
+            
+except Exception:
+    pass
+
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
 sys.path.append(str(Path(__file__).parent))
 
@@ -37,13 +87,8 @@ from src.constants import (
 setup_logging(logging.INFO)
 logger = get_logger(__name__)
 
-# 서버 기동 시 모델 확보 및 사전 로드
-try:
-    from src.utils.model_bootstrap import ensure_models_available, preload_models
-    ensure_models_available(download_exaone=False)
-    preload_models()
-except Exception as e:
-    logger.warning(f"모델 부트스트랩 중 경고: {e}")
+# 모델 부트스트랩은 세션 상태에서 한 번만 실행
+# (모듈 레벨 실행으로 인한 중복 방지)
 
 # 페이지 설정
 st.set_page_config(
@@ -58,12 +103,236 @@ st.set_page_config(
     }
 )
 
+# 세션 상태 안전 접근 헬퍼 함수들
+def safe_get_vector_db():
+    """벡터 DB 안전 접근 - 초기화되지 않은 경우 자동 초기화 (중복 방지)"""
+    if 'vector_db' not in st.session_state or st.session_state.vector_db is None:
+        # 중복 초기화 방지를 위한 플래그 확인
+        if not st.session_state.get('vector_db_initializing', False):
+            st.session_state.vector_db_initializing = True
+            logger.info("🔄 vector_db 초기화 시작 (한 번만)")
+            try:
+                st.session_state.vector_db = VectorDatabase()
+                logger.info("✅ vector_db 초기화 완료")
+            finally:
+                st.session_state.vector_db_initializing = False
+        else:
+            # 다른 프로세스에서 초기화 중인 경우 잠시 대기
+            import time
+            for _ in range(10):  # 최대 1초 대기
+                if 'vector_db' in st.session_state and st.session_state.vector_db is not None:
+                    break
+                time.sleep(0.1)
+            
+            # 여전히 없으면 강제 초기화
+            if 'vector_db' not in st.session_state or st.session_state.vector_db is None:
+                logger.warning("⚠️ vector_db 대기 시간 초과 - 강제 초기화")
+                st.session_state.vector_db = VectorDatabase()
+    
+    return st.session_state.vector_db
+
+def safe_get_rag_chain():
+    """RAG 체인 안전 접근 - 초기화되지 않은 경우 자동 초기화 (중복 방지)"""
+    if 'rag_chain' not in st.session_state or st.session_state.rag_chain is None:
+        # 중복 초기화 방지를 위한 플래그 확인
+        if not st.session_state.get('rag_chain_initializing', False):
+            st.session_state.rag_chain_initializing = True
+            logger.info("🔄 rag_chain 초기화 시작 (한 번만)")
+            try:
+                vector_db = safe_get_vector_db()
+                st.session_state.rag_chain = RAGChain(vector_db=vector_db)
+                logger.info("✅ rag_chain 초기화 완료")
+            finally:
+                st.session_state.rag_chain_initializing = False
+        else:
+            # 다른 프로세스에서 초기화 중인 경우 잠시 대기
+            import time
+            for _ in range(10):  # 최대 1초 대기
+                if 'rag_chain' in st.session_state and st.session_state.rag_chain is not None:
+                    break
+                time.sleep(0.1)
+            
+            # 여전히 없으면 강제 초기화
+            if 'rag_chain' not in st.session_state or st.session_state.rag_chain is None:
+                logger.warning("⚠️ rag_chain 대기 시간 초과 - 강제 초기화")
+                vector_db = safe_get_vector_db()
+                st.session_state.rag_chain = RAGChain(vector_db=vector_db)
+    
+    return st.session_state.rag_chain
+
 # 세션 상태 초기화
-if 'vector_db' not in st.session_state:
-    st.session_state.vector_db = VectorDatabase()
-if 'rag_chain' not in st.session_state:
-    # RAG 체인에 벡터 DB 인스턴스를 공유
-    st.session_state.rag_chain = RAGChain(vector_db=st.session_state.vector_db)
+# 모델 부트스트랩을 프로세스 간 동기화로 한 번만 실행
+def bootstrap_models_with_file_lock():
+    """파일 기반 잠금을 사용한 멀티프로세스 안전 모델 부트스트랩"""
+    import fcntl
+    import time
+    
+    # 잠금 파일 경로
+    lock_file_path = Path(__file__).parent / ".bootstrap_lock"
+    bootstrap_done_file = Path(__file__).parent / ".bootstrap_done"
+    
+    # 이미 부트스트랩이 완료되었다면 스킷
+    if bootstrap_done_file.exists():
+        logger.debug("모델 부트스트랩이 이미 완료됨 (파일 확인)")
+        return True
+    
+    # 잠금 파일로 동기화
+    try:
+        with open(lock_file_path, 'w') as lock_file:
+            try:
+                # 비블로킹 잠금 시도
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                
+                # 잠금 획득 성공 - 부트스트랩 실행
+                if not bootstrap_done_file.exists():
+                    logger.info("🚀 프로세스 동기화 모델 부트스트랩 시작...")
+                    
+                    from src.utils.model_bootstrap import ensure_models_available, preload_models
+                    ensure_models_available(download_exaone=False)
+                    preload_models()
+                    
+                    # 완료 표시 파일 생성
+                    bootstrap_done_file.touch()
+                    logger.info("✅ 프로세스 동기화 모델 부트스트랩 완료")
+                    
+                return True
+                
+            except BlockingIOError:
+                # 다른 프로세스가 이미 잠금 보유 중 - 대기
+                logger.debug("다른 프로세스가 부트스트랩 중... 대기")
+                
+                # 최대 30초 대기
+                max_wait = 30
+                wait_time = 0
+                while not bootstrap_done_file.exists() and wait_time < max_wait:
+                    time.sleep(0.5)
+                    wait_time += 0.5
+                
+                if bootstrap_done_file.exists():
+                    logger.debug("다른 프로세스의 부트스트랩 완료 확인")
+                    return True
+                else:
+                    logger.warning("부트스트랩 대기 시간 초과")
+                    return False
+                    
+    except Exception as e:
+        logger.warning(f"파일 잠금 부트스트랩 실패: {e}")
+        return False
+    finally:
+        # 잠금 파일 정리 (완료 파일은 유지)
+        try:
+            if lock_file_path.exists():
+                lock_file_path.unlink()
+        except:
+            pass
+
+# 프로세스 동기화 부트스트랩 실행
+if 'models_bootstrapped' not in st.session_state:
+    try:
+        success = bootstrap_models_with_file_lock()
+        st.session_state.models_bootstrapped = success
+        if not success:
+            logger.warning("프로세스 동기화 부트스트랩 실패 - 폴백 시도")
+            # 폴백: 기존 방식 시도
+            from src.utils.model_bootstrap import ensure_models_available, preload_models
+            ensure_models_available(download_exaone=False)
+            preload_models()
+            st.session_state.models_bootstrapped = True
+    except Exception as e:
+        logger.warning(f"모델 부트스트랩 중 경고: {e}")
+        st.session_state.models_bootstrapped = False
+
+# 전역 초기화 상태를 프로세스 간 동기화
+def initialize_components_with_sync():
+    """프로세스 간 동기화된 컴포넌트 초기화"""
+    import fcntl
+    import time
+    
+    # 컴포넌트 초기화 잠금 파일
+    comp_lock_file = Path(__file__).parent / ".components_lock"
+    comp_done_file = Path(__file__).parent / ".components_done"
+    
+    # 이미 초기화 완료되었다면 스킵
+    if comp_done_file.exists():
+        logger.debug("컴포넌트 초기화가 이미 완료됨")
+        return True
+    
+    try:
+        with open(comp_lock_file, 'w') as lock_file:
+            try:
+                # 비블로킹 잠금 시도
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                
+                # 잠금 획득 성공 - 첫 번째 프로세스가 초기화 수행
+                if not comp_done_file.exists():
+                    logger.info("🔧 프로세스 동기화 컴포넌트 초기화 시작...")
+                    
+                    # VectorDatabase 초기화 (로그 중복 방지를 위해 한 번만)
+                    if 'vector_db' not in st.session_state:
+                        st.session_state.vector_db = VectorDatabase()
+                    
+                    # RAG 체인 초기화
+                    if 'rag_chain' not in st.session_state:
+                        st.session_state.rag_chain = RAGChain(vector_db=safe_get_vector_db())
+                    
+                    # 초기화 완료 표시
+                    comp_done_file.touch()
+                    logger.info("✅ 프로세스 동기화 컴포넌트 초기화 완료")
+                
+                return True
+                
+            except BlockingIOError:
+                # 다른 프로세스가 초기화 중 - 대기
+                logger.debug("다른 프로세스가 컴포넌트 초기화 중... 대기")
+                
+                # 최대 20초 대기
+                max_wait = 20
+                wait_time = 0
+                while not comp_done_file.exists() and wait_time < max_wait:
+                    time.sleep(0.3)
+                    wait_time += 0.3
+                
+                if comp_done_file.exists():
+                    logger.debug("다른 프로세스의 컴포넌트 초기화 완료 확인")
+                    # 여전히 세션 상태에는 설정해야 함
+                    if 'vector_db' not in st.session_state:
+                        st.session_state.vector_db = VectorDatabase()
+                    if 'rag_chain' not in st.session_state:
+                        st.session_state.rag_chain = RAGChain(vector_db=safe_get_vector_db())
+                    return True
+                else:
+                    logger.warning("컴포넌트 초기화 대기 시간 초과")
+                    return False
+                    
+    except Exception as e:
+        logger.warning(f"컴포넌트 동기화 실패: {e}")
+        return False
+    finally:
+        # 잠금 파일 정리
+        try:
+            if comp_lock_file.exists():
+                comp_lock_file.unlink()
+        except:
+            pass
+
+# 동기화된 컴포넌트 초기화 실행
+if 'vector_db' not in st.session_state or 'rag_chain' not in st.session_state:
+    try:
+        success = initialize_components_with_sync()
+        if not success:
+            logger.warning("동기화 컴포넌트 초기화 실패 - 폴백 실행")
+            # 폴백: 개별 초기화
+            if 'vector_db' not in st.session_state:
+                st.session_state.vector_db = VectorDatabase()
+            if 'rag_chain' not in st.session_state:
+                st.session_state.rag_chain = RAGChain(vector_db=safe_get_vector_db())
+    except Exception as e:
+        logger.warning(f"컴포넌트 초기화 중 오류: {e}")
+        # 폴백 실행
+        if 'vector_db' not in st.session_state:
+            st.session_state.vector_db = VectorDatabase()
+        if 'rag_chain' not in st.session_state:
+            st.session_state.rag_chain = RAGChain(vector_db=safe_get_vector_db())
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'document_loader' not in st.session_state:
@@ -460,7 +729,7 @@ def display_images_in_response(response_text: str, context_documents: List = Non
                             clean_source = clean_source[:27] + "..."
                     
                     st.markdown(
-                        f'''<div class="image-container" onclick="openLightbox('{image_data_url}', '{clean_filename}', '{clean_source}')" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                        f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
                             <img id="{image_id}" 
                                 src="{image_data_url}" 
                                 class="image-thumbnail">
@@ -620,7 +889,7 @@ def main() -> None:
                                 )
                             
                             # 벡터 DB에 추가하기 전 청크 수 확인
-                            before_count = st.session_state.vector_db.get_document_count()
+                            before_count = safe_get_vector_db().get_document_count()
                             
                             # 문서 로드
                             documents = st.session_state.document_loader.load_document(temp_path, update_progress)
@@ -645,10 +914,10 @@ def main() -> None:
                                 if documents:
                                     # 벡터 DB에 추가
                                     update_progress(0.95, "벡터 데이터베이스에 저장 중...")
-                                    st.session_state.vector_db.add_documents(documents)
+                                    safe_get_vector_db().add_documents(documents)
                                     
                                     # 저장 후 청크 수 확인 (품질 검증)
-                                    after_count = st.session_state.vector_db.get_document_count()
+                                    after_count = safe_get_vector_db().get_document_count()
                                     saved_chunks = after_count - before_count
                                 else:
                                     # 이미지만 추출된 경우
@@ -725,7 +994,7 @@ def main() -> None:
                                     st.info(f"🖼️ 이미지 추출: {extracted_images_count}개 이미지가 성공적으로 추출됨")
                                 
                                 # 검색 품질 테스트
-                                search_results = test_search_quality(st.session_state.vector_db, uploaded_file.name)
+                                search_results = test_search_quality(safe_get_vector_db(), uploaded_file.name)
                                 if search_results:
                                     with st.expander("🔍 검색 테스트 결과"):
                                         search_cols = st.columns(len(search_results))
@@ -791,7 +1060,7 @@ def main() -> None:
                     st.metric("총 처리시간", f"{total_processing_time:.1f}초")
                 
                 # 최종 벡터 DB 상태
-                final_doc_count = st.session_state.vector_db.get_document_count()
+                final_doc_count = safe_get_vector_db().get_document_count()
                 if total_chunks > 0:
                     st.success(f"🎉 업로드 완료! 벡터 데이터베이스에 총 {final_doc_count}개의 청크가 저장되어 있습니다.")
                 else:
@@ -817,7 +1086,7 @@ def main() -> None:
                     documents = st.session_state.document_loader.load_document(domain_path, update_progress)
                     
                     update_progress(0.95, "벡터 데이터베이스에 저장 중...")
-                    st.session_state.vector_db.add_documents(documents)
+                    safe_get_vector_db().add_documents(documents)
                     
                     update_progress(1.0, "완료!")
                     st.success(f"✅ domain.md 로드 완료 ({len(documents)} 청크)")
@@ -834,7 +1103,8 @@ def main() -> None:
         
         # 벡터 DB 상태
         st.divider()
-        doc_count = st.session_state.vector_db.get_document_count()
+        vector_db = safe_get_vector_db()
+        doc_count = vector_db.get_document_count()
         st.info(f"💾 저장된 문서 청크: {doc_count}개")
         
         # 로그 뷰어 (확장 가능)
@@ -858,12 +1128,12 @@ def main() -> None:
         if 'show_clear_confirm' in st.session_state and st.session_state.show_clear_confirm:
             with col2:
                 if st.button("⚠️ 확인", type="primary", key="confirm_clear"):
-                    st.session_state.vector_db.clear_database()
+                    safe_get_vector_db().clear_database()
                     # RAG 체인도 재초기화 (벡터 DB 인스턴스 공유)
                     st.session_state.rag_chain = RAGChain(
                         provider=st.session_state.current_provider, 
                         model=st.session_state.current_model,
-                        vector_db=st.session_state.vector_db
+                        vector_db=safe_get_vector_db()
                     )
                     st.success("벡터 데이터베이스가 초기화되었습니다.")
                     st.session_state.show_clear_confirm = False
@@ -874,7 +1144,7 @@ def main() -> None:
         st.subheader("🤖 LLM 모델 설정")
         
         # 사용 가능한 모델 가져오기
-        available_models = st.session_state.rag_chain.get_available_models()
+        available_models = safe_get_rag_chain().get_available_models()
         
         # LLM 제공자 선택
         provider_names = {
@@ -894,19 +1164,31 @@ def main() -> None:
         # 선택된 제공자의 모델 목록
         if selected_provider in available_models:
             model_options = available_models[selected_provider]
-            # 로컬 LLM은 EXAONE만 표시 (요청 사항)
+            # 로컬 LLM: EXAONE(Transformers) + Local GGUF 모두 선택 가능
             if selected_provider == "local":
-                def is_exaone(entry: dict) -> bool:
+                def is_local_allowed(entry: dict) -> bool:
                     model_id = str(entry.get('model', '')).lower()
                     name = str(entry.get('name', '')).lower()
-                    return ("exaone" in model_id) or ("exaone" in name)
-
-                filtered_options = [m for m in model_options if is_exaone(m)]
+                    return (
+                        "exaone" in model_id or "exaone" in name or
+                        "gguf" in model_id or "gguf" in name or
+                        model_id in ("local-gguf", "local-model")
+                    )
+                filtered_options = [m for m in model_options if is_local_allowed(m)]
+                # 정렬: Local GGUF 우선 표시 → EXAONE 순
+                def sort_key(e: dict) -> int:
+                    txt = (str(e.get('name','')) + str(e.get('model',''))).lower()
+                    if 'gguf' in txt or e.get('model') in ("local-gguf", "local-model"):
+                        return 0
+                    if 'exaone' in txt:
+                        return 1
+                    return 2
+                filtered_options = sorted(filtered_options, key=sort_key)
                 if not filtered_options:
                     filtered_options = [{
-                        "name": "EXAONE-4.0-32B (Transformers)",
-                        "model": "exaone-4.0-32b",
-                        "description": "로컬 Transformers 모델"
+                        "name": "Local GGUF (llama.cpp)",
+                        "model": "local-gguf",
+                        "description": "local_models 내 GGUF 자동 탐색"
                     }]
                 model_options = filtered_options
             
@@ -1125,6 +1407,31 @@ def main() -> None:
                 }
             }, {once: true});
         }
+        // 안전한 이벤트 바인딩: onClick 속성 대신 JS로 바인딩(React 오류 방지)
+        (function bindLightbox(){
+            function attach(el){
+                if (!el || el.dataset.lbBound === '1') return;
+                el.addEventListener('click', function(){
+                    const src = el.getAttribute('data-img-src');
+                    const fn = el.getAttribute('data-filename') || '';
+                    const sc = el.getAttribute('data-source') || '';
+                    if (src) { openLightbox(src, fn, sc); }
+                });
+                el.dataset.lbBound = '1';
+            }
+            document.querySelectorAll('.image-container').forEach(attach);
+            const obs = new MutationObserver(function(muts){
+                muts.forEach(function(m){
+                    m.addedNodes && m.addedNodes.forEach(function(n){
+                        if (n && n.nodeType === 1){
+                            if (n.classList && n.classList.contains('image-container')) attach(n);
+                            if (n.querySelectorAll) n.querySelectorAll('.image-container').forEach(attach);
+                        }
+                    });
+                });
+            });
+            obs.observe(document.body, {childList:true, subtree:true});
+        })();
         </script>
         """, unsafe_allow_html=True)
 
@@ -1225,7 +1532,7 @@ def main() -> None:
                                 
                                 # CSS 스타일과 JavaScript는 이미 정의되어 있음
                                 st.markdown(
-                                    f'''<div class="image-container" onclick="openLightbox('{image_data_url}', '{clean_filename}', '{clean_source}')" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                    f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
                                         <img id="{image_id}" 
                                             src="{image_data_url}" 
                                             class="image-thumbnail">
@@ -1396,7 +1703,7 @@ def main() -> None:
                                         
                                         # CSS 스타일과 JavaScript는 이미 정의되어 있음
                                         st.markdown(
-                                            f'''<div class="image-container" onclick="openLightbox('{image_data_url}', '{clean_filename}', '{clean_source}')" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                            f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
                                                 <img id="{image_id}" 
                                                     src="{image_data_url}" 
                                                     class="image-thumbnail">
@@ -1490,7 +1797,7 @@ def main() -> None:
                                         
                                         # CSS 스타일과 JavaScript는 이미 정의되어 있음
                                     st.markdown(
-                                        f'''<div class="image-container" onclick="openLightbox('{image_data_url}', '{clean_filename}', '{clean_source}')" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
+                                        f'''<div class="image-container" data-img-src="{image_data_url}" data-filename="{clean_filename}" data-source="{clean_source}" title="클릭하여 크게 보기">
                                             <img id="{image_id}" 
                                                 src="{image_data_url}" 
                                                 class="image-thumbnail">
@@ -1509,7 +1816,7 @@ def main() -> None:
                     with st.expander("🔍 디버그 정보"):
                         st.write(f"**검색 쿼리**: {prompt}")
                         st.write(f"**벡터 DB 상태**:")
-                        st.write(f"- 총 문서 청크 수: {st.session_state.vector_db.get_document_count()}")
+                        st.write(f"- 총 문서 청크 수: {safe_get_vector_db().get_document_count()}")
                         st.write(f"- 벡터 DB 타입: {settings.vector_db_type}")
                         st.write(f"- 검색 임계값: FAISS < 2.0, ChromaDB > 0.2")
                         st.write(f"**검색 설정**:")
@@ -1530,10 +1837,11 @@ def main() -> None:
                             st.write("❌ 검색된 문서가 없습니다.")
                             
                             # 벡터 DB에 저장된 문서가 있다면 원시 검색 시도
-                            if st.session_state.vector_db.get_document_count() > 0:
+                            if safe_get_vector_db().get_document_count() > 0:
                                 try:
-                                    if hasattr(st.session_state.vector_db.vector_store, 'similarity_search_with_score'):
-                                        raw_results = st.session_state.vector_db.vector_store.similarity_search_with_score(prompt, k=3)
+                                    vector_db = safe_get_vector_db()
+                                    if hasattr(vector_db.vector_store, 'similarity_search_with_score'):
+                                        raw_results = vector_db.vector_store.similarity_search_with_score(prompt, k=3)
                                         st.write(f"**원시 검색 결과** (임계값 무시):")
                                         for i, (doc, score) in enumerate(raw_results):
                                             st.write(f"- 문서 {i+1}: 점수 {score:.4f}, 내용: {doc.page_content[:100]}...")

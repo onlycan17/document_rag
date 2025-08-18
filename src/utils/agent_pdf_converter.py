@@ -48,12 +48,12 @@ class AgentBasedPDFConverter:
             # 로컬 멀티모달(Gemma) 직접 연결 옵션: 이미지 추출에서 사용하는 것과 동일한 모델 재사용
             self.local_multimodal = None
             try:
-                from src.utils.model_bootstrap import get_gemma_dir
-                from src.utils.gemma_multimodal import GemmaMultimodalModel
-                gemma_path = get_gemma_dir(prefer_3n=True)
-                if gemma_path and gemma_path.exists():
-                    # 동일 경로로 멀티모달 인스턴스 구성 (GGUF/로컬 구성이더라도 래퍼가 처리)
-                    self.local_multimodal = GemmaMultimodalModel(model_path=str(gemma_path), device="auto", load_in_4bit=False, max_memory_gb=8)
+                from src.utils.model_bootstrap import get_ax_vl_dir
+                from src.utils.ax_multimodal import AXMultimodalModel
+                ax_path = get_ax_vl_dir()
+                if ax_path and ax_path.exists():
+                    # 동일 경로로 멀티모달 인스턴스 구성 (A.X-4.0-VL-Light)
+                    self.local_multimodal = AXMultimodalModel(model_path=str(ax_path), device="auto", max_memory_gb=8)
                     logger.info("🔗 로컬 Gemma 멀티모달을 이미지 설명에도 재사용합니다")
             except Exception as e:
                 logger.warning(f"로컬 멀티모달 연결 건너뜀: {e}")

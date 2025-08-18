@@ -189,6 +189,17 @@ python scripts/data_management/vector_db_manager.py --help
 - ✅ **상세한 진행률**: 실시간 처리 상황 표시
 - ✅ **오류 복구**: 강화된 오류 처리 및 재시도 로직
 
+## 🌞 업스테이지 임베딩(선택) 설치 안내
+
+이 프로젝트는 업스테이지 임베딩(`langchain-upstage`)을 지원하지만, `requirements.txt`에는 포함하지 않습니다.  
+이유: `langchain-upstage`가 `tokenizers<0.21`을 강제하여 최신 `transformers`와 충돌하기 때문입니다.
+
+업스테이지를 사용할 경우 아래와 같이 별도 설치 후 `.env`에 `UPSTAGE_API_KEY`를 설정하세요.
+
+```bash
+pip install --no-deps langchain-upstage
+```
+
 ## 🧪 테스트
 
 ```bash

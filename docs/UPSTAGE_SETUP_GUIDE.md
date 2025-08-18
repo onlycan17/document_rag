@@ -39,38 +39,29 @@
 
 ### 3단계: 패키지 설치 확인
 
-필요한 패키지가 모두 설치되었는지 확인:
+`langchain-upstage`는 `requirements.txt`에 포함되어 있지 않습니다(토크나이저 버전 충돌 회피).  
+업스테이지 임베딩을 사용할 경우 다음과 같이 설치하세요:
 
 ```bash
-pip install langchain-upstage
+pip install --no-deps langchain-upstage
 ```
 
 ## 🔧 벡터 데이터베이스 재구축
 
-### 안전한 방법 (권장)
-
-멀티프로세싱 오류를 방지하는 안전한 스크립트 사용:
+통합 벡터 DB 관리 스크립트를 사용하세요:
 
 ```bash
-python safe_rebuild_vector_db.py
-```
+# 기본 모드
+python scripts/data_management/vector_db_manager.py
 
-**특징:**
-- ✅ OCR 기능 비활성화로 안정성 확보
-- ✅ 기본 PyPDFLoader만 사용
-- ✅ 멀티프로세싱 오류 방지
-- ✅ 상세한 진행 상황 표시
+# 안전 모드 (OCR 비활성화)
+python scripts/data_management/vector_db_manager.py --safe-mode
 
-### 기존 방법 (고급 사용자용)
+# 마크다운만 처리
+python scripts/data_management/vector_db_manager.py --markdown-only
 
-OCR 기능을 포함한 전체 기능 사용:
-
-```bash
-# 기존 벡터 DB 삭제
-rm -rf vector_db/
-
-# 재구축 실행
-python rebuild_vector_db.py
+# 특정 파일만 처리
+python scripts/data_management/vector_db_manager.py --files "file1.pdf" "file2.md"
 ```
 
 ## 🧪 테스트
@@ -78,7 +69,7 @@ python rebuild_vector_db.py
 ### 임베딩 모델 테스트
 
 ```bash
-python test_upstage_embedding.py
+python tests/test_upstage_embedding.py
 ```
 
 **예상 출력:**
@@ -211,5 +202,5 @@ streamlit run app.py
 
 추가 도움이 필요하면:
 - 📚 [업스테이지 문서](https://developers.upstage.ai/)
-- 🔧 `test_upstage_embedding.py` 실행하여 진단
+- 🔧 `tests/test_upstage_embedding.py` 실행하여 진단
 - 💬 로그 파일 확인: `logs/` 디렉터리 

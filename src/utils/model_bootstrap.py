@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 # 모듈 전역 캐시/가드
 _BOOTSTRAP_DONE: bool = False
 _RESOLVED_MIDM: Path | None = None
+_RESOLVED_GGUF_ANY: Path | None = None
 _RESOLVED_GEMMA3N: Path | None = None
 _RESOLVED_GEMMA2B: Path | None = None
 _RESOLVED_EXAONE: Path | None = None
@@ -49,6 +50,65 @@ def _midm_path() -> Path:
     except Exception:
         pass
     return _project_root() / "models" / "korean" / "Midm-2.0-Base-Instruct-Q4_K_S.gguf"
+
+
+def _any_gguf_path(preferred_keywords: list[str] | None = None) -> Path:
+    """local_models 이하에서 임의의 GGUF 파일을 탐색하여 반환.
+
+    우선순위:
+    1) 환경변수 LOCAL_LLM_GGUF_PATH
+    2) local_models/**.gguf (preferred_keywords 스코어링 후 최상위)
+    3) 프로젝트 기본 models/**.gguf (호환성)
+    찾지 못하면 예상 경로 객체를 반환(존재하지 않을 수 있음).
+    """
+    # 1) 환경변수 우선
+    env_path = os.getenv("LOCAL_LLM_GGUF_PATH")
+    if env_path and Path(env_path).exists():
+        return Path(env_path)
+
+    # 2) local_models 재귀 탐색
+    root = _local_models_root()
+    candidates: list[Path] = []
+    try:
+        for p in root.rglob("*.gguf"):
+            if p.is_file():
+                candidates.append(p)
+    except Exception:
+        pass
+
+    def _score(path: Path) -> int:
+        name = path.name.lower()
+        score = 0
+        # 한국어/지시형 우선 키워드 가점
+        for kw in ["korean", "ko", "instruct", "q4", "q5", "q8"]:
+            if kw in name:
+                score += 1
+        if preferred_keywords:
+            for kw in preferred_keywords:
+                if kw.lower() in name:
+                    score += 2
+        return score
+
+    if candidates:
+        # Midm 제외 선호: 다른 후보가 있으면 midm 포함 항목 제거
+        non_midm = [p for p in candidates if "midm" not in p.name.lower()]
+        pool = non_midm if non_midm else candidates
+        best = sorted(pool, key=_score, reverse=True)[0]
+        logger.info(f"🔎 GGUF 모델 선택: {best}")
+        return best
+
+    # 3) 프로젝트 기본 디렉토리 Fallback 탐색
+    proj = _project_root()
+    try:
+        for p in (proj / "models").rglob("*.gguf"):
+            if p.is_file():
+                logger.info(f"🔎 GGUF 후보(프로젝트): {p}")
+                return p
+    except Exception:
+        pass
+
+    # 아무것도 없을 경우 예상 경로 반환 (존재하지 않을 수 있음)
+    return proj / "models" / "local" / "model.gguf"
 
 
 def _gemma3n_dir_or_file() -> Path:
@@ -167,6 +227,15 @@ def get_midm_path() -> Path:
     return _RESOLVED_MIDM
 
 
+def get_gguf_path(preferred_keywords: list[str] | None = None) -> Path:
+    """임의 GGUF 모델 경로 반환(캐시 포함)."""
+    global _RESOLVED_GGUF_ANY
+    if _RESOLVED_GGUF_ANY and _RESOLVED_GGUF_ANY.exists():
+        return _RESOLVED_GGUF_ANY
+    _RESOLVED_GGUF_ANY = _any_gguf_path(preferred_keywords)
+    return _RESOLVED_GGUF_ANY
+
+
 def get_gemma_dir(prefer_3n: bool = True) -> Path:
     global _RESOLVED_GEMMA3N, _RESOLVED_GEMMA2B
     if prefer_3n:
@@ -206,17 +275,25 @@ def get_ax_vl_dir() -> Path:
 
 
 def ensure_models_available(download_exaone: bool = False) -> None:
-    """필수(및 선택적) 모델이 없으면 다운로드합니다.
+    """로컬 모델 가용성 확인(다운로드 강제하지 않음).
 
-    - Midm-2.0 GGUF (필수, 지능형 이미지 추출의 한국어 주제 추출)
-    - Gemma 3n e4b (권장) / 접근 불가 시 2b-it 폴백 다운로드 시도
-    - EXAONE 4.0 32B (선택, 거대 모델) -> download_exaone=True일 때만
+    - GGUF: local_models 내 임의 모델 사용 가능
+    - Gemma/EXAONE: 존재 시만 사용, 네트워크 환경에서는 다운로드 생략
     """
-    try:
-        from scripts import download_models as dm
-    except Exception as e:  # pragma: no cover
-        logger.warning(f"모델 다운로드 스크립트를 불러오지 못했습니다: {e}")
-        return
+    # GGUF 존재 확인
+    gguf = get_gguf_path()
+    if gguf and gguf.exists():
+        logger.info(f"✅ 로컬 GGUF 모델 감지: {gguf}")
+    else:
+        logger.warning("⚠️ 로컬 GGUF 모델을 찾지 못했습니다. LOCAL_LLM_GGUF_PATH를 설정하거나 local_models에 배치하세요.")
+
+    # 선택 모델(Transformers) 경로 로그만
+    exa = get_exaone_dir()
+    if exa.exists():
+        logger.info(f"🔎 EXAONE 로컬 디렉토리 확인: {exa}")
+    ax = get_ax_vl_dir()
+    if ax.exists():
+        logger.info(f"🔎 A.X VL 로컬 디렉토리 확인: {ax}")
 
     # 0) 재실행 가드
     global _BOOTSTRAP_DONE
@@ -224,56 +301,12 @@ def ensure_models_available(download_exaone: bool = False) -> None:
         logger.debug("모델 부트스트랩은 이미 완료됨")
         return
 
-    # 1) Midm-2.0 (로컬 재탐색 포함)
-    midm = get_midm_path()
-    if not midm.exists():
-        logger.info("🇰🇷 Midm-2.0 모델이 없어 자동 다운로드를 시작합니다...")
-        try:
-            ok = dm.download_midm_korean_model()
-            if not ok:
-                logger.warning("Midm-2.0 다운로드 실패")
-        except Exception as e:
-            logger.warning(f"Midm-2.0 다운로드 중 오류: {e}")
-    else:
-        logger.info(f"✅ Midm-2.0 로컬 모델 사용: {midm}")
-
-    # 2) Gemma 멀티모달 (우선 3n-e4b, 실패 시 2b-it)
-    if not get_gemma_dir(prefer_3n=True).exists():
-        logger.info("🖼️ Gemma 멀티모달 모델이 없어 자동 다운로드를 시도합니다 (3n-e4b → 2b-it 폴백)...")
-        # 우선 스크립트에 정의된 항목 호출 (repo는 3n-e4b로 설정되어 있어야 함)
-        ok_3n = False
-        try:
-            ok_3n = dm.download_gemma_multimodal_model()
-        except Exception as e:
-            logger.warning(f"Gemma 3n-e4b 다운로드 중 오류: {e}")
-
-        if not ok_3n:
-            # 폴백: 2-2b-it을 직접 시도
-            try:
-                from huggingface_hub import snapshot_download
-                target = _gemma2b_dir()
-                snapshot_download(
-                    repo_id="google/gemma-2-2b-it",
-                    local_dir=str(target),
-                    local_dir_use_symlinks=False,
-                    resume_download=True,
-                )
-                logger.info("✅ Gemma 2-2b-it 폴백 다운로드 완료")
-            except Exception as e:
-                logger.warning(f"Gemma 2-2b-it 폴백 다운로드 실패: {e}")
-    else:
-        found = get_gemma_dir(prefer_3n=True)
-        logger.info(f"✅ Gemma 로컬 모델 사용: {found}")
-
-    # 3) EXAONE (옵션)
-    if download_exaone and not get_exaone_dir().exists():
-        logger.info("🧠 EXAONE 4.0 32B 모델이 없어 자동 다운로드를 시작합니다...")
-        try:
-            ok = dm.download_exaone_model()
-            if not ok:
-                logger.warning("EXAONE 다운로드 실패")
-        except Exception as e:
-            logger.warning(f"EXAONE 다운로드 중 오류: {e}")
+    # 다운로드는 수행하지 않음: 오프라인/로컬 환경 우선
+    # 멀티모달/EXAONE은 경로가 있을 때만 사용하도록 로그만 출력
+    found = get_gemma_dir(prefer_3n=True)
+    if found.exists():
+        label = "A.X 4.0 VL Light" if ("a.x-4.0-vl-light" in str(found).lower() or "ax-4.0-vl-light" in str(found).lower()) else "Gemma"
+        logger.info(f"✅ {label} 멀티모달 모델 사용 가능: {found}")
 
     _BOOTSTRAP_DONE = True
 
@@ -283,25 +316,104 @@ def preload_models() -> None:
 
     너무 무겁지 않게 각 모델을 가볍게 인스턴스화만 수행합니다.
     실패해도 치명적이지 않으며, 런타임 시 다시 로드됩니다.
+    
+    파일 기반 잠금을 사용하여 다중 프로세스 환경에서 개별 모델 로딩 동기화
     """
-    # Midm-2.0
+    import fcntl
+    import time
+    from pathlib import Path
+    
+    # 개별 모델 로딩 동기화를 위한 잠금 파일
+    lock_file_path = Path(__file__).parent.parent.parent / ".preload_models_lock"
+    preload_done_file = Path(__file__).parent.parent.parent / ".preload_models_done"
+    
+    # 이미 사전 로드가 완료되었다면 스킵
+    if preload_done_file.exists():
+        logger.debug("모델 사전 로드가 이미 완료됨 (파일 확인)")
+        return
+    
+    # 잠금 파일로 동기화
     try:
-        midm = get_midm_path()
-        if midm.exists():
-            from src.utils.korean_text_model import KoreanTextModel
-            _ = KoreanTextModel(model_path=str(midm), n_ctx=1024, n_threads=int(os.getenv("LOCAL_LLM_THREADS", "2")))
-            logger.info("✅ Midm-2.0 사전 로드 완료")
+        with open(lock_file_path, 'w') as lock_file:
+            try:
+                # 비블로킹 잠금 시도
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                
+                # 잠금 획득 성공 - 이미 완료되었는지 다시 확인
+                if preload_done_file.exists():
+                    logger.debug("모델 사전 로드가 다른 프로세스에서 완료됨")
+                    return
+                
+                logger.info("🔄 프로세스 동기화 모델 사전 로드 시작...")
+                
+                # 로컬 GGUF 사전 로드
+                try:
+                    from src.utils.model_bootstrap import get_gguf_path
+                    gguf = get_gguf_path()
+                    if gguf.exists():
+                        from src.utils.korean_text_model import KoreanTextModel
+                        _ = KoreanTextModel(model_path=str(gguf), n_ctx=1024, n_threads=int(os.getenv("LOCAL_LLM_THREADS", "2")))
+                        logger.info("✅ GGUF 사전 로드 완료")
+                except Exception as e:
+                    logger.warning(f"GGUF 사전 로드 실패(무시): {e}")
+
+                # A.X 멀티모달 모델
+                try:
+                    ax_dir = get_ax_vl_dir()
+                    if ax_dir.exists():
+                        from src.utils.ax_multimodal import AXMultimodalModel
+                        _ = AXMultimodalModel(model_path=str(ax_dir), device="auto", max_memory_gb=4)
+                        logger.info("✅ A.X 멀티모달 사전 로드 완료")
+                except Exception as e:
+                    logger.warning(f"A.X 사전 로드 실패(무시): {e}")
+                
+                # 완료 표시 파일 생성
+                preload_done_file.touch()
+                logger.info("🎉 프로세스 동기화 모델 사전 로드 완료")
+                
+            except BlockingIOError:
+                # 다른 프로세스가 이미 잠금 보유 중 - 완료될 때까지 대기
+                logger.debug("다른 프로세스가 모델 사전 로드 중... 대기")
+                max_wait_time = 120  # 최대 2분 대기
+                wait_start = time.time()
+                
+                while time.time() - wait_start < max_wait_time:
+                    if preload_done_file.exists():
+                        logger.debug("모델 사전 로드가 다른 프로세스에서 완료됨")
+                        return
+                    time.sleep(0.5)
+                
+                logger.warning("모델 사전 로드 대기 시간 초과 - 계속 진행")
+                
     except Exception as e:
-        logger.warning(f"Midm-2.0 사전 로드 실패(무시): {e}")
+        logger.warning(f"파일 잠금 사전 로드 실패: {e}")
+        # 폴백: 잠금 없이 기본 로딩 시도
+        logger.info("🔄 폴백 모드: 잠금 없이 모델 사전 로드")
+        
+        # Midm-2.0 (폴백)
+        try:
+            midm = get_midm_path()
+            if midm.exists():
+                from src.utils.korean_text_model import KoreanTextModel
+                _ = KoreanTextModel(model_path=str(midm), n_ctx=1024, n_threads=int(os.getenv("LOCAL_LLM_THREADS", "2")))
+                logger.info("✅ Midm-2.0 폴백 사전 로드 완료")
+        except Exception as e:
+            logger.warning(f"Midm-2.0 폴백 사전 로드 실패(무시): {e}")
 
-    # Gemma 멀티모달 (3n-e4b 또는 2-2b-it 어느 쪽이든)
-    try:
-        gdir = get_gemma_dir(prefer_3n=True)
-        if gdir.exists():
-            from src.utils.gemma_multimodal import GemmaMultimodalModel
-            _ = GemmaMultimodalModel(model_path=str(gdir), load_in_4bit=False, max_memory_gb=4)
-            logger.info("✅ Gemma 멀티모달 사전 로드 완료")
-    except Exception as e:
-        logger.warning(f"Gemma 사전 로드 실패(무시): {e}")
-
-
+        # A.X 멀티모달 모델 (폴백)
+        try:
+            ax_dir = get_ax_vl_dir()
+            if ax_dir.exists():
+                from src.utils.ax_multimodal import AXMultimodalModel
+                _ = AXMultimodalModel(model_path=str(ax_dir), device="auto", max_memory_gb=4)
+                logger.info("✅ A.X 멀티모달 폴백 사전 로드 완료")
+        except Exception as e:
+            logger.warning(f"A.X 폴백 사전 로드 실패(무시): {e}")
+    
+    finally:
+        # 잠금 파일 정리 (선택적)
+        try:
+            if lock_file_path.exists():
+                lock_file_path.unlink()
+        except Exception:
+            pass

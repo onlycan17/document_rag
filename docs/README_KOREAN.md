@@ -17,8 +17,8 @@
 
 ```bash
 # 저장소 클론
-git clone https://github.com/WithRun-Office/document_rag.git
-cd document_rag
+git clone <your-repo-url>
+cd ragTest
 
 # 가상환경 생성 및 활성화
 python -m venv venv
@@ -28,7 +28,7 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # OCR 지원 설치 (선택사항, 스캔된 PDF용)
-./install_ocr.sh  # Windows는 수동 설치 필요
+bash scripts/setup/install_ocr.sh  # Windows는 수동 설치 필요
 ```
 
 ### 2. 환경 설정
@@ -38,7 +38,8 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # .env 파일 편집하여 API 키 설정
-# 최소 하나의 LLM API 키가 필요합니다:
+# 최소 하나의 LLM/임베딩 API 키가 필요합니다:
+# - UPSTAGE_API_KEY (임베딩, 권장)
 # - OPENAI_API_KEY
 # - GOOGLE_API_KEY  
 # - ANTHROPIC_API_KEY
@@ -47,6 +48,10 @@ cp .env.example .env
 ### 3. 실행
 
 ```bash
+# 통합 실행 도구(권장)
+python run_rag.py
+
+# 또는 직접 실행
 streamlit run app.py
 ```
 
@@ -103,8 +108,12 @@ streamlit run app.py
 
 ## 기여하기
 
-버그 제보나 기능 제안은 [Issues](https://github.com/WithRun-Office/document_rag/issues)에 등록해주세요.
+버그 제보나 기능 제안은 이 저장소의 Issues에 등록해주세요.
 
 ## 라이선스
 
 MIT License
+
+## 문서 언어 정책
+
+본 프로젝트는 한국어 문서를 기본으로 유지하며, 필요한 경우 영어판을 병행 관리합니다.

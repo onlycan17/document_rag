@@ -144,13 +144,24 @@ CONTENT|0
         
         try:
             response = self._call_local_llm(prompt, temperature=0.1, max_tokens=50)
-            
-            if response.startswith("HEADING|"):
-                level = int(response.split("|")[1])
-                return {'is_heading': True, 'level': level, 'confidence': 0.8}
-            else:
-                return {'is_heading': False, 'level': 0, 'confidence': 0.8}
-                
+
+            # 첫 유효 라인만 사용 (LLM이 추가 텍스트를 반환해도 안전)
+            first_resp_line = next((ln.strip() for ln in response.splitlines() if ln.strip()), "")
+
+            # HEADING|N 패턴만 정규식으로 안전 파싱
+            m = re.search(r"^HEADING\|(\d+)", first_resp_line)
+            if m:
+                try:
+                    level = int(m.group(1))
+                    # 레벨 범위 가드(1~6)
+                    level = max(1, min(level, 6))
+                    return {'is_heading': True, 'level': level, 'confidence': 0.8}
+                except ValueError:
+                    pass
+
+            # CONTENT|0 또는 기타 응답은 본문으로 처리
+            return {'is_heading': False, 'level': 0, 'confidence': 0.8}
+
         except Exception as e:
             logger.warning(f"⚠️ 구조 식별 LLM 호출 실패: {str(e)}")
             return {'is_heading': False, 'level': 0, 'confidence': 0.3}

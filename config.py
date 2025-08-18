@@ -29,6 +29,21 @@ class Settings(BaseSettings):
     local_llm_context_window: int = int(os.getenv("LOCAL_LLM_CONTEXT_WINDOW", "4096"))  # 로컬 모델 컨텍스트 윈도우
     local_llm_timeout: int = int(os.getenv("LOCAL_LLM_TIMEOUT", "120"))  # 로컬 모델 응답 타임아웃 (초)
     local_llm_max_retries: int = int(os.getenv("LOCAL_LLM_MAX_RETRIES", "3"))  # 로컬 모델 재시도 횟수
+    # 로컬 GGUF 경로(서버 없이 오프라인 추론)
+    local_llm_gguf_path: Optional[str] = os.getenv("LOCAL_LLM_GGUF_PATH")
+    # 업로드/전처리 과정에서 HTTP 폴백 비활성화 여부
+    disable_http_fallback: bool = os.getenv("DISABLE_HTTP_FALLBACK", "false").lower() == "true"
+    # 로컬 LLM 성능/안정성 파라미터
+    local_llm_threads: int = int(os.getenv("LOCAL_LLM_THREADS", "8"))
+    local_llm_n_gpu_layers: int = int(os.getenv("LOCAL_LLM_N_GPU_LAYERS", "0"))
+    # 메모리 보호용 최대 컨텍스트 상한 (llama.cpp)
+    local_llm_max_context_cap: int = int(os.getenv("LOCAL_LLM_MAX_CONTEXT_CAP", "65536"))
+    
+    # Gemma Multimodal 모델 설정
+    gemma_multimodal_dir: Optional[str] = os.getenv("GEMMA_MULTIMODAL_DIR")
+    
+    # A.X Multimodal 모델 설정
+    ax_multimodal_dir: Optional[str] = os.getenv("AX_MULTIMODAL_DIR")
     
     # MD 후처리 설정
     enable_md_postprocessing: bool = os.getenv("ENABLE_MD_POSTPROCESSING", "true").lower() == "true"

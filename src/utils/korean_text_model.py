@@ -1,7 +1,7 @@
 """
-한국어 텍스트 모델 - Midm-2.0-Base-Instruct GGUF 모델 사용
+한국어 텍스트 모델 - 로컬 GGUF 모델 사용(모델명 고정 의존 제거)
 
-이 모듈은 KT의 한국어-영어 바이링귀 모델을 사용하여
+이 모듈은 local_models 디렉토리에 존재하는 GGUF 모델을 사용하여
 문서의 주제와 핵심 내용을 추출합니다.
 """
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class KoreanTextModel:
-    """Midm-2.0을 사용한 한국어 텍스트 분석"""
+    """로컬 GGUF를 사용한 한국어 텍스트 분석"""
     
     def __init__(self, 
                  model_path: Optional[str] = None,
@@ -37,8 +37,8 @@ class KoreanTextModel:
             self.model_path = Path(model_path)
         else:
             try:
-                from src.utils.model_bootstrap import get_midm_path
-                self.model_path = get_midm_path()
+                from src.utils.model_bootstrap import get_gguf_path
+                self.model_path = get_gguf_path()
             except Exception:
                 self.model_path = self._get_model_path(None)
         self.n_ctx = n_ctx
@@ -53,15 +53,17 @@ class KoreanTextModel:
         if model_path:
             return Path(model_path)
         
-        # 기본 경로
-        project_root = Path(__file__).parent.parent.parent
-        default_path = project_root / "models" / "korean" / "Midm-2.0-Base-Instruct-Q4_K_S.gguf"
-        
-        if not default_path.exists():
-            logger.warning(f"⚠️ 모델 파일이 없습니다: {default_path}")
-            logger.info("scripts/download_models.py를 실행하여 모델을 다운로드하세요.")
-            
-        return default_path
+        # Fallback: local_models 또는 models 아래 임의 GGUF 탐색
+        try:
+            from src.utils.model_bootstrap import get_gguf_path
+            p = get_gguf_path()
+            return p
+        except Exception:
+            project_root = Path(__file__).parent.parent.parent
+            fallback = project_root / "models" / "local" / "model.gguf"
+            if not fallback.exists():
+                logger.warning(f"⚠️ 모델 파일을 찾을 수 없습니다. LOCAL_LLM_GGUF_PATH를 설정하거나 local_models에 GGUF를 배치하세요: {fallback}")
+            return fallback
     
     def _load_model(self):
         """모델 로드"""

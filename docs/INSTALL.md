@@ -1,89 +1,105 @@
-# Installation Guide
+# 설치 가이드
 
-This RAG chatbot application requires both Python dependencies and system packages for full functionality.
+이 RAG 챗봇 애플리케이션은 원활한 동작을 위해 Python 패키지와 시스템 패키지(OCR 등) 설치가 필요합니다.
 
-## Quick Start
+## 빠른 시작
 
-### 1. Install Python Dependencies
+### 1. Python 의존성 설치
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Install System Dependencies (for OCR support)
+### 2. 시스템 의존성 설치(OCR 지원)
 
-For OCR functionality with scanned PDFs, you need to install system packages:
+스캔된 PDF의 OCR 기능을 사용하려면 시스템 패키지 설치가 필요합니다:
 
 ```bash
-./install_ocr.sh
+bash scripts/setup/install_ocr.sh
 ```
 
-This script will install:
-- **Tesseract OCR**: For optical character recognition
-- **Poppler utilities**: For PDF to image conversion
-- **Korean language pack**: For Korean text recognition
+해당 스크립트는 다음을 설치합니다:
+- **Tesseract OCR**: 광학 문자 인식 엔진
+- **Poppler 유틸리티**: PDF → 이미지 변환 도구
+- **한국어 언어팩**: 한국어 텍스트 인식 지원
 
-### Alternative: Use Docker (Coming Soon)
+### 대안: Docker 사용(준비 중)
 
-A Docker image with all dependencies pre-installed will be available soon.
+모든 의존성이 사전 설치된 Docker 이미지가 곧 제공될 예정입니다.
 
-## Platform-Specific Notes
+## 플랫폼별 안내
 
 ### macOS
-- Requires Homebrew for system package installation
-- All dependencies can be installed via the provided scripts
+- Homebrew가 필요합니다(시스템 패키지 설치).
+- 제공된 스크립트로 모든 의존성을 설치할 수 있습니다.
 
 ### Linux (Ubuntu/Debian)
-- Uses apt-get for system packages
-- May require sudo permissions
+- 시스템 패키지는 apt-get을 사용합니다.
+- sudo 권한이 필요할 수 있습니다.
 
 ### Linux (RedHat/CentOS)
-- Uses yum for system packages
-- May require sudo permissions
+- 시스템 패키지는 yum을 사용합니다.
+- sudo 권한이 필요할 수 있습니다.
 
 ### Windows
-- Not officially supported yet
-- Consider using WSL2 (Windows Subsystem for Linux)
+- 아직 공식 지원하지 않습니다.
+- WSL2(Windows Subsystem for Linux) 사용을 권장합니다.
 
-## Dependency Details
+## 의존성 상세
 
-### Python Packages (via pip)
-- **Core**: streamlit, langchain ecosystem
+### Python 패키지(pip)
+- **Core**: streamlit, langchain 생태계
 - **Vector DB**: faiss-cpu, chromadb
 - **ML/AI**: sentence-transformers, torch, transformers
-- **PDF Processing**: pypdf, PyPDF2, pdf2image[jpeg]
-- **OCR**: pytesseract (Python wrapper for Tesseract)
-- **API Clients**: openai, anthropic, google-generativeai
+- **PDF 처리**: pypdf, PyPDF2, pdf2image[jpeg]
+- **OCR**: pytesseract(Tesseract의 Python 래퍼)
+- **API 클라이언트**: openai, anthropic, google-generativeai
 
-### System Packages (via package manager)
-- **tesseract-ocr**: OCR engine
-- **tesseract-ocr-kor**: Korean language support
-- **poppler-utils**: PDF rendering (required by pdf2image)
-
-## Verification
-
-After installation, verify everything is working:
+### 업스테이지 임베딩 사용 시 추가 설치
+- 이 프로젝트는 기본 `requirements.txt`에서 `langchain-upstage`를 제외합니다. 이유: `langchain-upstage`가 `tokenizers<0.21`을 강제하여 최신 `transformers`(tokenizers>=0.21)와 충돌하기 때문입니다.
+- 업스테이지 임베딩을 사용할 경우, 다음과 같이 의존성 없이 개별 설치하세요:
 
 ```bash
-# Check Python dependencies
+pip install --no-deps langchain-upstage
+```
+
+- 설치 후 `.env`에 `UPSTAGE_API_KEY`를 설정하세요.
+
+### 시스템 패키지(패키지 관리자)
+- **tesseract-ocr**: OCR 엔진
+- **tesseract-ocr-kor**: 한국어 언어팩
+- **poppler-utils**: PDF 렌더링(pdf2image가 필요로 함)
+
+## 설치 검증
+
+설치 이후, 다음 명령으로 정상 동작을 확인하세요:
+
+```bash
+# Python 의존성 확인
 python -c "import streamlit, langchain, pytesseract; print('Python dependencies OK')"
 
-# Check system dependencies
+# 시스템 의존성 확인
 tesseract --version
 pdftoppm -v
 ```
 
-## Troubleshooting
+업스테이지 임베딩 사용 시 추가 확인:
 
-### OCR not working
-- Ensure Tesseract is installed: `which tesseract`
-- Check language packs: `tesseract --list-langs`
+```bash
+python -c "import langchain_upstage; print('langchain-upstage OK')"
+```
 
-### PDF to image conversion failing
-- Ensure poppler is installed: `which pdftoppm`
-- On macOS: `brew install poppler`
-- On Linux: `sudo apt-get install poppler-utils`
+## 문제 해결
 
-### Import errors
-- Ensure all packages installed: `pip install -r requirements.txt`
-- Check Python version: Requires Python 3.8+
+### OCR가 동작하지 않을 때
+- Tesseract 설치 확인: `which tesseract`
+- 언어팩 확인: `tesseract --list-langs`
+
+### PDF → 이미지 변환 실패
+- poppler 설치 확인: `which pdftoppm`
+- macOS: `brew install poppler`
+- Linux: `sudo apt-get install poppler-utils`
+
+### Import 오류
+- 패키지 설치 확인: `pip install -r requirements.txt`
+- Python 버전 확인: Python 3.8+ 필요
