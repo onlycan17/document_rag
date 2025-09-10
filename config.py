@@ -1,28 +1,32 @@
 import os
 from dotenv import load_dotenv
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 load_dotenv()
 
 class Settings(BaseSettings):
+    # Pydantic v2 설정: .env 사용, 알 수 없는 환경변수는 무시(에러 방지)
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     # LLM 제공자 설정
     llm_provider: str = "local"  # "openai", "google", "anthropic", "local"
     
     # OpenAI 설정
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
-    openai_model: str = "gpt-3.5-turbo"
+    openai_model: str = "gpt-5-mini"
     
     # Google Gemini 설정
     google_api_key: Optional[str] = os.getenv("GOOGLE_API_KEY")
-    google_model: str = "gemini-1.5-flash"  # 또는 "gemini-1.5-pro", "gemini-pro"
+    google_model: str = "gemini-2.5-flash"  # 또는 "gemini-2.5-pro", "gemini-pro"
     
     # Anthropic Claude 설정
     anthropic_api_key: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
     anthropic_model: str = "claude-3-haiku-20240307"
     
     # 로컬 LLM 설정 (OpenAI 호환 API)
-    local_llm_base_url: str = os.getenv("LOCAL_LLM_BASE_URL", "http://localhost:1234")
+    local_llm_base_url: str = os.getenv("LOCAL_LLM_BASE_URL", "http://210.126.109.57:1620")
+    # 여러 로컬 서버 지원(콤마 구분). 예: "http://210.126.109.57:1620,http://210.126.109.57:1621,http://210.126.109.57:1622"
+    local_llm_base_urls: str | None = os.getenv("LOCAL_LLM_BASE_URLS")
     local_llm_model: str = os.getenv("LOCAL_LLM_MODEL", "midm-2.0-base-instruct")
     local_llm_api_key: str = os.getenv("LOCAL_LLM_API_KEY", "not-needed")  # 일부 로컬 서버는 API 키 필요
     local_llm_max_tokens: int = int(os.getenv("LOCAL_LLM_MAX_TOKENS", "512"))  # 로컬 모델 최대 토큰 (더 보수적으로)
@@ -53,6 +57,28 @@ class Settings(BaseSettings):
     embedding_provider: str = "upstage"  # "openai", "local", "upstage"
     embedding_model_name: str = "sentence-transformers/xlm-r-100langs-bert-base-nli-stsb-mean-tokens"
 
+    # 로컬 서버 기반 이미지 처리(Flux 등) 사용 여부
+    use_local_image_server: bool = os.getenv("USE_LOCAL_IMAGE_SERVER", "true").lower() == "true"
+    local_image_relevance_threshold: float = float(os.getenv("LOCAL_IMAGE_RELEVANCE_THRESHOLD", "0.6"))
+
+    # 이미지 분석 프로바이더 (pdf 전처리용): "local" | "openrouter"
+    image_analysis_provider: str = os.getenv("IMAGE_ANALYSIS_PROVIDER", "local")
+    # 로컬 멀티모달 선호 포트(1620 고정 요청)
+    local_mm_prefer_port: str = os.getenv("LOCAL_MM_PREFER_PORT", "1620")
+
+    # OpenRouter (외부 API) 설정 — 사용자 .env에 OPNEROUTER_API_KEY 키가 존재
+    # 주의: 오타 포함 정확한 이름을 사용 (OPNEROUTER_API_KEY)
+    openrouter_api_key: Optional[str] = os.getenv("OPNEROUTER_API_KEY")
+    openrouter_api_base: str = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api")
+    openrouter_mm_model: str = os.getenv("OPENROUTER_MM_MODEL", "qwen/qwen2.5-vl-32b-instruct")
+
+    # 이미지 향상(선택) 설정
+    enable_image_enhancement: bool = os.getenv("ENABLE_IMAGE_ENHANCEMENT", "false").lower() == "true"
+    image_enhancement_prompt: str = os.getenv(
+        "IMAGE_ENHANCEMENT_PROMPT",
+        "Enhance readability for OCR: denoise, increase contrast, sharpen, preserve original content."
+    )
+
     # 업스테이지 임베딩 설정
     upstage_api_key: Optional[str] = os.getenv("UPSTAGE_API_KEY")
     upstage_embedding_model: str = "solar-embedding-1-large-query"
@@ -66,8 +92,8 @@ class Settings(BaseSettings):
     vector_db_type: str = "faiss"  # "faiss" 또는 "chromadb"
 
     # 청크 설정 - 성능 최적화
-    chunk_size: int = int(os.getenv("CHUNK_SIZE", "1200"))  # 더 큰 청크로 맥락 유지
-    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "200"))  # 오버랩 증가로 연속성 향상
+    chunk_size: int = int(os.getenv("CHUNK_SIZE", "150"))  # 검색 정밀도 향상을 위한 청크 크기 조정
+    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "50"))  # 오버랩 조정
     # 의미 기반 청킹 설정
     use_semantic_chunking: bool = os.getenv("USE_SEMANTIC_CHUNKING", "false").lower() == "true"
     semantic_chunk_sentences: int = 3  # 의미 기반 청킹 시 문장 단위
@@ -75,8 +101,8 @@ class Settings(BaseSettings):
     # RAG 설정 - 검색 성능 최적화
     k_documents: int = int(os.getenv("K_DOCUMENTS", "12"))  # 더 많은 문서를 검색하여 관련 정보 포함 가능성 높임
     search_threshold_faiss: float = 1.5  # FAISS 임계값 (거리 기반, 25% 유사도에 해당, 더 관대한 검색)
-    search_threshold_chromadb: float = 0.38  # ChromaDB 임계값 (유사도 38%)
-    use_mmr_search: bool = os.getenv("USE_MMR_SEARCH", "false").lower() == "true"  # MMR 검색 비활성화 (점수 계산 문제)
+    search_threshold_chromadb: float = 0.30  # ChromaDB 임계값 (유사도 30%로 조정)
+    use_mmr_search: bool = os.getenv("USE_MMR_SEARCH", "true").lower() == "true"  # MMR 검색 활성화 (다양성 향상)
     mmr_diversity_score: float = 0.3  # MMR 다양성 점수
 
     # 하이브리드 검색 설정
@@ -116,8 +142,5 @@ class Settings(BaseSettings):
     # UI 설정
     app_title: str = "쉽게 설명하는 RAG 챗봇"
     app_description: str = "복잡한 문서도 쉽게! 궁금한 내용을 질문하세요. 일반인도 이해할 수 있도록 친절하게 설명해드립니다."
-
-    class Config:
-        env_file = ".env"
 
 settings = Settings()

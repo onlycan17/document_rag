@@ -17,6 +17,7 @@ from src.constants import (
     REQUEST_TIMEOUT, LOCAL_MODEL_TIMEOUT, MAX_RETRIES, RETRY_DELAY, RETRY_DELAY_LOCAL
 )
 import logging
+import re
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import os
@@ -28,6 +29,16 @@ from .parallel_processor import ParallelRAGProcessor
 
 # 로거 설정
 logger = logging.getLogger(__name__)
+
+# 성능 유틸
+try:
+    from src.utils.perf import now
+except Exception:
+    # 유틸 불가 시 표준 time 대체
+    import time
+
+    def now() -> float:
+        return time.perf_counter()
 
 class RAGChain:
     def __init__(self, provider: Optional[str] = None, model: Optional[str] = None, vector_db: Optional[VectorDatabase] = None):
@@ -142,150 +153,60 @@ class RAGChain:
             )
         
         elif provider == "local":
-            """로컬 모델 경로 우선 사용.
-            - midm-2.0-gguf: llama.cpp(GGUF)
-            - exaone-4.0-32b: HF Transformers 파이프라인
-            - 그 외: 기존 OpenAI 호환 서버로 폴백 (settings.local_llm_base_url)
+            """로컬 모델: OpenAI 호환 HTTP 엔드포인트 사용.
+            - 엔드포인트: {base}/v1
+            - 헬스체크: GET {base}/health
+            - 큐 상태: GET {base}/v1/queue/stats
+            - 모델 목록: GET {base}/v1/models
+            - 채팅: POST {base}/v1/chat/completions
+            - 임베딩: POST {base}/v1/embeddings
             """
-            import os
-            from pathlib import Path
             from src.constants import LOCAL_MODEL_TIMEOUT
-            
-            model_lower = (actual_model or "").lower()
-            project_root = Path(__file__).parent.parent.parent
-
-            # 1) 임의 GGUF (llama.cpp) – local_models 내 탐색
-            try:
-                from src.utils.model_bootstrap import get_gguf_path
-                # Qwen 우선 사용을 위해 키워드 가중치 부여
-                gguf_path = str(get_gguf_path(preferred_keywords=["qwen", "qwen2.5"]))
-            except Exception:
-                gguf_path = os.getenv("LOCAL_LLM_GGUF_PATH", "")
-
-            # 디렉토리가 전달된 경우 내부에서 *.gguf 파일 탐색
-            from glob import glob
-            if gguf_path and os.path.isdir(gguf_path):
-                candidates = glob(os.path.join(gguf_path, "*.gguf"))
-                # Qwen 우선, EXAONE 제외
-                qwen_pref = [c for c in candidates if "qwen" in os.path.basename(c).lower()]
-                non_exa = [c for c in candidates if "exaone" not in os.path.basename(c).lower()]
-                if qwen_pref:
-                    gguf_path = qwen_pref[0]
-                elif non_exa:
-                    gguf_path = non_exa[0]
-                elif candidates:
-                    gguf_path = candidates[0]
-
-            # EXAONE GGUF는 llama.cpp에서 미지원 아키텍처일 수 있어 제외
-            if gguf_path and "exaone" in os.path.basename(gguf_path).lower():
-                # 프로젝트 전체에서 대안 검색
-                candidates = glob(str(project_root / "local_models" / "**" / "*.gguf"), recursive=True)
-                qwen_pref = [c for c in candidates if "qwen" in os.path.basename(c).lower()]
-                non_exa = [c for c in candidates if "exaone" not in os.path.basename(c).lower()]
-                if qwen_pref:
-                    gguf_path = qwen_pref[0]
-                elif non_exa:
-                    gguf_path = non_exa[0]
-
-            if gguf_path and os.path.isfile(gguf_path):
-                logger.info(f"로컬 GGUF 모델 선택: {gguf_path}")
-                # 모델 유형 판단 (샘플링/프롬프트 특화)
-                base_name = os.path.basename(gguf_path).lower()
-                self.is_qwen_gguf = ("qwen" in base_name)
-                self.is_midm_gguf = ("midm" in base_name)
-                # 메모리 보호용 n_ctx 상한 적용
-                n_ctx_used = min(settings.local_llm_context_window, getattr(settings, 'local_llm_max_context_cap', settings.local_llm_context_window))
-                if n_ctx_used < settings.local_llm_context_window:
-                    logger.warning(f"n_ctx {settings.local_llm_context_window} -> {n_ctx_used} (LOCAL_LLM_MAX_CONTEXT_CAP 적용)")
-                # Qwen 전용 샘플링 파라미터
-                qwen_kwargs = {}
-                if self.is_qwen_gguf:
-                    qwen_kwargs = {
-                        "top_p": 0.9,
-                        "top_k": 50,
-                        "repeat_penalty": 1.18,
-                        "repeat_last_n": 256,
-                        "stop": ["<|im_end|>"]
-                    }
-                # Midm 전용 샘플링/스톱(일반 instruct 스타일)
-                midm_kwargs = {}
-                if self.is_midm_gguf:
-                    midm_kwargs = {
-                        "top_p": 0.9,
-                        "top_k": 50,
-                        "repeat_penalty": 1.12,
-                        "repeat_last_n": 256,
-                        "stop": ["</answer>", "\n\n\n"]
-                    }
-                return LlamaCpp(
-                    model_path=gguf_path,
-                    n_ctx=n_ctx_used,
-                    n_threads=getattr(settings, 'local_llm_threads', 8),
-                    n_gpu_layers=getattr(settings, 'local_llm_n_gpu_layers', 0),
-                    temperature=settings.temperature,
-                    max_tokens=max_tokens,
-                    **({} | qwen_kwargs | midm_kwargs),
-                )
-
-            # 2) EXAONE 4.0 32B (Transformers)
-            if model_lower in ["exaone-4.0-32b", "lgai-exaone/exaone-4.0-32b"]:
+            # 모델에 엔드포인트가 포함된 경우(형식: "<model_id>|<base_url>") 우선 사용
+            override_base = None
+            if actual_model and isinstance(actual_model, str) and "|" in actual_model:
                 try:
-                    from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
-                    import torch
-                    from transformers import pipeline
-
-                    # 로컬 탐색 우선 (model_bootstrap → 재귀 탐색 폴백)
-                    import os
-                    local_dir = None
-                    try:
-                        from src.utils.model_bootstrap import get_exaone_dir
-                        d = get_exaone_dir()
-                        if d.exists():
-                            local_dir = d
-                    except Exception:
-                        pass
-                    if local_dir is None or not local_dir.exists():
-                        from glob import glob
-                        candidates = glob(str(project_root / "local_models" / "**" / "*exaone*"), recursive=True)
-                        for c in candidates:
-                            if (Path(c) / "config.json").exists():
-                                local_dir = Path(c)
-                                break
-                    model_id = str(local_dir) if local_dir and local_dir.exists() else "LGAI-EXAONE/EXAONE-4.0-32B"
-
-                    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-                    model = AutoModelForCausalLM.from_pretrained(
-                        model_id,
-                        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-                        device_map="auto" if torch.cuda.is_available() else None,
-                        trust_remote_code=True,
-                    )
-                    text_gen = pipeline(
-                        task="text-generation",
-                        model=model,
-                        tokenizer=tokenizer,
-                        max_new_tokens=max_tokens,
-                        temperature=settings.temperature,
-                    )
-                    return HuggingFacePipeline(pipeline=text_gen)
-                except Exception as e:
-                    logger.warning(f"EXAONE 로컬 로딩 실패, HTTP 폴백 시도: {e}")
-
-            # 3) 폴백: OpenAI 호환 로컬 서버 (옵션)
-            if getattr(settings, 'disable_http_fallback', False):
-                raise ValueError(
-                    "로컬 LLM 오프라인 모델을 찾을 수 없고 HTTP 폴백이 비활성화되어 있습니다. "
-                    "LOCAL_LLM_GGUF_PATH를 설정하거나 local_models에 GGUF/Transformers 모델을 배치하세요."
-                )
+                    parts = actual_model.split("|", 1)
+                    actual_model = parts[0]
+                    override_base = parts[1]
+                except Exception:
+                    override_base = None
+            # 스킴 보강 및 프리플라이트 점검
+            def ensure_scheme(u: str) -> str:
+                if not u:
+                    return u
+                u = u.strip()
+                if not (u.startswith("http://") or u.startswith("https://")):
+                    return "http://" + u
+                return u
+            base = ensure_scheme(override_base or settings.local_llm_base_url).rstrip("/")
+            try:
+                from src.utils.http_probe import probe_local_server
+                probe = probe_local_server(base)
+                logger.info(f"로컬 LLM 프리플라이트: base={base} health={probe['health']} models={probe['models']} queue={probe['queue']}")
+                # 모델 엔드포인트가 응답하지 않으면 1620으로 폴백 시도(멀티모달/기본 서버)
+                if not probe.get('models'):
+                    host = base.split('://', 1)[-1].split(':')[0]
+                    cand = f"http://{host}:1620"
+                    probe2 = probe_local_server(cand)
+                    if probe2.get('models'):
+                        logger.warning(f"/v1/models 미응답: {base} → {cand} 폴백")
+                        base = cand
+            except Exception:
+                # 점검 실패 시 그대로 진행
+                pass
+            logger.info(f"로컬 LLM HTTP 엔드포인트 사용: {base} (model={actual_model})")
+            logger.info(f"ChatOpenAI(local) 설정: base_url={base}/v1, model={actual_model}")
             return ChatOpenAI(
-                openai_api_key=settings.local_llm_api_key,
-                openai_api_base=settings.local_llm_base_url + "/v1",
-                model_name=actual_model,
+                api_key=settings.local_llm_api_key,
+                base_url=f"{base}/v1",
+                model=actual_model,
                 temperature=settings.temperature,
                 max_tokens=max_tokens,
                 streaming=streaming,
                 callbacks=callbacks,
-                request_timeout=LOCAL_MODEL_TIMEOUT,
+                timeout=LOCAL_MODEL_TIMEOUT,
+                max_retries=getattr(settings, 'local_llm_max_retries', 3),
             )
         
         else:
@@ -296,25 +217,19 @@ class RAGChain:
         if getattr(self, 'is_qwen_gguf', False):
             template = (
                 "<|im_start|>system\n"
-                "당신은 국사의 전문적인 지식을 초등학교 학생들도 알기쉽게 친절하게 전달하는 AI 어시스턴트입니다.\n"
-                "상세하고 정확한 정보를 제공하면서도, 초등학생들도 이해할 수 있도록 쉽게 설명하는 것이 당신의 역할입니다.\n\n"
-                "답변 시 반드시 지켜야 할 규칙:\n"
-                "1) 상세하고 풍부한 정보 제공 (숫자/날짜/발견사항 포함)\n"
-                "2) 한자/전문 용어는 한글 독음과 의미를 함께 표기하고 처음에 쉬운 설명 추가\n"
-                "3) 구조화된 답변(섹션/번호/불릿)\n"
-                "4) 정확성과 신뢰성(문서 근거, 출처 언급)\n"
-                "5) 종합적 답변(핵심→맥락)\n"
-                "6) 한국어 전용 출력: 반드시 한글만 사용하고, 영어 표현은 한국어로 풀어쓰세요.\n"
-                "7) 답변은 반드시 완결된 문장으로 끝내세요. 다 쓰지 못했다면 이어서 완성한 뒤 종료하세요.\n"
+                "역할: 한국 역사 주제를 한국어로 쉽고 정확하게 설명하는 조력자.\n"
+                "원칙: (1) 사실 근거 (2) 간결하고 쉬운 표현 (3) 번호/불릿으로 정리 (4) 한자/전문 용어는 괄호로 풀어쓰기.\n"
+                "중요: 아래 원칙이나 지침 문구를 답변에 출력하지 말 것. '초등학생 수준' 등 메타 문구 금지.\n"
+                "출력 형식: 질문에 대한 답변 본문만. 도입 멘트(예: '~설명해줄게요')와 예시/지침 제목 출력 금지.\n\n"
                 "<|im_end|>\n"
                 "<|im_start|>user\n"
                 "다음은 검색된 관련 문서들입니다:\n{context}\n\n"
-                "위 문서들을 참고하여 다음 질문에 한국어로 답변하세요:\n{question}\n"
+                "위 문서들을 참고하여 다음 질문에 답변하세요.\n질문: {question}\n"
                 "<|im_end|>\n"
                 "<|im_start|>assistant\n"
             )
         else:
-            template = """당신은 국사의 전문적인 지식을 초등학교 학생들도 알기쉽게 친절하게 전달하는 AI 어시스턴트입니다. 
+            template = """당신은 국사의 전문적인 지식을 초등학교 학생들도 알기쉽게 친절하게 전달하는 AI 어시스턴트입니다.
 상세하고 정확한 정보를 제공하면서도, 초등학생들도 이해할 수 있도록 쉽게 설명하는 것이 당신의 역할입니다.
 
 다음은 검색된 관련 문서들입니다:
@@ -322,46 +237,6 @@ class RAGChain:
 
 위 문서들의 내용을 참고하여 다음 질문에 답변해주세요:
 {question}
-
-답변 시 반드시 지켜야 할 규칙:
-
-1. **상세하고 풍부한 정보 제공**:
-   - 문서에 있는 구체적인 사실, 숫자, 날짜, 발견사항을 빠짐없이 포함하세요
-   - 중요한 세부사항을 생략하지 말고 충실히 전달하세요
-   - 관련된 모든 정보를 체계적으로 정리하여 상세하게 제공하세요
-
-2. **한자(漢字) 및 전문 용어 설명 필수**:
-   - 모든 한자 용어는 반드시 한글 읽음과 의미를 함께 표기하세요
-   - 예시: "土城(토성: 흙으로 쌓은 성)", "城郭(성곽: 성벽과 성문을 갖춘 방어시설)"
-   - 전문 용어도 처음 나올 때 괄호 안에 쉬운 설명을 추가하세요
-   - 예시: "판축(版築: 나무 틀에 흙을 넣고 다져서 쌓는 축성 방법)"
-   - 출처 및 문서의 내용 안에도 한자 및 전문 용어에 대해 한글로 풀이와 쉬운 설명을 추가하세요
-   - 중요한 내용은 강조하여 설명하세요
-   - 어려운 용어 및 개념은 예시를 들어서 설명하세요
-   - 복잡한 내용은 단계별로 나누어 설명하세요
-   - 필요한 경우 배경 지식을 상세히 제공하세요
-
-3. **구조화된 답변**:
-   - 주제별로 섹션을 나누어 정리하세요
-   - 시대순, 중요도순 등 논리적인 순서로 배열하세요
-   - 번호나 불릿 포인트를 활용하여 가독성을 높이세요
-
-4. **정확성과 신뢰성**:
-   - 제공된 문서의 내용을 정확히 인용하세요
-   - 추측이나 일반화는 피하고, 문서에 근거한 사실만 전달하되 상세히 전달하세요
-   - 출처가 명확한 정보는 출처를 함께 언급하세요
-
-5. **종합적인 답변**:
-   - 질문의 핵심에 대한 직접적인 답변을 먼저 제공하세요
-   - 그 다음 관련된 부가 정보와 맥락을 상세히 설명하세요
-   - 가능한 한 많은 관련 정보를 포함하여 완전한 답변을 만드세요
-
-6. **한국어 전용 출력**:
-   - 반드시 한국어만 사용하세요. 영어 단어/문장 사용을 피하고, 필요한 경우 한국어로 풀어써서 설명하세요.
-   - 모델이 영어로 응답하려는 경우에도 한국어 표현으로 변환하여 답변하세요.
-
-7. **완결성**:
-   - 답변은 반드시 완결된 문장으로 끝내세요. 다 쓰지 못했다면 이어서 완성한 뒤 종료하세요.
 
 답변:"""
 
@@ -649,12 +524,57 @@ class RAGChain:
         return min(1.0, quality_score)
     
     def _optimize_content(self, content: str, query: str = "") -> str:
-        """컨텐츠 최적화 - 불필요한 공백만 정리"""
-        # 불필요한 공백 정리
-        content = ' '.join(content.split())
-        
-        # 길이 제한 없이 전체 내용 반환
-        return content
+        """컨텐츠 최적화 및 오염 제거.
+        - 메타 지침/예시/ChatML 토큰 제거(문서 내 포함된 가이드 문구가 답변에 스며드는 현상 방지)
+        """
+        # 1) 공백 정리(과하지 않게)
+        text = re.sub(r"\s+", " ", content).strip()
+
+        # 2) ChatML/역할 토큰 제거
+        blacklist_tokens = ["<|im_start|>", "<|im_end|>", "\nuser ", "\nassistant ", "\nsystem "]
+        for t in blacklist_tokens:
+            text = text.replace(t, " ")
+
+        # 3) 라인 단위로 지침/예시 문구 필터
+        banned_patterns = [
+            r"^\s*답변\s*시\s*지켜야\s*할\s*규칙.*$",
+            r"^\s*이런\s*식으로\s*답변.*$",
+            r"^\s*답변\s*예시.*$",
+            r"^\s*예시.*$",
+        ]
+        lines = [ln for ln in re.split(r"\s*\n\s*", content) if ln.strip()]
+        filtered = []
+        for ln in lines:
+            if any(re.search(p, ln, flags=re.IGNORECASE) for p in banned_patterns):
+                continue
+            if ln.strip() in ("user", "assistant", "system"):
+                continue
+            filtered.append(ln)
+        text = "\n".join(filtered) if filtered else text
+
+        return text
+
+    def _sanitize_output_chunk(self, text: str) -> str:
+        """스트리밍 출력 중 메타/토큰 제거(가벼운 필터)."""
+        if not text:
+            return text
+        # 토큰 제거
+        text = text.replace("<|im_start|>", "").replace("<|im_end|>", "")
+        # 한 줄 지침/예시 라인 제거
+        banned_fragments = [
+            "답변 시 지켜야 할 규칙",
+            "이런 식으로 답변",
+            "답변 예시",
+        ]
+        if any(fr in text for fr in banned_fragments):
+            lines = text.splitlines()
+            kept = [ln for ln in lines if not any(fr in ln for fr in banned_fragments)]
+            text = "\n".join(kept)
+        # 역할 태그 라인 제거
+        role_prefixes = ("user ", "assistant ", "system ")
+        lines = text.splitlines()
+        kept2 = [ln for ln in lines if not ln.strip().lower().startswith(role_prefixes)]
+        return "\n".join(kept2)
     
     def get_last_context_tokens(self) -> int:
         """마지막 쿼리에서 사용된 컨텍스트 토큰 수 반환"""
@@ -669,6 +589,7 @@ class RAGChain:
         - 컨텍스트 최적화
         """
         try:
+            t0 = now()
             # 0. 쿼리 전처리 및 확장
             processed_question = self._preprocess_query(question)
             
@@ -691,7 +612,9 @@ class RAGChain:
                 k_docs = min(LOCAL_MODEL_MAX_DOCUMENTS, settings.k_documents)  # 로컬 모델 제한
                 logger.info(f"로컬 모델 사용 중 - 검색 문서 수를 {k_docs}개로 제한")
             
+            t_search_start = now()
             relevant_docs = self.vector_db.search(processed_question, k=k_docs)
+            t_search = now() - t_search_start
             logger.info(f"검색 결과: {len(relevant_docs)}개 문서")
             
             if not relevant_docs:
@@ -715,11 +638,34 @@ class RAGChain:
                 total_context_length > self.large_context_threshold):
                 # 대량 문서 처리 모드
                 logger.info(f"대량 문서 처리 모드 활성화: {total_context_length:,}자")
-                return self._process_large_context(question, relevant_docs)
+                t_ans_start = now()
+                result = self._process_large_context(question, relevant_docs)
+                t_total = now() - t0
+                # 경량 성능 로그
+                logger.info(
+                    "PERF query: provider=%s model=%s docs=%d search=%.3fs total=%.3fs",
+                    self.current_provider,
+                    self.current_model or getattr(settings, f"{self.current_provider}_model", None),
+                    len(relevant_docs),
+                    t_search,
+                    t_total,
+                )
+                return result
             else:
                 # 기존 방식 처리
                 logger.info(f"기존 방식 처리: {total_context_length:,}자")
-                return self._process_standard_context(question, relevant_docs)
+                t_ans_start = now()
+                result = self._process_standard_context(question, relevant_docs)
+                t_total = now() - t0
+                logger.info(
+                    "PERF query: provider=%s model=%s docs=%d search=%.3fs total=%.3fs",
+                    self.current_provider,
+                    self.current_model or getattr(settings, f"{self.current_provider}_model", None),
+                    len(relevant_docs),
+                    t_search,
+                    t_total,
+                )
+                return result
             
         except Exception as e:
             logger.error(f"쿼리 처리 중 오류 발생: {str(e)}")
@@ -928,60 +874,106 @@ class RAGChain:
         """사용 가능한 모델 목록 반환"""
         models = ModelRegistry.get_all_models()
 
-        # 로컬 서버(LM Studio 등)에서 노출되는 모델과 병합 (있으면 추가)
+        # 로컬: 오프라인(local_models) 사용 중단하고, 서버(1620~1622 등) 모델만 노출
         try:
             server_local_models = self._get_local_models()
         except Exception:
             server_local_models = []
 
-        # 오프라인 로컬 모델 후보 (GGUF / Transformers)
-        # 오프라인 로컬 모델 후보 (GGUF / Transformers)
-        gguf_name = "Local GGUF (llama.cpp)"
-        gguf_desc = "local_models 내 GGUF 자동 탐색"
-        try:
-            from src.utils.model_bootstrap import get_gguf_path
-            p = str(get_gguf_path(preferred_keywords=["qwen", "qwen2.5"]))
-            base = os.path.basename(p).lower()
-            if "qwen" in base and ("1m" in base or "1m" in gguf_desc):
-                gguf_name = "Local GGUF (Qwen 1M)"
-                gguf_desc = os.path.basename(p)
-        except Exception:
-            pass
-
-        offline_local_models = [
-            {"name": gguf_name, "model": "local-gguf", "description": gguf_desc},
-            {"name": "EXAONE-4.0-32B (Transformers)", "model": "exaone-4.0-32b", "description": "로컬 Transformers 모델"},
-        ]
-
-        # 병합
-        existing = {m["model"] for m in models.get("local", [])}
-        merged = list(models.get("local", []))
-        for m in offline_local_models + server_local_models:
-            if m.get("model") not in existing:
-                merged.append(m)
-                existing.add(m.get("model"))
-
-        models["local"] = merged
+        models["local"] = server_local_models
         return models
     
     def _get_local_models(self) -> List[Dict[str, str]]:
-        """로컬 서버에서 사용 가능한 모델 목록 조회"""
+        """로컬 서버(복수)에서 사용 가능한 모델 목록 조회.
+        - `LOCAL_LLM_BASE_URLS`(콤마 구분) 또는 단일 `LOCAL_LLM_BASE_URL`에서 수집
+        - 선택된 모델은 `model` 필드에 `"<id>|<base>"` 형식으로 base 포함
+        """
+        def ensure_scheme(u: str) -> str:
+            u = u.strip()
+            if not u:
+                return u
+            if not (u.startswith("http://") or u.startswith("https://")):
+                return "http://" + u
+            return u
+
+        endpoints: List[str] = []
+        # 1) 명시 리스트
+        if getattr(settings, 'local_llm_base_urls', None):
+            endpoints = [ensure_scheme(e).rstrip('/') for e in str(settings.local_llm_base_urls).split(',') if e.strip()]
+        # 2) 단일 기본 + 형제 포트(1621,1622) 자동 추가
+        base_default = ensure_scheme(getattr(settings, 'local_llm_base_url', '')).rstrip('/')
+        if base_default and base_default not in endpoints:
+            endpoints.append(base_default)
+            # host 추출하여 1621/1622 추가
+            try:
+                from urllib.parse import urlparse
+                p = urlparse(base_default)
+                host = p.hostname or "210.126.109.57"
+                scheme = p.scheme or "http"
+                # 이미 1620인 경우 1621/1622 추가
+                for port in (1621, 1622):
+                    cand = f"{scheme}://{host}:{port}"
+                    if cand not in endpoints:
+                        endpoints.append(cand)
+            except Exception:
+                # 안전 폴백
+                for cand in ("http://210.126.109.57:1621", "http://210.126.109.57:1622"):
+                    if cand not in endpoints:
+                        endpoints.append(cand)
+        # 3) 최종 폴백(명시값 전혀 없을 때)
+        if not endpoints:
+            endpoints = [
+                "http://210.126.109.57:1620",
+                "http://210.126.109.57:1621",
+                "http://210.126.109.57:1622",
+            ]
+
+        collected: List[Dict[str, str]] = []
         try:
             import requests  # 로컬 import로 옵셔널 의존성 처리
-            response = requests.get(f"{settings.local_llm_base_url}/v1/models", timeout=REQUEST_TIMEOUT)
-            if response.status_code == 200:
-                data = response.json()
-                local_models = []
-                for model in data.get("data", []):
-                    local_models.append({
-                        "name": model.get("id", "unknown"),
-                        "model": model.get("id", "unknown"),
-                        "description": f"로컬 모델 - {model.get('owned_by', 'unknown')}"
+        except Exception:
+            return collected
+
+        for base in endpoints:
+            try:
+                response = requests.get(f"{base}/v1/models", timeout=10)
+                if response.status_code != 200:
+                    continue
+                payload = response.json()
+                # 다양한 스키마 대응: {data:[{id:..}]}, {models:[...]}, [..], {"object":"list","data":[..]}
+                items: List[dict] = []
+                if isinstance(payload, dict):
+                    if isinstance(payload.get("data"), list):
+                        items = payload["data"]
+                    elif isinstance(payload.get("models"), list):
+                        items = payload["models"]
+                    else:
+                        # 단일 객체 혹은 예외 스키마는 무시
+                        items = []
+                elif isinstance(payload, list):
+                    # 문자열 목록 혹은 dict 목록
+                    if all(isinstance(x, str) for x in payload):
+                        items = [{"id": x} for x in payload]
+                    else:
+                        items = payload  # 기대: dict 리스트
+
+                for m in items:
+                    # id/name 추출 보강
+                    if isinstance(m, dict):
+                        mid = m.get("id") or m.get("name") or m.get("model") or "unknown"
+                        owner = m.get('owned_by', m.get('owner', 'unknown'))
+                    else:
+                        mid = str(m)
+                        owner = 'unknown'
+                    port = base.split(":")[-1] if ":" in base else base
+                    collected.append({
+                        "name": f"{mid} ({port})",
+                        "model": f"{mid}|{base}",
+                        "description": f"로컬 모델 @ {base} - {owner}"
                     })
-                return local_models if local_models else [{"name": "로컬 모델", "model": "local-model", "description": "현재 실행 중인 모델"}]
-        except:
-            pass
-        return []
+            except Exception:
+                continue
+        return collected
     
     def add_feedback(self, question: str, answer: str, feedback: str):
         """사용자 피드백 저장 (향후 개선을 위한 기능)"""
@@ -1070,10 +1062,12 @@ class RAGChain:
                     chunk_text = str(chunk)
                 
                 if chunk_text:
-                    full_response += chunk_text
+                    # 스트리밍 중 간단한 정화 필터 적용
+                    cleaned = self._sanitize_output_chunk(chunk_text)
+                    full_response += cleaned
                     yield {
                         "type": "content",
-                        "content": chunk_text,
+                        "content": cleaned,
                         "full_content": full_response,
                         "status": "streaming"
                     }
