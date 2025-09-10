@@ -791,15 +791,10 @@ def main() -> None:
             disabled=False
         )
         
-        # 지능형 이미지 추출 옵션 (새로 추가)
-        use_intelligent_extraction = st.checkbox(
-            "🧠 지능형 이미지 추출 (실험적)",
-            value=False,
-            help="로컬 AI 모델을 사용한 지능형 이미지 추출:\n• 문서 주제와 관련된 이미지만 추출\n• 텍스트 이미지는 OCR로 자동 변환\n• Midm-2.0 한국어 모델 사용\n• Gemma-2 멀티모달 모델 사용\n⚠️ 모델 다운로드 필요 (약 12GB)"
-        )
+        # ===== 문서 전처리(텍스트) =====
         
         # 전처리 모델 선택 (새로 추가)
-        st.subheader("🤖 문서 전처리 모델")
+        st.subheader("🤖 문서 전처리(텍스트)")
         
         preprocessing_model_options = {
             "local": "로컬 모델 (기본)",
@@ -824,18 +819,45 @@ def main() -> None:
         )
         st.session_state.enable_multimodal_preprocessing = enable_multimodal
         
+        # 텍스트 전처리 상태 표시(제공자/모델/멀티모달)
+        try:
+            if selected_preprocessing_model == "openai":
+                _model_name = settings.openai_model
+            elif selected_preprocessing_model == "google":
+                _model_name = settings.google_model
+            elif selected_preprocessing_model == "anthropic":
+                _model_name = settings.anthropic_model
+            else:
+                _model_name = "local_default"
+            st.caption(
+                f"텍스트 전처리: {preprocessing_model_options[selected_preprocessing_model]} — "
+                f"모델: {_model_name} — 멀티모달: {'ON' if enable_multimodal else 'OFF'}"
+            )
+        except Exception:
+            pass
+        
         # 멀티모달 모델 정보 표시
         if enable_multimodal:
             multimodal_models = PreprocessingModelFactory.get_multimodal_models()
             with st.expander("📋 지원되는 멀티모달 모델"):
                 available_models = PreprocessingModelFactory.get_available_models()
                 for provider, models in multimodal_models.items():
-                    if available_models.get(provider, {}).get('available', False):
+                    is_available = available_models.get(provider, {}).get('available', False)
+                    # OpenRouter는 별도 경로이므로 별도 가용성 판정
+                    if provider == 'openrouter':
+                        try:
+                            is_available = bool(settings.openrouter_api_key) and \
+                                settings.image_analysis_provider.lower() == 'openrouter'
+                        except Exception:
+                            is_available = False
+                    if is_available and models:
                         st.write(f"**{provider}**: {', '.join(models)}")
         
         # 전처리 모델 상태 표시
         if selected_preprocessing_model == "local":
             st.info("🏠 **로컬 모델**: 빠른 처리, 무료 사용")
+            if enable_multimodal:
+                st.warning("멀티모달 전처리는 외부 API가 필요합니다(OpenAI/Google/Anthropic). 키가 설정되어 있어야 합니다.")
         else:
             api_key_status = "✅ API 키 설정됨"
             if selected_preprocessing_model == "openai" and not settings.openai_api_key:
@@ -845,6 +867,26 @@ def main() -> None:
             elif selected_preprocessing_model == "anthropic" and not settings.anthropic_api_key:
                 api_key_status = "❌ Anthropic API 키가 필요합니다"
             st.caption(api_key_status)
+        
+        # ===== 이미지 추출·OCR(실험적) =====
+        st.subheader("🖼️ 이미지 추출·OCR(실험적)")
+        use_intelligent_extraction = st.checkbox(
+            "🧠 지능형 이미지 추출 활성화",
+            value=False,
+            help="문서의 이미지를 분석하여 관련 이미지만 저장하고, 텍스트 이미지는 OCR로 추출합니다."
+        )
+        if use_intelligent_extraction:
+            try:
+                provider = settings.image_analysis_provider
+                if provider.lower() == 'openrouter':
+                    if settings.openrouter_api_key:
+                        st.caption(f"이미지 분석 프로바이더: OpenRouter — 모델: {settings.openrouter_mm_model}")
+                    else:
+                        st.warning("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되어 있지 않습니다.")
+                else:
+                    st.caption("이미지 분석 프로바이더: Local HTTP 또는 내장 추출기")
+            except Exception:
+                pass
         
         # 현재 설정 상태 표시
         if use_agent_mode:

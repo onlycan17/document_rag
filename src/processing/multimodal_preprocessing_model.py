@@ -63,6 +63,22 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
         base: Dict[str, list[str]] = {
             k: v.copy() for k, v in cls.SUPPORTED_MULTIMODAL_MODELS.items()
         }
+        # OpenRouter(이미지 분석용)도 표시에 포함
+        try:
+            from config import settings as _settings  # 지연 임포트로 순환 의존 방지
+            openrouter_models: list[str] = []
+            if getattr(_settings, "openrouter_mm_model", None):
+                openrouter_models.append(_settings.openrouter_mm_model)
+            # 추가 확장 (콤마 구분)
+            extra_or = getattr(_settings, "extra_multimodal_openrouter_models", None)
+            if extra_or:
+                for name in [s.strip() for s in extra_or.split(",") if s.strip()]:
+                    if name not in openrouter_models:
+                        openrouter_models.append(name)
+            if openrouter_models:
+                base["openrouter"] = openrouter_models
+        except Exception:
+            pass
 
         def extend_unique(dst: list[str], extra_csv: str | None) -> None:
             if not extra_csv:
