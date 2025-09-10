@@ -239,6 +239,17 @@ streamlit run app.py
 
 ## 핵심 워크플로우 - 반드시 이 순서를 따르세요!
 
+## 최신 전처리/멀티모달 업데이트(요약)
+- 기본 전처리 모델을 저비용·멀티모달 우선으로 재정렬
+  - OpenAI: `gpt-4o-mini`, Google: `gemini-1.5-flash-8b`, Anthropic: `claude-3-5-haiku-20241022`
+- 멀티모달 전처리 기본 ON(`ENABLE_MULTIMODAL_PREPROCESSING=true`)
+- 멀티모달 모델 목록 동적 확장(.env):
+  - `EXTRA_MULTIMODAL_OPENAI_MODELS`, `EXTRA_MULTIMODAL_GOOGLE_MODELS`, `EXTRA_MULTIMODAL_ANTHROPIC_MODELS`
+  - OpenAI 목록에 `gpt-5-mini`, `gpt-5-nano` 추가(공식 페이지 미러 근거)
+- OpenRouter를 이용한 지능형 이미지 추출 기본 경로
+  - `IMAGE_ANALYSIS_PROVIDER=openrouter`, `OPENROUTER_MM_MODEL=z-ai/glm-4.5v`, `OPNEROUTER_API_KEY` 필요
+- OpenAI API 호출 경로 개선: Responses API → Chat Completions 폴백
+
 ### 조사 → 계획 → 구현
 
 **절대로 코딩에 바로 뛰어들지 마세요!** 다음 순서를 항상 따르세요:

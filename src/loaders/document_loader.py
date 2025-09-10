@@ -34,15 +34,22 @@ class EnhancedDocumentLoader:
     - 지능형 이미지 추출 지원
     """
     
-    def __init__(self, use_ocr: bool = True, use_agent_preprocessing: bool = False, 
-                 enable_postprocessing: bool = False, use_intelligent_image_extraction: bool = False):
+    def __init__(self, use_ocr: bool = True, use_agent_preprocessing: bool = False,
+                 enable_postprocessing: bool = False, use_intelligent_image_extraction: bool = False,
+                 preprocessing_model: str = 'local', enable_multimodal_preprocessing: bool = False):
         self.use_ocr = use_ocr
         self.use_agent_preprocessing = use_agent_preprocessing
         self.enable_postprocessing = enable_postprocessing
         self.use_intelligent_image_extraction = use_intelligent_image_extraction
+        self.preprocessing_model = preprocessing_model
+        self.enable_multimodal_preprocessing = enable_multimodal_preprocessing
         
         # 지능형 이미지 추출 메타데이터 저장용
         self.image_extraction_metadata = None
+        
+        # 전처리 모델 초기화
+        self._preprocessing_model = None
+        self._initialize_preprocessing_model()
         
         # 기본 텍스트 분할기 (기존 방식)
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -102,6 +109,27 @@ class EnhancedDocumentLoader:
             if not ocr_available:
                 logger.warning("OCR을 사용할 수 없습니다. Tesseract와 한국어 언어팩을 설치해주세요.")
                 self.use_ocr = False
+    
+    def _initialize_preprocessing_model(self):
+        """전처리 모델을 초기화합니다."""
+        try:
+            from src.processing.preprocessing_factory import PreprocessingModelFactory
+            
+            # 선택된 전처리 모델로 초기화
+            self._preprocessing_model = PreprocessingModelFactory.create_model(
+                self.preprocessing_model
+            )
+            logger.info(f"전처리 모델 초기화 완료: {self.preprocessing_model}")
+            
+        except Exception as e:
+            logger.error(f"전처리 모델 초기화 실패: {e}")
+            # 실패 시 로컬 모델로 폴백
+            try:
+                self._preprocessing_model = PreprocessingModelFactory.create_model("local")
+                logger.warning("전처리 모델 초기화 실패, 로컬 모델로 폴백")
+            except Exception as fallback_error:
+                logger.error(f"로컬 모델 폴백도 실패: {fallback_error}")
+                self._preprocessing_model = None
     
     def load_document(self, file_path: str, progress_callback=None) -> List[Document]:
         """
@@ -478,29 +506,52 @@ class EnhancedDocumentLoader:
             try:
                 if progress_callback:
                     progress_callback(0.1, "🧠 지능형 이미지 추출 중...")
-                
-                # 지능형 이미지 추출기 임포트
-                from ..utils.intelligent_image_extractor_korean import IntelligentImageExtractorKorean
-                
-                # 영구 출력 디렉토리 사용
                 from pathlib import Path
-                
                 # PDF 파일명 기반으로 출력 디렉토리 생성
                 pdf_name = Path(file_path).stem
                 output_base_dir = Path("data/extracted_images")
                 output_dir = output_base_dir / pdf_name
                 output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # 지능형 이미지 추출기 초기화
-                extractor = IntelligentImageExtractorKorean(
-                    output_dir=str(output_dir),
-                    relevance_threshold=0.6,
-                    enable_ocr=self.use_ocr,
-                    use_local_models=True  # 로컬 모델 사용
-                )
-                
-                # PDF 처리 및 이미지 추출
-                extraction_results = extractor.process_pdf(file_path, progress_callback)
+
+                extraction_results = None
+                # 1순위: 설정된 이미지 분석 프로바이더
+                if settings.image_analysis_provider.lower() == "openrouter" and settings.openrouter_api_key:
+                    try:
+                        from ..utils.openrouter_image_service import OpenRouterImageService
+                        svc = OpenRouterImageService()
+                        extraction_results = svc.process_pdf(
+                            pdf_path=file_path,
+                            output_dir=str(output_dir),
+                            relevance_threshold=settings.local_image_relevance_threshold,
+                        )
+                        logger.info("OpenRouter를 이용한 지능형 추출 완료")
+                    except Exception as e:
+                        logger.warning(f"OpenRouter 사용 실패, 다른 방법으로 폴백: {e}")
+                if not extraction_results and settings.use_local_image_server:
+                    # 2순위: 로컬 서버(OpenAI 호환)로 이미지 분석/OCR 수행(1620 우선)
+                    try:
+                        from ..utils.local_image_service import LocalImageService
+                        svc = LocalImageService()
+                        extraction_results = svc.process_pdf(
+                            pdf_path=file_path,
+                            output_dir=str(output_dir),
+                            relevance_threshold=settings.local_image_relevance_threshold,
+                            progress_callback=progress_callback,
+                        )
+                        logger.info("로컬 이미지 서버를 이용한 지능형 추출 완료")
+                    except Exception as e:
+                        logger.warning(f"로컬 이미지 서버 사용 실패, 내장 추출기로 폴백: {e}")
+
+                if not extraction_results:
+                    # 내장 로컬 모델 기반 추출기로 폴백
+                    from ..utils.intelligent_image_extractor_korean import IntelligentImageExtractorKorean
+                    extractor = IntelligentImageExtractorKorean(
+                        output_dir=str(output_dir),
+                        relevance_threshold=settings.local_image_relevance_threshold,
+                        enable_ocr=self.use_ocr,
+                        use_local_models=True
+                    )
+                    extraction_results = extractor.process_pdf(file_path, progress_callback)
                 
                 # 추출된 텍스트와 관련 이미지 정보를 Document로 변환
                 if extraction_results and extraction_results.get('images'):
@@ -970,6 +1021,7 @@ class EnhancedDocumentLoader:
         - 불필요한 내용 제거
         - 텍스트 정규화
         - 한국어 최적화
+        - 선택된 전처리 모델 적용
         """
         processed_docs = []
         
@@ -988,7 +1040,50 @@ class EnhancedDocumentLoader:
             # 3. 구조화된 내용 보존
             content = self._preserve_structure(content)
             
-            # 4. 너무 짧은 내용 필터링 강화 (300자 이상)
+            # 4. 선택된 전처리 모델 적용 (PDF 파일에만 적용)
+            if file_extension == '.pdf' and self._preprocessing_model:
+                try:
+                    logger.info(f"전처리 모델 적용: {self.preprocessing_model} (멀티모달: {self.enable_multimodal_preprocessing})")
+                    
+                    if self.enable_multimodal_preprocessing and hasattr(self._preprocessing_model, 'preprocess_document_with_images'):
+                        # 멀티모달 전처리
+                        logger.info("멀티모달 전처리 수행")
+                        # PDF에서 추출된 이미지 정보 가져오기
+                        images = []
+                        for doc in documents:
+                            if hasattr(doc, 'metadata') and 'images' in doc.metadata:
+                                images.extend(doc.metadata['images'])
+                        
+                        if images:
+                            processed_result = self._preprocessing_model.preprocess_document_with_images(content, images)
+                            if processed_result and len(processed_result.strip()) > 0:
+                                content = processed_result
+                                logger.info(f"멀티모달 전처리 완료: {len(content)}자")
+                            else:
+                                logger.warning("멀티모달 전처리가 빈 결과를 반환했습니다. 일반 전처리로 폴백합니다.")
+                                processed_result = self._preprocessing_model.preprocess_text(content)
+                                if processed_result and len(processed_result.strip()) > 0:
+                                    content = processed_result
+                                    logger.info(f"일반 전처리 폴백 완료: {len(content)}자")
+                        else:
+                            logger.info("이미지가 없어 일반 전처리로 수행")
+                            processed_result = self._preprocessing_model.preprocess_text(content)
+                            if processed_result and len(processed_result.strip()) > 0:
+                                content = processed_result
+                                logger.info(f"전처리 모델 적용 완료: {len(content)}자")
+                    else:
+                        # 일반 전처리
+                        processed_result = self._preprocessing_model.preprocess_text(content)
+                        if processed_result and len(processed_result.strip()) > 0:
+                            content = processed_result
+                            logger.info(f"전처리 모델 적용 완료: {len(content)}자")
+                        else:
+                            logger.warning("전처리 모델이 빈 결과를 반환했습니다. 원본 텍스트를 사용합니다.")
+                            
+                except Exception as e:
+                    logger.error(f"전처리 모델 적용 실패: {e}. 원본 텍스트를 사용합니다.")
+            
+            # 5. 너무 짧은 내용 필터링 강화 (300자 이상)
             if len(content.strip()) >= 300:  # 최소 길이를 300자로 증가
                 processed_docs.append(Document(
                     page_content=content,

@@ -108,6 +108,20 @@ class EmbeddingModel:
             )
             self.model_type = "openai"
             logger.info("OpenAI 임베딩 모델 초기화 완료")
+        elif settings.embedding_provider == "local":
+            # 로컬 OpenAI 호환 임베딩 엔드포인트 사용
+            base = settings.local_llm_base_url.rstrip("/")
+            try:
+                self.embeddings = OpenAIEmbeddings(
+                    api_key=settings.local_llm_api_key,
+                    base_url=f"{base}/v1",
+                    model="text-embedding-3-small",
+                )
+                self.model_type = "local"
+                logger.info(f"로컬 임베딩 엔드포인트 초기화 완료: {base}/v1/embeddings")
+            except Exception as e:
+                logger.warning(f"로컬 임베딩 초기화 실패, HuggingFace로 폴백: {e}")
+                # 아래 HuggingFace 분기로 폴백
         elif settings.embedding_provider == "upstage" and settings.upstage_api_key:
             # 업스테이지 solar-embedding-1-large-query 모델 초기화
             self.embeddings = UpstageEmbeddings(

@@ -77,6 +77,7 @@ from src.loaders import DocumentLoader
 from src.rag import RAGChain
 from src.vectorstore import VectorDatabase
 from src.utils.logging_config import setup_logging, get_logger
+from src.processing import PreprocessingModelFactory
 from src.utils.token_counter import TokenCounter
 from src.utils.document_processor import DocumentProcessor
 from src.constants import (
@@ -337,10 +338,12 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'document_loader' not in st.session_state:
     st.session_state.document_loader = DocumentLoader(
-        use_ocr=True, 
-        use_agent_preprocessing=False, 
+        use_ocr=True,
+        use_agent_preprocessing=False,
         enable_postprocessing=False,
-        use_intelligent_image_extraction=False
+        use_intelligent_image_extraction=False,
+        preprocessing_model='local',
+        enable_multimodal_preprocessing=False
     )
 if 'current_provider' not in st.session_state:
     st.session_state.current_provider = settings.llm_provider
@@ -350,6 +353,10 @@ if 'debug_mode' not in st.session_state:
     st.session_state.debug_mode = False
 if 'token_counter' not in st.session_state:
     st.session_state.token_counter = TokenCounter()
+if 'preprocessing_model' not in st.session_state:
+    st.session_state.preprocessing_model = 'local'
+if 'enable_multimodal_preprocessing' not in st.session_state:
+    st.session_state.enable_multimodal_preprocessing = settings.enable_multimodal_preprocessing
 
 def analyze_chunks(documents: List[Any]) -> Optional[Dict[str, Any]]:
     """
@@ -786,10 +793,58 @@ def main() -> None:
         
         # 지능형 이미지 추출 옵션 (새로 추가)
         use_intelligent_extraction = st.checkbox(
-            "🧠 지능형 이미지 추출 (실험적)", 
+            "🧠 지능형 이미지 추출 (실험적)",
             value=False,
             help="로컬 AI 모델을 사용한 지능형 이미지 추출:\n• 문서 주제와 관련된 이미지만 추출\n• 텍스트 이미지는 OCR로 자동 변환\n• Midm-2.0 한국어 모델 사용\n• Gemma-2 멀티모달 모델 사용\n⚠️ 모델 다운로드 필요 (약 12GB)"
         )
+        
+        # 전처리 모델 선택 (새로 추가)
+        st.subheader("🤖 문서 전처리 모델")
+        
+        preprocessing_model_options = {
+            "local": "로컬 모델 (기본)",
+            "openai": "OpenAI GPT",
+            "google": "Google Gemini",
+            "anthropic": "Anthropic Claude"
+        }
+        
+        selected_preprocessing_model = st.selectbox(
+            "문서 전처리 모델 선택",
+            options=list(preprocessing_model_options.keys()),
+            format_func=lambda x: preprocessing_model_options[x],
+            index=list(preprocessing_model_options.keys()).index(st.session_state.get('preprocessing_model', 'local')),
+            help="PDF 문서 전처리에 사용할 모델을 선택하세요.\n• 로컬 모델: 빠르고 무료, 하지만 성능은 제한적\n• 외부 API: 고품질 전처리, but API 키 필요"
+        )
+        
+        # 멀티모달 전처리 옵션
+        enable_multimodal = st.checkbox(
+            "🖼️ 멀티모달 전처리 활성화",
+            value=st.session_state.enable_multimodal_preprocessing,
+            help="이미지와 텍스트를 함께 분석하는 멀티모달 AI 모델을 사용합니다"
+        )
+        st.session_state.enable_multimodal_preprocessing = enable_multimodal
+        
+        # 멀티모달 모델 정보 표시
+        if enable_multimodal:
+            multimodal_models = PreprocessingModelFactory.get_multimodal_models()
+            with st.expander("📋 지원되는 멀티모달 모델"):
+                available_models = PreprocessingModelFactory.get_available_models()
+                for provider, models in multimodal_models.items():
+                    if available_models.get(provider, {}).get('available', False):
+                        st.write(f"**{provider}**: {', '.join(models)}")
+        
+        # 전처리 모델 상태 표시
+        if selected_preprocessing_model == "local":
+            st.info("🏠 **로컬 모델**: 빠른 처리, 무료 사용")
+        else:
+            api_key_status = "✅ API 키 설정됨"
+            if selected_preprocessing_model == "openai" and not settings.openai_api_key:
+                api_key_status = "❌ OpenAI API 키가 필요합니다"
+            elif selected_preprocessing_model == "google" and not settings.google_api_key:
+                api_key_status = "❌ Google API 키가 필요합니다"
+            elif selected_preprocessing_model == "anthropic" and not settings.anthropic_api_key:
+                api_key_status = "❌ Anthropic API 키가 필요합니다"
+            st.caption(api_key_status)
         
         # 현재 설정 상태 표시
         if use_agent_mode:
@@ -811,12 +866,15 @@ def main() -> None:
                 # DocumentLoader를 현재 옵션으로 재초기화
                 if (use_agent_mode != st.session_state.document_loader.use_agent_preprocessing or
                     enable_postprocessing != getattr(st.session_state.document_loader, 'enable_postprocessing', False) or
-                    use_intelligent_extraction != getattr(st.session_state.document_loader, 'use_intelligent_image_extraction', False)):
+                    use_intelligent_extraction != getattr(st.session_state.document_loader, 'use_intelligent_image_extraction', False) or
+                    selected_preprocessing_model != getattr(st.session_state.document_loader, 'preprocessing_model', 'local')):
                     st.session_state.document_loader = DocumentLoader(
                         use_ocr=st.session_state.document_loader.use_ocr,
                         use_agent_preprocessing=use_agent_mode,
                         enable_postprocessing=enable_postprocessing,
-                        use_intelligent_image_extraction=use_intelligent_extraction
+                        use_intelligent_image_extraction=use_intelligent_extraction,
+                        preprocessing_model=selected_preprocessing_model,
+                        enable_multimodal_preprocessing=st.session_state.enable_multimodal_preprocessing
                     )
                 
                 # 디렉토리 준비
@@ -883,9 +941,10 @@ def main() -> None:
                             
                             if current_ocr != use_ocr or current_agent != use_agent_mode or current_intelligent != use_intelligent_extraction:
                                 st.session_state.document_loader = DocumentLoader(
-                                    use_ocr=use_ocr, 
+                                    use_ocr=use_ocr,
                                     use_agent_preprocessing=use_agent_mode,
-                                    use_intelligent_image_extraction=use_intelligent_extraction
+                                    use_intelligent_image_extraction=use_intelligent_extraction,
+                                    preprocessing_model=selected_preprocessing_model
                                 )
                             
                             # 벡터 DB에 추가하기 전 청크 수 확인
@@ -899,7 +958,6 @@ def main() -> None:
                             extracted_images_count = 0
                             if use_intelligent_extraction:
                                 # 이미지 추출 결과 확인
-                                from pathlib import Path
                                 pdf_name = Path(uploaded_file.name).stem
                                 images_dir = Path(f"data/extracted_images/{pdf_name}/images")
                                 if images_dir.exists():
@@ -1162,45 +1220,76 @@ def main() -> None:
         )
         
         # 선택된 제공자의 모델 목록
+
         if selected_provider in available_models:
             model_options = available_models[selected_provider]
-            # 로컬 LLM: EXAONE(Transformers) + Local GGUF 모두 선택 가능
+            # 로컬 LLM: 서버 노출 모델만 사용 (1620~1622 등), 이름 기준 정렬 + 큐 상태 조회
+            stats_map = {}
             if selected_provider == "local":
-                def is_local_allowed(entry: dict) -> bool:
-                    model_id = str(entry.get('model', '')).lower()
-                    name = str(entry.get('name', '')).lower()
-                    return (
-                        "exaone" in model_id or "exaone" in name or
-                        "gguf" in model_id or "gguf" in name or
-                        model_id in ("local-gguf", "local-model")
-                    )
-                filtered_options = [m for m in model_options if is_local_allowed(m)]
-                # 정렬: Local GGUF 우선 표시 → EXAONE 순
-                def sort_key(e: dict) -> int:
-                    txt = (str(e.get('name','')) + str(e.get('model',''))).lower()
-                    if 'gguf' in txt or e.get('model') in ("local-gguf", "local-model"):
-                        return 0
-                    if 'exaone' in txt:
-                        return 1
-                    return 2
-                filtered_options = sorted(filtered_options, key=sort_key)
-                if not filtered_options:
-                    filtered_options = [{
-                        "name": "Local GGUF (llama.cpp)",
-                        "model": "local-gguf",
-                        "description": "local_models 내 GGUF 자동 탐색"
-                    }]
-                model_options = filtered_options
-            
-            # 모델 선택
-            selected_model_info = st.selectbox(
-                "모델 선택",
-                options=model_options,
-                format_func=lambda x: f"{x['name']} - {x['description']}",
-                index=0
-            )
-            
-            selected_model = selected_model_info['model'] if selected_model_info else None
+                model_options = sorted(model_options, key=lambda e: str(e.get('name','')).lower())
+                st.caption("ℹ️ 멀티모달(이미지 분석)은 1620 포트 서버의 모델만 지원됩니다.")
+                # 서버별 큐 상태 가져오기 (중복 BASE는 1회 호출)
+                def get_base(opt: dict) -> str:
+                    mv = str(opt.get('model', ''))
+                    return mv.split('|', 1)[1] if '|' in mv else getattr(settings, 'local_llm_base_url', '')
+                bases = {}
+                for opt in model_options:
+                    base = get_base(opt)
+                    if base and base not in bases:
+                        bases[base] = True
+                # 네트워크 호출: 각 BASE의 /v1/queue/stats
+                for base in bases.keys():
+                    try:
+                        import requests
+                        r = requests.get(f"{base}/v1/queue/stats", timeout=3)
+                        if r.status_code == 200:
+                            data = r.json() or {}
+                            stats_map[base] = {
+                                'pending': int(data.get('pending', 0)),
+                                'running': int(data.get('running', 0)),
+                                'concurrency': int(data.get('concurrency', 0)) or 0,
+                            }
+                        else:
+                            stats_map[base] = {'pending': 0, 'running': 0, 'concurrency': 0}
+                    except Exception:
+                        stats_map[base] = {'pending': 0, 'running': 0, 'concurrency': 0}
+
+            if not model_options:
+                st.warning("로컬 서버에서 사용 가능한 모델을 찾을 수 없습니다. LOCAL_LLM_BASE_URLS 설정과 /v1/models 응답을 확인하세요.")
+                selected_model_info = None
+                selected_model = None
+            else:
+                # 모델 선택(왼쪽) + 새로고침 버튼(오른쪽) 가로 정렬
+                def format_with_queue(opt: dict) -> str:
+                    name = str(opt.get('name', ''))
+                    desc = str(opt.get('description', ''))
+                    mv = str(opt.get('model', ''))
+                    base = mv.split('|', 1)[1] if '|' in mv else getattr(settings, 'local_llm_base_url', '')
+                    if selected_provider == 'local' and base in stats_map:
+                        s = stats_map[base]
+                        badge = f"(대기 {s['pending']}, 실행 {s['running']}, 동시 {s['concurrency']})"
+                        return f"{name} - {desc} {badge}"
+                    return f"{name} - {desc}"
+
+                # 모델 선택 콤보박스
+                selected_model_info = st.selectbox(
+                    "모델 선택",
+                    options=model_options,
+                    format_func=format_with_queue,
+                    index=0,
+                )
+                
+                # 새로고침 버튼을 아래에 배치
+                if st.button("새로고침", key="refresh_models_button", help="서버에서 모델 목록과 큐 상태를 다시 가져옵니다."):
+                    st.session_state['models_refresh_at'] = time.time()
+                    st.rerun()
+                selected_model = selected_model_info['model'] if selected_model_info else None
+                # 안내 이미지를 콤보박스 아래에 배치(있으면 이미지, 없으면 캡션)
+                hint_img = Path("static/images/local_llm_hint.png")
+                if hint_img.exists():
+                    st.image(str(hint_img), use_column_width=True)
+                else:
+                    st.caption("ℹ️ 멀티모달(이미지 분석)은 1620 포트 서버의 모델만 지원됩니다.")
             
             # API 키 확인
             api_key_status = "✅ API 키 설정됨"

@@ -54,6 +54,7 @@ bash scripts/setup/install_ocr.sh
 - **PDF 처리**: pypdf, PyPDF2, pdf2image[jpeg]
 - **OCR**: pytesseract(Tesseract의 Python 래퍼)
 - **API 클라이언트**: openai, anthropic, google-generativeai
+ - **외부 라우터**: OpenRouter(HTTP, OpenAI 호환)
 
 ### 업스테이지 임베딩 사용 시 추가 설치
 - 이 프로젝트는 기본 `requirements.txt`에서 `langchain-upstage`를 제외합니다. 이유: `langchain-upstage`가 `tokenizers<0.21`을 강제하여 최신 `transformers`(tokenizers>=0.21)와 충돌하기 때문입니다.
@@ -87,6 +88,25 @@ pdftoppm -v
 
 ```bash
 python -c "import langchain_upstage; print('langchain-upstage OK')"
+
+## OpenRouter 사용 설정
+
+`.env`에 아래 값을 설정하세요(예시):
+
+```
+IMAGE_ANALYSIS_PROVIDER=openrouter
+OPNEROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_API_BASE=https://openrouter.ai/api
+OPENROUTER_MM_MODEL=z-ai/glm-4.5v
+```
+
+멀티모달 모델 확장이 필요하면 아래 키로 추가할 수 있습니다(콤마 구분):
+
+```
+EXTRA_MULTIMODAL_OPENAI_MODELS=gpt-5-mini,gpt-5-nano
+EXTRA_MULTIMODAL_GOOGLE_MODELS=gemini-2.5-pro
+EXTRA_MULTIMODAL_ANTHROPIC_MODELS=claude-opus-4-1-20250805
+```
 ```
 
 ## 문제 해결

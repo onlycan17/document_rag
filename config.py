@@ -13,15 +13,25 @@ class Settings(BaseSettings):
     
     # OpenAI 설정
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
-    openai_model: str = "gpt-5-mini"
+    # 권장 기본값: 경량 멀티모달 고성능-저비용 모델
+    openai_model: str = "gpt-4o-mini"
     
     # Google Gemini 설정
     google_api_key: Optional[str] = os.getenv("GOOGLE_API_KEY")
-    google_model: str = "gemini-2.5-flash"  # 또는 "gemini-2.5-pro", "gemini-pro"
+    google_model: str = "gemini-1.5-flash-8b"  # 또는 "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-pro"
     
     # Anthropic Claude 설정
     anthropic_api_key: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
-    anthropic_model: str = "claude-3-haiku-20240307"
+    # 권장 기본값: 최신 세대 Sonnet 4
+    anthropic_model: str = "claude-3-5-haiku-20241022"
+
+    # 멀티모달 추가 모델(.env에서 콤마로 확장)
+    # 예) EXTRA_MULTIMODAL_OPENAI_MODELS=gpt-5-mini,gpt-5-nano
+    #    EXTRA_MULTIMODAL_GOOGLE_MODELS=gemini-2.5-pro
+    #    EXTRA_MULTIMODAL_ANTHROPIC_MODELS=claude-opus-4-1-20250805
+    extra_multimodal_openai_models: Optional[str] = os.getenv("EXTRA_MULTIMODAL_OPENAI_MODELS")
+    extra_multimodal_google_models: Optional[str] = os.getenv("EXTRA_MULTIMODAL_GOOGLE_MODELS")
+    extra_multimodal_anthropic_models: Optional[str] = os.getenv("EXTRA_MULTIMODAL_ANTHROPIC_MODELS")
     
     # 로컬 LLM 설정 (OpenAI 호환 API)
     local_llm_base_url: str = os.getenv("LOCAL_LLM_BASE_URL", "http://210.126.109.57:1620")
@@ -62,7 +72,8 @@ class Settings(BaseSettings):
     local_image_relevance_threshold: float = float(os.getenv("LOCAL_IMAGE_RELEVANCE_THRESHOLD", "0.6"))
 
     # 이미지 분석 프로바이더 (pdf 전처리용): "local" | "openrouter"
-    image_analysis_provider: str = os.getenv("IMAGE_ANALYSIS_PROVIDER", "local")
+    # 요청에 따라 기본값을 openrouter로 설정 (OpenRouter 멀티모달 활용)
+    image_analysis_provider: str = os.getenv("IMAGE_ANALYSIS_PROVIDER", "openrouter")
     # 로컬 멀티모달 선호 포트(1620 고정 요청)
     local_mm_prefer_port: str = os.getenv("LOCAL_MM_PREFER_PORT", "1620")
 
@@ -70,7 +81,8 @@ class Settings(BaseSettings):
     # 주의: 오타 포함 정확한 이름을 사용 (OPNEROUTER_API_KEY)
     openrouter_api_key: Optional[str] = os.getenv("OPNEROUTER_API_KEY")
     openrouter_api_base: str = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api")
-    openrouter_mm_model: str = os.getenv("OPENROUTER_MM_MODEL", "qwen/qwen2.5-vl-32b-instruct")
+    # 데이터 전처리의 이미지 처리용 기본 모델: z-ai/glm-4.5v
+    openrouter_mm_model: str = os.getenv("OPENROUTER_MM_MODEL", "z-ai/glm-4.5v")
 
     # 이미지 향상(선택) 설정
     enable_image_enhancement: bool = os.getenv("ENABLE_IMAGE_ENHANCEMENT", "false").lower() == "true"
@@ -138,6 +150,16 @@ class Settings(BaseSettings):
     api_max_retries: int = int(os.getenv("API_MAX_RETRIES", "5"))  # 재시도 횟수 증가
     api_base_delay: float = float(os.getenv("API_BASE_DELAY", "3.0"))  # 기본 대기 시간 증가
     api_max_delay: float = float(os.getenv("API_MAX_DELAY", "300.0"))  # 최대 대기 시간 증가 (5분)
+    
+    # 문서 전처리 모델 설정
+    preprocessing_model: str = os.getenv("PREPROCESSING_MODEL", "local")  # "local", "openai", "google", "anthropic"
+    preprocessing_max_tokens: int = int(os.getenv("PREPROCESSING_MAX_TOKENS", "2000"))  # 전처리 최대 토큰 수
+    preprocessing_temperature: float = float(os.getenv("PREPROCESSING_TEMPERATURE", "0.3"))  # 전처리 온도
+    
+    # 멀티모달 전처리 모델 설정 (이미지 처리용)
+    multimodal_preprocessing_model: str = os.getenv("MULTIMODAL_PREPROCESSING_MODEL", "gpt-4o-mini")  # 멀티모달 모델(저비용)
+    multimodal_preprocessing_provider: str = os.getenv("MULTIMODAL_PREPROCESSING_PROVIDER", "openai")  # 멀티모달 제공자
+    enable_multimodal_preprocessing: bool = os.getenv("ENABLE_MULTIMODAL_PREPROCESSING", "true").lower() == "true"  # 멀티모달 전처리 활성화(기본 on)
     
     # UI 설정
     app_title: str = "쉽게 설명하는 RAG 챗봇"
