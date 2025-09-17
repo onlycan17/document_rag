@@ -54,22 +54,70 @@ def llm_retry_with_backoff(max_retries=2, base_delay=5.0, max_delay=60.0):
 
 class LocalLLMAgent(ABC):
     """
-    로컬 LLM을 활용한 에이전트 베이스 클래스
+    LLM을 활용한 에이전트 베이스 클래스
+
+    - 기본은 로컬이지만, 화면/설정에서 선택한 제공자(openai/google/anthropic/local)를 따르도록 확장
+    - 로컬 선택 시: 1620 포트 멀티모달 서버 우선(base URL 강제 정규화)
     """
     
-    def __init__(self, agent_name: str):
+    def __init__(
+        self,
+        agent_name: str,
+        provider: Optional[str] = None,
+        model_name: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ):
         self.agent_name = agent_name
-        self.base_url = settings.local_llm_base_url
-        self.model_name = settings.local_llm_model
-        self.max_tokens = getattr(settings, 'local_llm_max_tokens', 2048)
+        # 현재 제공자 결정: 명시값 → 세션설정값(.env) 순
+        self.provider = (provider or settings.llm_provider or "local").lower()
+
+        # 모델명 결정(제공자별 기본값 사용)
+        if model_name:
+            self.model_name = model_name
+        else:
+            if self.provider == "openai":
+                self.model_name = getattr(settings, 'openai_model', 'gpt-4o-mini')
+            elif self.provider == "google":
+                self.model_name = getattr(settings, 'google_model', 'gemini-1.5-flash-8b')
+            elif self.provider == "anthropic":
+                self.model_name = getattr(settings, 'anthropic_model', 'claude-3-5-haiku-20241022')
+            else:
+                self.model_name = getattr(settings, 'local_llm_model', 'local-model')
+
+        # base_url 결정(로컬만 사용). 로컬이면 1620 멀티모달 선호 포트 적용
+        if self.provider == "local":
+            self.base_url = self._prefer_local_mm_port(base_url or getattr(settings, 'local_llm_base_url', 'http://localhost:3620'))
+        else:
+            self.base_url = base_url or ""
+
+        # 토큰/컨텍스트 설정(로컬/외부 공통 기본)
+        self.max_tokens = getattr(settings, 'local_llm_max_tokens', 2048) if self.provider == 'local' else getattr(settings, 'max_tokens', 4096)
         self.context_window = getattr(settings, 'local_llm_context_window', 4096)
         self._llama = None  # 로컬 GGUF 백엔드 (존재 시 사용)
         
+        # 초기화 로그
         logger.info(f"🤖 {agent_name} 에이전트 초기화 완료")
-        logger.info(f"📡 로컬 LLM: {self.base_url} - {self.model_name}")
+        if self.provider == 'local':
+            logger.info(f"📡 LLM: provider=local base={self.base_url} model={self.model_name}")
+        else:
+            logger.info(f"📡 LLM: provider={self.provider} model={self.model_name}")
 
-        # 로컬 GGUF 백엔드 시도 (모델 파일이 있으면 우선 사용)
-        self._initialize_local_llm_backend()
+        # 로컬 선택 시에만 GGUF 백엔드 시도
+        if self.provider == 'local':
+            self._initialize_local_llm_backend()
+
+    def _prefer_local_mm_port(self, url: str) -> str:
+        """로컬 base URL을 멀티모달 선호 포트(기본 1620)로 정규화"""
+        try:
+            from urllib.parse import urlparse
+            prefer_port = int(getattr(settings, 'local_mm_prefer_port', '1620'))
+            p = urlparse(url if url.startswith('http') else f"http://{url}")
+            host = p.hostname or 'localhost'
+            scheme = p.scheme or 'http'
+            return f"{scheme}://{host}:{prefer_port}"
+        except Exception:
+            # 실패 시 원본 반환
+            return url
 
     def _initialize_local_llm_backend(self) -> None:
         """로컬 GGUF 모델 백엔드 초기화 (가능할 경우).
@@ -113,11 +161,7 @@ class LocalLLMAgent(ABC):
     
     @llm_retry_with_backoff()
     def _call_local_llm(self, prompt: str, temperature: float = 0.1, max_tokens: Optional[int] = None) -> str:
-        """로컬 LLM 호출.
-
-        - GGUF 백엔드가 활성화되어 있으면 llama.cpp로 직접 추론
-        - 아니면 OpenAI 호환 HTTP 엔드포인트로 폴백
-        """
+        """로컬 LLM 호출 (GGUF→HTTP)."""
         if not max_tokens:
             max_tokens = self.max_tokens
 
@@ -176,6 +220,102 @@ class LocalLLMAgent(ABC):
             raise Exception(f"네트워크 오류: {str(e)}")
         except Exception as e:
             raise Exception(f"LLM 호출 오류: {str(e)}")
+
+    # ===== 외부 API 호출 경로 =====
+    def _call_openai(self, prompt: str, temperature: float, max_tokens: int) -> str:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise Exception("OpenAI API 키가 설정되지 않았습니다.")
+        model = self.model_name or getattr(settings, 'openai_model', 'gpt-4o-mini')
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": float(temperature),
+            "max_tokens": int(max_tokens),
+        }
+        resp = requests.post("https://api.openai.com/v1/chat/completions", json=body, headers=headers, timeout=120)
+        if resp.status_code != 200:
+            raise Exception(f"OpenAI 오류: {resp.status_code} - {resp.text}")
+        data = resp.json()
+        return (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
+
+    def _call_google(self, prompt: str, temperature: float, max_tokens: int) -> str:
+        try:
+            genai = __import__("google.generativeai", fromlist=["generativeai"])
+        except Exception:
+            raise Exception("google.generativeai 패키지가 설치되어 있지 않습니다.")
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise Exception("Google API 키가 설정되지 않았습니다.")
+        genai.configure(api_key=api_key)
+        model_name = self.model_name or getattr(settings, 'google_model', 'gemini-1.5-flash-8b')
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content([prompt])
+        text = getattr(response, 'text', None)
+        if not text:
+            raise Exception("Google Generative AI 응답이 비어있습니다.")
+        return text.strip()
+
+    def _call_anthropic(self, prompt: str, temperature: float, max_tokens: int) -> str:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise Exception("Anthropic API 키가 설정되지 않았습니다.")
+        try:
+            import anthropic  # type: ignore
+            client = anthropic.Anthropic(api_key=api_key)
+            model = self.model_name or getattr(settings, 'anthropic_model', 'claude-3-5-haiku-20241022')
+            msg = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=float(temperature),
+                messages=[{"role": "user", "content": prompt}],
+            )
+            contents = getattr(msg, 'content', [])
+            if contents and hasattr(contents[0], 'text'):
+                return contents[0].text.strip()
+            # HTTP 폴백 불가 시 에러
+            raise Exception("Anthropic 응답 파싱 실패")
+        except Exception as e:
+            # HTTP 직접 호출 폴백
+            try:
+                import json as _json
+                headers = {
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                }
+                body = {
+                    "model": self.model_name or getattr(settings, 'anthropic_model', 'claude-3-5-haiku-20241022'),
+                    "max_tokens": int(max_tokens),
+                    "temperature": float(temperature),
+                    "messages": [{"role": "user", "content": prompt}],
+                }
+                r = requests.post("https://api.anthropic.com/v1/messages", headers=headers, data=_json.dumps(body), timeout=120)
+                if r.status_code != 200:
+                    raise Exception(f"Anthropic 오류: {r.status_code} - {r.text}")
+                data = r.json()
+                content = data.get("content", [])
+                # content는 [{type:'text', text:'...'}]
+                if content and isinstance(content, list) and content[0].get('type') == 'text':
+                    return content[0].get('text', '').strip()
+                raise Exception("Anthropic 응답 파싱 실패(HTTP)")
+            except Exception as e2:
+                raise Exception(f"Anthropic 호출 실패: {e2}")
+
+    def _call_llm(self, prompt: str, temperature: float = 0.1, max_tokens: Optional[int] = None) -> str:
+        """현재 provider에 맞는 LLM 호출"""
+        if not max_tokens:
+            max_tokens = self.max_tokens
+        if self.provider == 'local':
+            return self._call_local_llm(prompt, temperature=temperature, max_tokens=max_tokens)
+        if self.provider == 'openai':
+            return self._call_openai(prompt, temperature=temperature, max_tokens=max_tokens)
+        if self.provider == 'google':
+            return self._call_google(prompt, temperature=temperature, max_tokens=max_tokens)
+        if self.provider == 'anthropic':
+            return self._call_anthropic(prompt, temperature=temperature, max_tokens=max_tokens)
+        raise Exception(f"지원하지 않는 provider: {self.provider}")
     
     def _create_korean_prompt(self, task_description: str, content: str, examples: List[str] = None) -> str:
         """

@@ -190,6 +190,12 @@ class ImprovedPDFConverter:
             if progress_callback:
                 progress = 0.2 + (page_num / total_pages) * 0.3
                 progress_callback(progress, f"페이지 {page_num + 1}/{total_pages} 텍스트 수집 중...")
+            # 콜백이 없을 때도 대용량 문서에서 진행 상황을 가시화하기 위한 하트비트 로그
+            elif (page_num + 1) % 25 == 0 or page_num == 0:
+                try:
+                    logger.info(f"⏳ 페이지 진행: {page_num + 1}/{total_pages} 텍스트 수집 중")
+                except Exception:
+                    pass
             
             # 텍스트 수집
             text = page.get_text()
@@ -208,11 +214,15 @@ class ImprovedPDFConverter:
         # 3단계: 연결된 텍스트를 마크다운으로 변환 (페이지별 이미지 정보와 함께)
         if progress_callback:
             progress_callback(0.6, "마크다운 텍스트 변환 중...")
+        else:
+            logger.info("🧩 텍스트 연결 및 마크다운 변환 단계 진입")
         
         if connected_text.strip():
             # 이미지 처리를 먼저 수행
             if progress_callback:
                 progress_callback(0.65, "이미지 추출 및 매핑 중...")
+            else:
+                logger.info("🖼️ 페이지 이미지 매핑 및 추출 시작")
             
             image_references = self._extract_and_process_images(doc, pdf_path, page_images, progress_callback)
             image_count = len(image_references)

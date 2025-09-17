@@ -506,6 +506,8 @@ class EnhancedDocumentLoader:
             try:
                 if progress_callback:
                     progress_callback(0.1, "🧠 지능형 이미지 추출 중...")
+                else:
+                    logger.info("🧠 지능형 이미지 추출 시작 (provider=%s)", settings.image_analysis_provider.lower())
                 from pathlib import Path
                 # PDF 파일명 기반으로 출력 디렉토리 생성
                 pdf_name = Path(file_path).stem
@@ -519,6 +521,7 @@ class EnhancedDocumentLoader:
                     try:
                         from ..utils.openrouter_image_service import OpenRouterImageService
                         svc = OpenRouterImageService()
+                        logger.info("OpenRouter 기반 지능형 이미지 추출 경로 선택")
                         extraction_results = svc.process_pdf(
                             pdf_path=file_path,
                             output_dir=str(output_dir),
@@ -526,12 +529,18 @@ class EnhancedDocumentLoader:
                         )
                         logger.info("OpenRouter를 이용한 지능형 추출 완료")
                     except Exception as e:
+                        if getattr(settings, 'disable_image_fallback', False):
+                            logger.error("엄격 모드 활성화로 인해 OpenRouter 실패 시 폴백하지 않고 중단합니다.")
+                            raise RuntimeError(f"OpenRouter 이미지 분석 실패(엄격 모드): {e}") from e
                         logger.warning(f"OpenRouter 사용 실패, 다른 방법으로 폴백: {e}")
                 if not extraction_results and settings.use_local_image_server:
+                    if getattr(settings, 'disable_image_fallback', False):
+                        raise RuntimeError("OpenRouter 결과 없음(엄격 모드): 폴백이 비활성화되어 처리 중단")
                     # 2순위: 로컬 서버(OpenAI 호환)로 이미지 분석/OCR 수행(1620 우선)
                     try:
                         from ..utils.local_image_service import LocalImageService
                         svc = LocalImageService()
+                        logger.info("로컬 이미지 서버 기반 지능형 이미지 추출 경로 선택")
                         extraction_results = svc.process_pdf(
                             pdf_path=file_path,
                             output_dir=str(output_dir),
@@ -540,9 +549,14 @@ class EnhancedDocumentLoader:
                         )
                         logger.info("로컬 이미지 서버를 이용한 지능형 추출 완료")
                     except Exception as e:
+                        if getattr(settings, 'disable_image_fallback', False):
+                            logger.error("엄격 모드 활성화: 로컬 서버 폴백도 비활성화되어 중단합니다.")
+                            raise RuntimeError(f"로컬 이미지 서버 실패(엄격 모드): {e}") from e
                         logger.warning(f"로컬 이미지 서버 사용 실패, 내장 추출기로 폴백: {e}")
 
                 if not extraction_results:
+                    if getattr(settings, 'disable_image_fallback', False):
+                        raise RuntimeError("지능형 이미지 추출 실패(엄격 모드): 모든 폴백이 비활성화됨")
                     # 내장 로컬 모델 기반 추출기로 폴백
                     from ..utils.intelligent_image_extractor_korean import IntelligentImageExtractorKorean
                     extractor = IntelligentImageExtractorKorean(
@@ -551,6 +565,7 @@ class EnhancedDocumentLoader:
                         enable_ocr=self.use_ocr,
                         use_local_models=True
                     )
+                    logger.info("내장 로컬 모델 기반 지능형 이미지 추출 경로 선택")
                     extraction_results = extractor.process_pdf(file_path, progress_callback)
                 
                 # 추출된 텍스트와 관련 이미지 정보를 Document로 변환
@@ -664,6 +679,8 @@ class EnhancedDocumentLoader:
         try:
             if progress_callback:
                 progress_callback(0.1, "개선된 PDF 변환기로 처리 중...")
+            else:
+                logger.info("📝 개선된 PDF 변환기 시작: 텍스트/이미지 추출 수행")
             
             # 임시 출력 디렉토리 사용
             import tempfile

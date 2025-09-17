@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     # 이미지 분석 프로바이더 (pdf 전처리용): "local" | "openrouter"
     # 요청에 따라 기본값을 openrouter로 설정 (OpenRouter 멀티모달 활용)
     image_analysis_provider: str = os.getenv("IMAGE_ANALYSIS_PROVIDER", "openrouter")
+    # 이미지 분석 폴백 비활성화(엄격 모드). true이면 OpenRouter 실패 시 즉시 에러 발생
+    disable_image_fallback: bool = os.getenv("DISABLE_IMAGE_FALLBACK", "false").lower() == "true"
     # 로컬 멀티모달 선호 포트(1620 고정 요청)
     local_mm_prefer_port: str = os.getenv("LOCAL_MM_PREFER_PORT", "1620")
 

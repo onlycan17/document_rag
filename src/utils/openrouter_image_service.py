@@ -88,9 +88,14 @@ class OpenRouterImageService:
         results: List[Dict[str, Any]] = []
 
         doc = fitz.open(pdf_path)
-        for page_index in range(len(doc)):
+        total_pages = len(doc)
+        logger.info(f"🧠 OpenRouter 이미지 분석 시작: 총 {total_pages}페이지")
+        for page_index in range(total_pages):
             page = doc.load_page(page_index)
             image_list = page.get_images(full=True)
+            # 페이지 단위 하트비트 로그 (과도한 로그 방지: 10페이지마다)
+            if (page_index + 1) % 10 == 0 or page_index == 0:
+                logger.info(f"   ⏳ 이미지 분석 진행: {page_index + 1}/{total_pages}페이지 (이미지 {len(image_list)}개)")
             for img_idx, img in enumerate(image_list):
                 stats["total_images_found"] += 1
                 xref = img[0]
@@ -122,4 +127,8 @@ class OpenRouterImageService:
                     "description": info.get("description", ""),
                     "extracted_text": info.get("text", ""),
                 })
+        logger.info(
+            f"✅ OpenRouter 이미지 분석 완료: 총 이미지 {stats['total_images_found']}개, "
+            f"저장 {stats['relevant_images_saved']}개, 텍스트 변환 {stats['text_images_converted']}개"
+        )
         return {"images": results, "statistics": stats, "document_topic": {}}

@@ -20,7 +20,14 @@ class AgentBasedPDFConverter:
     로컬 LLM 에이전트들을 활용한 고품질 PDF-to-Markdown 변환기
     """
     
-    def __init__(self, output_dir: str = "converted_docs_agent", enable_quality_validation: bool = True, enable_image_analysis: bool = True):
+    def __init__(
+        self,
+        output_dir: str = "converted_docs_agent",
+        enable_quality_validation: bool = True,
+        enable_image_analysis: bool = True,
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
+    ):
         self.output_dir = output_dir
         self.enable_quality_validation = enable_quality_validation
         self.enable_image_analysis = enable_image_analysis
@@ -28,35 +35,46 @@ class AgentBasedPDFConverter:
         # 출력 디렉토리 생성
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         
-        # 에이전트 초기화
-        self.context_agent = ContextConnectorAgent()
-        self.structure_agent = StructureParserAgent()
+        # 현재 UI/설정의 제공자/모델 동기화: Streamlit 세션 → 설정 순서
+        provider, model, base_url = self._resolve_runtime_llm(llm_provider, llm_model)
+
+        # 에이전트 초기화(선택된 제공자/모델로 동기화)
+        self.context_agent = ContextConnectorAgent(provider=provider, model_name=model, base_url=base_url)
+        self.structure_agent = StructureParserAgent(provider=provider, model_name=model, base_url=base_url)
         
         if enable_quality_validation:
-            self.quality_agent = QualityValidatorAgent()
+            self.quality_agent = QualityValidatorAgent(provider=provider, model_name=model, base_url=base_url)
         
         # 이미지 분석기 초기화 (선택적)
         if enable_image_analysis:
             try:
-                self.image_analyzer = create_image_analyzer()
+                # 이미지 분석기 제공자: 화면 선택(가능 시)과 일치시키되, 미설정이면 기존 heuristics 유지
+                analyzer_provider = None
+                try:
+                    import streamlit as st  # type: ignore
+                    analyzer_provider = st.session_state.get('current_provider', None)
+                except Exception:
+                    analyzer_provider = provider
+                # 'local' 외에는 로컬 멀티모달을 피하고 외부 API 사용
+                self.image_analyzer = create_image_analyzer(analyzer_provider)
                 logger.info("🖼️ 이미지 분석기 활성화됨")
             except Exception as e:
                 logger.warning(f"⚠️ 이미지 분석기 초기화 실패: {str(e)}")
                 self.image_analyzer = None
                 self.enable_image_analysis = False
 
-            # 로컬 멀티모달(Gemma) 직접 연결 옵션: 이미지 추출에서 사용하는 것과 동일한 모델 재사용
+            # 로컬 제공자일 때만 로컬 멀티모달 연결
             self.local_multimodal = None
-            try:
-                from src.utils.model_bootstrap import get_ax_vl_dir
-                from src.utils.ax_multimodal import AXMultimodalModel
-                ax_path = get_ax_vl_dir()
-                if ax_path and ax_path.exists():
-                    # 동일 경로로 멀티모달 인스턴스 구성 (A.X-4.0-VL-Light)
-                    self.local_multimodal = AXMultimodalModel(model_path=str(ax_path), device="auto", max_memory_gb=8)
-                    logger.info("🔗 로컬 Gemma 멀티모달을 이미지 설명에도 재사용합니다")
-            except Exception as e:
-                logger.warning(f"로컬 멀티모달 연결 건너뜀: {e}")
+            if (provider or "local").lower() == "local":
+                try:
+                    from src.utils.model_bootstrap import get_ax_vl_dir
+                    from src.utils.ax_multimodal import AXMultimodalModel
+                    ax_path = get_ax_vl_dir()
+                    if ax_path and ax_path.exists():
+                        self.local_multimodal = AXMultimodalModel(model_path=str(ax_path), device="auto", max_memory_gb=8)
+                        logger.info("🔗 로컬 A.X 멀티모달 활성화(이미지 설명)")
+                except Exception as e:
+                    logger.warning(f"로컬 멀티모달 연결 건너뜀: {e}")
         else:
             self.image_analyzer = None
         
@@ -64,6 +82,45 @@ class AgentBasedPDFConverter:
         self.fallback_converter = ImprovedPDFConverter(output_dir=f"{output_dir}_fallback")
         
         logger.info("🤖 에이전트 기반 PDF 변환기 초기화 완료")
+
+    def _resolve_runtime_llm(self, llm_provider: str | None, llm_model: str | None) -> tuple[str, str | None, str | None]:
+        """화면 선택값(Streamlit 세션) → 인자 → 설정 순으로 제공자/모델/로컬 base_url 결정"""
+        from config import settings as _settings
+        provider = None
+        model = None
+        base_url = None
+        # 1) Streamlit 세션에서 시도
+        try:
+            import streamlit as st  # type: ignore
+            provider = st.session_state.get('current_provider', None)
+            model = st.session_state.get('current_model', None)
+        except Exception:
+            pass
+        # 2) 인자값 우선
+        provider = (llm_provider or provider or _settings.llm_provider or 'local').lower()
+        if not model:
+            model = llm_model
+        if not model:
+            if provider == 'openai':
+                model = getattr(_settings, 'openai_model', 'gpt-4o-mini')
+            elif provider == 'google':
+                model = getattr(_settings, 'google_model', 'gemini-1.5-flash-8b')
+            elif provider == 'anthropic':
+                model = getattr(_settings, 'anthropic_model', 'claude-3-5-haiku-20241022')
+            else:
+                model = getattr(_settings, 'local_llm_model', 'local-model')
+        # 3) 로컬일 경우 1620 선호 포트 적용
+        if provider == 'local':
+            try:
+                prefer_port = int(getattr(_settings, 'local_mm_prefer_port', '1620'))
+                from urllib.parse import urlparse
+                p = urlparse(getattr(_settings, 'local_llm_base_url', 'http://localhost:3620'))
+                host = p.hostname or 'localhost'
+                scheme = p.scheme or 'http'
+                base_url = f"{scheme}://{host}:{prefer_port}"
+            except Exception:
+                base_url = getattr(_settings, 'local_llm_base_url', 'http://localhost:3620')
+        return provider, model, base_url
     
     def convert_pdf_to_markdown(self, pdf_path: str, comparison_mode: bool = False) -> str:
         """

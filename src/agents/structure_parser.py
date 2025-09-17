@@ -15,8 +15,8 @@ class StructureParserAgent(LocalLLMAgent):
     문서의 구조적 요소를 인식하고 올바른 마크다운 형식으로 변환하는 에이전트
     """
     
-    def __init__(self):
-        super().__init__("StructureParser")
+    def __init__(self, provider: str | None = None, model_name: str | None = None, base_url: str | None = None):
+        super().__init__("StructureParser", provider=provider, model_name=model_name, base_url=base_url)
         
         # 마크다운 구조 변환 예시들
         self.structure_examples = [
@@ -143,7 +143,7 @@ CONTENT|0
 """
         
         try:
-            response = self._call_local_llm(prompt, temperature=0.1, max_tokens=50)
+            response = self._call_llm(prompt, temperature=0.1, max_tokens=50)
 
             # 첫 유효 라인만 사용 (LLM이 추가 텍스트를 반환해도 안전)
             first_resp_line = next((ln.strip() for ln in response.splitlines() if ln.strip()), "")
