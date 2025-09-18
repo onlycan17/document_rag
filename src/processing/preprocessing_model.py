@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
 import logging
 from pathlib import Path
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -305,7 +306,7 @@ class APIPreprocessingModel(PreprocessingModel):
                         resp = self._client.responses.create(
                             model=self.model_name,
                             input=preprocessing_prompt,
-                            temperature=0.3,
+                            temperature=settings.preprocessing_temperature,
                             max_output_tokens=4000,
                         )
                         # openai>=1.0.0 에서 제공되는 편의 프로퍼티 시도

@@ -18,6 +18,7 @@ from transformers import (
     BitsAndBytesConfig,
     AutoConfig,
 )
+from config import settings
 try:  # transformers >= 4.52
     from transformers import AutoModelForImageTextToText as _AutoMMModel
 except Exception:  # pragma: no cover - fallback for older versions
@@ -408,7 +409,7 @@ class GemmaMultimodalModel:
                 outputs = self.model.generate(
                     **inputs,
                     max_new_tokens=256,
-                    temperature=0.3,
+                    temperature=settings.temperature,
                     do_sample=True,
                     top_p=0.9
                 )
@@ -558,7 +559,7 @@ Confidence: 0-1"""
                 outputs = self.model.generate(
                     **inputs,
                     max_new_tokens=50,
-                    temperature=0.1,
+                    temperature=settings.temperature,
                     do_sample=False
                 )
             

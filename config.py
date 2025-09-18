@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
@@ -14,16 +15,16 @@ class Settings(BaseSettings):
     # OpenAI 설정
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
     # 권장 기본값: 경량 멀티모달 고성능-저비용 모델
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-5-mini"
     
     # Google Gemini 설정
     google_api_key: Optional[str] = os.getenv("GOOGLE_API_KEY")
-    google_model: str = "gemini-1.5-flash-8b"  # 또는 "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-pro"
+    google_model: str = "gemini-2.5-flash"  # 또는 "gemini-2.5-pro", "gemini-2.0-ultra"
     
     # Anthropic Claude 설정
     anthropic_api_key: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
-    # 권장 기본값: 최신 세대 Sonnet 4
-    anthropic_model: str = "claude-3-5-haiku-20241022"
+    # 권장 기본값: 최신 세대 Claude 4 Sonnet
+    anthropic_model: str = "claude-4-sonnet"
 
     # 멀티모달 추가 모델(.env에서 콤마로 확장)
     # 예) EXTRA_MULTIMODAL_OPENAI_MODELS=gpt-5-mini,gpt-5-nano
@@ -81,6 +82,11 @@ class Settings(BaseSettings):
     # 로컬 멀티모달 선호 포트(1620 고정 요청)
     local_mm_prefer_port: str = os.getenv("LOCAL_MM_PREFER_PORT", "1620")
 
+    # LM Studio (로컬 모델 서버) 설정
+    # 기본값은 내부 네트워크에서 운영 중인 LM Studio 인스턴스를 가리킵니다.
+    lm_studio_api_url: str = os.getenv("LM_STUDIO_API_URL", "http://192.168.0.227:3620")
+    lm_studio_model_dir: Optional[str] = os.getenv("LM_STUDIO_MODEL_DIR", os.path.join(Path.home(), 'Library', 'Application Support', 'lm-studio', 'models'))
+
     # OpenRouter (외부 API) 설정 — 사용자 .env에 OPNEROUTER_API_KEY 키가 존재
     # 주의: 오타 포함 정확한 이름을 사용 (OPNEROUTER_API_KEY)
     openrouter_api_key: Optional[str] = os.getenv("OPNEROUTER_API_KEY")
@@ -136,7 +142,8 @@ class Settings(BaseSettings):
     langsmith_api_key: Optional[str] = os.getenv("LANGSMITH_API_KEY")
     langsmith_project: Optional[str] = os.getenv("LANGSMITH_PROJECT")
 
-    temperature: float = 0.3
+    # 일부 모델은 temperature를 변경할 수 없으므로 기본값을 1.0으로 설정(모델의 기본값과 일치)
+    temperature: float = 1.0
     max_tokens: int = 4096  # 기본값 - 모델별로 자동 조정됨
     
     # 스트리밍 설정
@@ -158,10 +165,11 @@ class Settings(BaseSettings):
     # 문서 전처리 모델 설정
     preprocessing_model: str = os.getenv("PREPROCESSING_MODEL", "local")  # "local", "openai", "google", "anthropic"
     preprocessing_max_tokens: int = int(os.getenv("PREPROCESSING_MAX_TOKENS", "2000"))  # 전처리 최대 토큰 수
-    preprocessing_temperature: float = float(os.getenv("PREPROCESSING_TEMPERATURE", "0.3"))  # 전처리 온도
+    # 전처리 단계에서 사용하는 온도 (환경변수로 오버라이드 가능)
+    preprocessing_temperature: float = float(os.getenv("PREPROCESSING_TEMPERATURE", "1.0"))  # 전처리 온도
     
     # 멀티모달 전처리 모델 설정 (이미지 처리용)
-    multimodal_preprocessing_model: str = os.getenv("MULTIMODAL_PREPROCESSING_MODEL", "gpt-4o-mini")  # 멀티모달 모델(저비용)
+    multimodal_preprocessing_model: str = os.getenv("MULTIMODAL_PREPROCESSING_MODEL", "gpt-5-mini")  # 멀티모달 모델(저비용)
     multimodal_preprocessing_provider: str = os.getenv("MULTIMODAL_PREPROCESSING_PROVIDER", "openai")  # 멀티모달 제공자
     enable_multimodal_preprocessing: bool = os.getenv("ENABLE_MULTIMODAL_PREPROCESSING", "true").lower() == "true"  # 멀티모달 전처리 활성화(기본 on)
     

@@ -6,6 +6,7 @@ import re
 import logging
 from typing import List, Dict, Any, Tuple
 from .base_agent import LocalLLMAgent
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,7 @@ CONTENT|0
 """
         
         try:
-            response = self._call_llm(prompt, temperature=0.1, max_tokens=50)
+            response = self._call_llm(prompt, temperature=settings.temperature, max_tokens=50)
 
             # 첫 유효 라인만 사용 (LLM이 추가 텍스트를 반환해도 안전)
             first_resp_line = next((ln.strip() for ln in response.splitlines() if ln.strip()), "")

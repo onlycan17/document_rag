@@ -264,5 +264,25 @@ class ModelRegistry:
                     "model": model.model_id,
                     "description": f"{model.description} ({cls.format_context_size(model.context_window)} 컨텍스트, 최대 {model.max_tokens}토큰)"
                 })
-        
+        # LM Studio(로컬 모델 탐색)가 활성화되어 있으면 해당 결과를 병합
+        try:
+            from src.models.lm_studio import list_lm_studio_models
+            lm_models = list_lm_studio_models()
+            local_models = lm_models.get('local', [])
+            if local_models:
+                # LM Studio에서 제공하는 모델을 우선적으로 'local'에 추가
+                lm_entries = []
+                for m in local_models:
+                    lm_entries.append({
+                        'name': m.get('name') or m.get('id'),
+                        'model': m.get('id') or m.get('name'),
+                        'description': m.get('description') or ''
+                    })
+                # 기존 로컬 모델 리스트 앞에 위치시키기
+                result.setdefault('local', [])
+                result['local'] = lm_entries + result.get('local', [])
+        except Exception:
+            # LM Studio 통합 실패 시 무시
+            pass
+
         return result

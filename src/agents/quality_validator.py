@@ -6,6 +6,7 @@ import re
 import logging
 from typing import Dict, List, Any, Tuple
 from .base_agent import LocalLLMAgent
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +178,7 @@ class QualityValidatorAgent(LocalLLMAgent):
 """
         
         try:
-            response = self._call_llm(prompt, temperature=0.1, max_tokens=10)
+            response = self._call_llm(prompt, temperature=settings.temperature, max_tokens=10)
             score = float(re.search(r'\d+', response).group()) / 10.0
             return min(1.0, max(0.0, score))
         except Exception as e:

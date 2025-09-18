@@ -11,6 +11,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.agents.base_agent import LocalLLMAgent
+from config import settings
 
 logger = logging.getLogger(__name__)
 

@@ -6,6 +6,7 @@ import re
 import logging
 from typing import Tuple, Optional, List, Dict, Any
 from .base_agent import LocalLLMAgent
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ class ContextConnectorAgent(LocalLLMAgent):
 교정된 텍스트(설명 없이 결과만):"""
         
         try:
-            response = self._call_llm(prompt, temperature=0.1, max_tokens=4000)
+            response = self._call_llm(prompt, temperature=settings.temperature, max_tokens=4000)
             
             if response.strip():
                 # LLM 응답에서 불필요한 텍스트 제거

@@ -25,7 +25,6 @@ converted_docs_agent/
 benchmark_agent/
 benchmark_fallback/
 static/images/pdf/
-*.md
 !README.md
 !CLAUDE.md
 !AGENT_SYSTEM_REPORT.md
@@ -83,7 +82,6 @@ test_rre_output/
 
 # Processed docs
 processed_docs/
-docs/
 
 # Python virtual environment
 ragtest_env/

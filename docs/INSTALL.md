@@ -1,125 +1,101 @@
-# 설치 가이드
+# 🚀 설치 가이드
 
-이 RAG 챗봇 애플리케이션은 원활한 동작을 위해 Python 패키지와 시스템 패키지(OCR 등) 설치가 필요합니다.
+이 문서는 RAG 챗봇 시스템을 로컬 환경에 설치하고 실행하는 방법을 안내합니다.
 
-## 빠른 시작
+## 📋 사전 요구사항
 
-### 1. Python 의존성 설치
+- **Python 3.10 이상**: 시스템에 Python이 설치되어 있어야 합니다.
+- **Git**: 소스 코드를 클론하기 위해 필요합니다.
+
+## ⚙️ 설치 절차
+
+### 1. 저장소 클론
+
+먼저, 터미널을 열고 Git을 사용하여 프로젝트 저장소를 클론합니다.
+
+```bash
+git clone [repository-url]
+cd ragTest
+```
+
+### 2. 가상환경 생성 및 활성화
+
+프로젝트 의존성을 시스템의 다른 Python 환경과 격리하기 위해 가상환경을 사용하는 것을 강력히 권장합니다.
+
+```bash
+# 가상환경 생성
+python -m venv venv
+
+# 가상환경 활성화
+# macOS / Linux
+source venv/bin/activate
+
+# Windows
+venv\Scripts\activate
+```
+
+### 3. 의존성 설치
+
+`requirements.txt` 파일에 명시된 모든 Python 패키지를 설치합니다.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 시스템 의존성 설치(OCR 지원)
+### 4. 환경 변수 설정
 
-스캔된 PDF의 OCR 기능을 사용하려면 시스템 패키지 설치가 필요합니다:
+API 키와 같은 민감한 정보를 관리하기 위해 `.env` 파일을 설정해야 합니다. 제공된 예제 파일을 복사하여 시작하세요.
 
 ```bash
+cp .env.example .env
+```
+
+이제 텍스트 편집기로 `.env` 파일을 열고, 사용할 LLM 서비스의 API 키를 입력하세요. **최소 하나 이상의 API 키가 필요합니다.**
+
+```env
+# --- 필수 (최소 1개 이상) ---
+# 업스테이지 API 키 (한국어 모델에 권장)
+UPSTAGE_API_KEY="your_upstage_api_key"
+
+# OpenAI API 키
+OPENAI_API_KEY="your_openai_api_key"
+
+# Google Gemini API 키
+GOOGLE_API_KEY="your_google_api_key"
+
+# Anthropic Claude API 키
+ANTHROPIC_API_KEY="your_anthropic_api_key"
+
+# --- 선택 (고급 기능용) ---
+# OpenRouter API 키 (지능형 이미지 분석용)
+OPNEROUTER_API_KEY="your_openrouter_api_key"
+
+# 로컬 LLM 서버 주소 (기본값: http://localhost:11434)
+LOCAL_LLM_BASE_URL="http://localhost:11434"
+```
+
+### 5. (선택) OCR 기능 설치
+
+스캔된 PDF나 이미지 형식의 문서에서 텍스트를 추출하려면 Tesseract OCR 엔진이 필요합니다.
+
+```bash
+# 자동 설치 스크립트 실행 (macOS/Linux)
 bash scripts/setup/install_ocr.sh
+
+# 또는 수동 설치 (macOS 예시)
+brew install tesseract tesseract-lang-kor poppler
 ```
 
-해당 스크립트는 다음을 설치합니다:
-- **Tesseract OCR**: 광학 문자 인식 엔진
-- **Poppler 유틸리티**: PDF → 이미지 변환 도구
-- **한국어 언어팩**: 한국어 텍스트 인식 지원
+## ✅ 설치 확인 및 실행
 
-### 대안: Docker 사용(준비 중)
-
-모든 의존성이 사전 설치된 Docker 이미지가 곧 제공될 예정입니다.
-
-## 플랫폼별 안내
-
-### macOS
-- Homebrew가 필요합니다(시스템 패키지 설치).
-- 제공된 스크립트로 모든 의존성을 설치할 수 있습니다.
-
-### Linux (Ubuntu/Debian)
-- 시스템 패키지는 apt-get을 사용합니다.
-- sudo 권한이 필요할 수 있습니다.
-
-### Linux (RedHat/CentOS)
-- 시스템 패키지는 yum을 사용합니다.
-- sudo 권한이 필요할 수 있습니다.
-
-### Windows
-- 아직 공식 지원하지 않습니다.
-- WSL2(Windows Subsystem for Linux) 사용을 권장합니다.
-
-## 의존성 상세
-
-### Python 패키지(pip)
-- **Core**: streamlit, langchain 생태계
-- **Vector DB**: faiss-cpu, chromadb
-- **ML/AI**: sentence-transformers, torch, transformers
-- **PDF 처리**: pypdf, PyPDF2, pdf2image[jpeg]
-- **OCR**: pytesseract(Tesseract의 Python 래퍼)
-- **API 클라이언트**: openai, anthropic, google-generativeai
- - **외부 라우터**: OpenRouter(HTTP, OpenAI 호환)
-
-### 업스테이지 임베딩 사용 시 추가 설치
-- 이 프로젝트는 기본 `requirements.txt`에서 `langchain-upstage`를 제외합니다. 이유: `langchain-upstage`가 `tokenizers<0.21`을 강제하여 최신 `transformers`(tokenizers>=0.21)와 충돌하기 때문입니다.
-- 업스테이지 임베딩을 사용할 경우, 다음과 같이 의존성 없이 개별 설치하세요:
+모든 설치가 완료되면, 통합 실행 도구를 사용하여 시스템을 시작할 수 있습니다.
 
 ```bash
-pip install --no-deps langchain-upstage
+python run_rag.py
 ```
 
-- 설치 후 `.env`에 `UPSTAGE_API_KEY`를 설정하세요.
+메뉴에서 "Streamlit 앱 실행"을 선택하여 웹 UI를 시작하세요. 잠시 후 웹 브라우저에서 챗봇 애플리케이션이 열립니다.
 
-### 시스템 패키지(패키지 관리자)
-- **tesseract-ocr**: OCR 엔진
-- **tesseract-ocr-kor**: 한국어 언어팩
-- **poppler-utils**: PDF 렌더링(pdf2image가 필요로 함)
+---
 
-## 설치 검증
-
-설치 이후, 다음 명령으로 정상 동작을 확인하세요:
-
-```bash
-# Python 의존성 확인
-python -c "import streamlit, langchain, pytesseract; print('Python dependencies OK')"
-
-# 시스템 의존성 확인
-tesseract --version
-pdftoppm -v
-```
-
-업스테이지 임베딩 사용 시 추가 확인:
-
-```bash
-python -c "import langchain_upstage; print('langchain-upstage OK')"
-
-## OpenRouter 사용 설정
-
-`.env`에 아래 값을 설정하세요(예시):
-
-```
-IMAGE_ANALYSIS_PROVIDER=openrouter
-OPNEROUTER_API_KEY=your_openrouter_api_key
-OPENROUTER_API_BASE=https://openrouter.ai/api
-OPENROUTER_MM_MODEL=z-ai/glm-4.5v
-```
-
-멀티모달 모델 확장이 필요하면 아래 키로 추가할 수 있습니다(콤마 구분):
-
-```
-EXTRA_MULTIMODAL_OPENAI_MODELS=gpt-5-mini,gpt-5-nano
-EXTRA_MULTIMODAL_GOOGLE_MODELS=gemini-2.5-pro
-EXTRA_MULTIMODAL_ANTHROPIC_MODELS=claude-opus-4-1-20250805
-```
-```
-
-## 문제 해결
-
-### OCR가 동작하지 않을 때
-- Tesseract 설치 확인: `which tesseract`
-- 언어팩 확인: `tesseract --list-langs`
-
-### PDF → 이미지 변환 실패
-- poppler 설치 확인: `which pdftoppm`
-- macOS: `brew install poppler`
-- Linux: `sudo apt-get install poppler-utils`
-
-### Import 오류
-- 패키지 설치 확인: `pip install -r requirements.txt`
-- Python 버전 확인: Python 3.8+ 필요
+**🎉 이제 모든 준비가 완료되었습니다!** 챗봇을 사용해 보세요.

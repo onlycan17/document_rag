@@ -241,24 +241,24 @@ streamlit run app.py
 
 ## 최신 전처리/멀티모달 업데이트(요약)
 - 기본 전처리 모델을 저비용·멀티모달 우선으로 재정렬
-  - OpenAI: `gpt-4o-mini`, Google: `gemini-1.5-flash-8b`, Anthropic: `claude-3-5-haiku-20241022`
+  - OpenAI: `gpt-5-mini`, Google: `gemini-2.5-flash`, Anthropic: `claude-4-sonnet`
 - 멀티모달 전처리 기본 ON(`ENABLE_MULTIMODAL_PREPROCESSING=true`)
 - 멀티모달 모델 목록 동적 확장(.env):
   - `EXTRA_MULTIMODAL_OPENAI_MODELS`, `EXTRA_MULTIMODAL_GOOGLE_MODELS`, `EXTRA_MULTIMODAL_ANTHROPIC_MODELS`
-  - OpenAI 목록에 `gpt-5-mini`, `gpt-5-nano` 추가(공식 페이지 미러 근거)
+  - OpenAI 목록에 `gpt-5-pro`, `gpt-5`, `gpt-5-mini` 추가(공식 페이지 미러 근거)
 - OpenRouter를 이용한 지능형 이미지 추출 기본 경로
   - `IMAGE_ANALYSIS_PROVIDER=openrouter`, `OPENROUTER_MM_MODEL=z-ai/glm-4.5v`, `OPNEROUTER_API_KEY` 필요
 - OpenAI API 호출 경로 개선: Responses API → Chat Completions 폴백
 
 ### 조사 → 계획 → 구현
 
-**절대로 코딩에 바로 뛰어들지 마세요!** 다음 순서를 항상 따르세요:
+**절대로 코딩에 바로 뛰어들지 마세요!** 다음 순서를 항상 따르세요: 
 
 1. **조사**: 코드베이스 탐색, 기존 패턴 이해
 2. **계획**: 상세한 구현 계획 수립 및 제게 확인 요청
 3. **구현**: 검증 지점과 함께 계획 실행
 
-어떤 기능을 구현해야 할 때는 먼저 말씀드립니다: "구현 전에 코드베이스를 조사하고 계획을 세우겠습니다."
+어떤 기능을 구현해야 할 때는 먼저 말씀드립니다: "구현 전에 코드베이스를 조사하고 계획을 세우겠습니다." 
 
 복잡한 아키텍처 결정이나 도전적인 문제의 경우, 최대한의 추론 능력을 발휘하기 위해 **"초고도 사고(ultrathink)"**를 사용합니다. "이 아키텍처에 대해 해결책을 제안하기 전에 깊이 생각해보겠습니다."
 

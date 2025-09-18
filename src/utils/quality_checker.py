@@ -8,6 +8,7 @@ from typing import Dict, List, Any, Tuple
 from pathlib import Path
 
 from src.agents.base_agent import LocalLLMAgent
+from config import settings
 
 logger = logging.getLogger(__name__)
 
