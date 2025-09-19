@@ -3,16 +3,17 @@
 """
 
 import streamlit as st
+import os
 import time
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
 from src.rag.rag_chain import RAGChain
+from ui.services.app_service import AppService
 
 
 def render_chat_interface(
     rag_chain: RAGChain,
-    display_images_in_response,
     sidebar_config: Dict[str, Any]
 ) -> None:
     """
@@ -29,30 +30,39 @@ def render_chat_interface(
         st.session_state.messages = []
     
     # 채팅 히스토리 표시
-    _display_chat_history(display_images_in_response)
-    
+    _display_chat_history()
+
     # 채팅 입력 및 처리
-    _handle_chat_input(rag_chain, display_images_in_response, sidebar_config)
+    _handle_chat_input(rag_chain, sidebar_config)
 
 
-def _display_chat_history(display_images_in_response) -> None:
+def _display_chat_history() -> None:
     """채팅 히스토리를 표시합니다."""
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             if message["role"] == "assistant" and "context_documents" in message:
-                # 이미지가 포함된 응답 처리
-                processed_content = display_images_in_response(
-                    message["content"], 
-                    message.get("context_documents", [])
-                )
-                st.markdown(processed_content, unsafe_allow_html=True)
+                # 텍스트는 Markdown으로 표시하고, 이미지들은 st.image로 직접 렌더링합니다.
+                st.markdown(message["content"])
+                try:
+                    images_info = AppService.extract_images_from_content(message.get("content", ""), message.get("context_documents", []))
+                    for img in images_info:
+                        path = img.get('path')
+                        caption = f"파일: {img.get('filename', 'Unknown')} | 출처: {img.get('source', 'Unknown')}"
+                        try:
+                            if path and os.path.exists(path):
+                                st.image(path, caption=caption, use_column_width=False)
+                        except Exception:
+                            # 안전하게 무시하고 계속 렌더링
+                            pass
+                except Exception:
+                    # 추출 실패시 기존 컨텐츠만 표시
+                    pass
             else:
                 st.markdown(message["content"])
 
 
 def _handle_chat_input(
     rag_chain: RAGChain,
-    display_images_in_response,
     sidebar_config: Dict[str, Any]
 ) -> None:
     """채팅 입력을 처리합니다."""
@@ -67,50 +77,118 @@ def _handle_chat_input(
         
         # 어시스턴트 응답 생성
         with st.chat_message("assistant"):
-            with st.spinner("답변을 생성하는 중..."):
-                try:
-                    # RAG 체인으로 응답 생성
-                    start_time = time.time()
-                    response_data = rag_chain.invoke(prompt)
+            # 스트리밍 우선 시도: rag_chain.stream_query가 존재하면 스트리밍을 사용하여 실시간 업데이트
+            start_time = time.time()
+            response_text = ""
+            context_documents = []
+            metadata = {}
+
+            try:
+                stream_gen = None
+                # 스트리밍 메서드 존재 시 사용
+                if hasattr(rag_chain, 'stream_query'):
+                    try:
+                        stream_gen = rag_chain.stream_query(prompt)
+                    except Exception:
+                        stream_gen = None
+
+                # 스트리밍 사용 가능한 경우 제너레이터로 청크 처리
+                if stream_gen is not None:
+                    placeholder = st.empty()
+                    status_placeholder = st.empty()
+
+                    # stream_gen은 dict 청크를 yield 해야 함 (type, content 등)
+                    for chunk in stream_gen:
+                        try:
+                            chunk_type = chunk.get('type', '')
+                            # QueryEngine.stream_query yields types: 'status', 'content', 'complete', 'error'
+                            if chunk_type == 'status':
+                                status_placeholder.info(chunk.get('content', ''))
+                            elif chunk_type == 'content':
+                                # 청크별 부분 텍스트
+                                chunk_content = chunk.get('content', '')
+                                response_text += chunk_content
+                                # 일부 스트리밍 구현은 full_content를 제공하므로 우선 순위로 사용
+                                full = chunk.get('full_content') or response_text
+                                placeholder.markdown(full)
+                            elif chunk_type == 'complete':
+                                # 스트리밍 완료: full_content와 sources 등의 메타 포함
+                                response_text = chunk.get('full_content', response_text)
+                                context_documents = chunk.get('sources', context_documents)
+                                # search_info/metadata가 있는 경우 metadata 변수에 저장
+                                if 'search_info' in chunk:
+                                    metadata['search_info'] = chunk.get('search_info')
+                                placeholder.markdown(response_text)
+                                break
+                            elif chunk_type == 'error':
+                                # 오류 청크 수신시 표시하고 종료
+                                err = chunk.get('content', '스트리밍 중 오류가 발생했습니다.')
+                                status_placeholder.error(err)
+                                response_text = ''
+                                break
+                        except Exception:
+                            # 개별 청크 처리 중 에러는 무시하고 계속 스트리밍
+                            continue
+
+                    # 상태 정리
+                    status_placeholder.empty()
                     end_time = time.time()
-                    
-                    # 응답 처리
-                    if isinstance(response_data, dict):
-                        response_text = response_data.get('answer', str(response_data))
-                        context_documents = response_data.get('context_documents', [])
-                        metadata = response_data.get('metadata', {})
-                    else:
-                        response_text = str(response_data)
-                        context_documents = []
-                        metadata = {}
-                    
-                    # 이미지 표시 처리
-                    if sidebar_config.get('extract_images', True):
-                        processed_response = display_images_in_response(response_text, context_documents)
-                        st.markdown(processed_response, unsafe_allow_html=True)
-                    else:
+                else:
+                    # 스트리밍을 사용할 수 없으면 기존 동기 방식으로 폴백
+                    with st.spinner("답변을 생성하는 중..."):
+                        response_data = rag_chain.invoke(prompt)
+                        end_time = time.time()
+
+                        if isinstance(response_data, dict):
+                            response_text = response_data.get('answer', str(response_data))
+                            context_documents = response_data.get('context_documents', [])
+                            metadata = response_data.get('metadata', {})
+                        else:
+                            response_text = str(response_data)
+                            context_documents = []
+                            metadata = {}
+
                         st.markdown(response_text)
-                    
-                    # 성능 정보 표시
-                    processing_time = end_time - start_time
-                    _display_performance_info(processing_time, metadata, context_documents)
-                    
-                    # 어시스턴트 메시지 저장
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": response_text,
-                        "context_documents": context_documents,
-                        "metadata": metadata,
-                        "processing_time": processing_time
-                    })
-                    
-                except Exception as e:
-                    error_message = f"답변 생성 중 오류가 발생했습니다: {str(e)}"
-                    st.error(error_message)
-                    st.session_state.messages.append({
-                        "role": "assistant", 
-                        "content": error_message
-                    })
+
+                # 이미지 및 추가 정보 렌더링
+                if sidebar_config.get('extract_images', True) and response_text:
+                    try:
+                        images_info = AppService.extract_images_from_content(response_text, context_documents)
+                        
+                        if images_info:
+                            for img in images_info:
+                                path = img.get('path')
+                                filename = img.get('filename', 'Unknown')
+                                source = img.get('source', 'Unknown')
+                                caption = f"파일: {filename} | 출처: {source}"
+                                
+                                try:
+                                    if path and os.path.exists(path):
+                                        st.image(path, caption=caption, use_column_width=False)
+                                except Exception as e:
+                                    st.warning(f"이미지 렌더링 중 오류 발생: {path} ({e})")
+                    except Exception as e:
+                        st.error(f"이미지 추출 과정에서 오류가 발생했습니다: {e}")
+
+                # 성능 정보 표시 및 세션 저장
+                processing_time = (end_time - start_time) if 'end_time' in locals() else time.time() - start_time
+                _display_performance_info(processing_time, metadata, context_documents)
+
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response_text,
+                    "context_documents": context_documents,
+                    "metadata": metadata,
+                    "processing_time": processing_time
+                })
+
+            except Exception as e:
+                error_message = f"답변 생성 중 오류가 발생했습니다: {str(e)}"
+                st.error(error_message)
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": error_message
+                })
 
 
 def _display_performance_info(

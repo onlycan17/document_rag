@@ -33,8 +33,9 @@ class AppService:
             import base64
             from pathlib import Path
             
-            if not os.path.exists(image_path):
-                return None
+            # 우선 제공된 경로가 파일로 존재하면 절대 경로 반환
+            if os.path.exists(image_path):
+                return os.path.abspath(image_path)
             
             # 파일 확장자 확인
             ext = Path(image_path).suffix.lower()
@@ -52,10 +53,15 @@ class AppService:
             }
             mime_type = mime_types.get(ext, 'image/jpeg')
             
-            # 파일을 base64로 인코딩
+            # 파일을 base64로 인코딩 (폴백)
+            # 만약 경로가 없을 경우, 호출자에서 여러 후보 경로를 탐색하도록 설계되어 있으나
+            # 안전을 위해 다시 확인하고 가능하면 data URL로 변환합니다.
+            if not os.path.exists(image_path):
+                return None
+
             with open(image_path, 'rb') as f:
                 image_data = base64.b64encode(f.read()).decode()
-            
+
             return f"data:{mime_type};base64,{image_data}"
             
         except Exception as e:
@@ -74,48 +80,223 @@ class AppService:
         Returns:
             List[Dict[str, Any]]: 이미지 정보 리스트
         """
-        images_info = []
-        
+        print(f"🔍 [AppService.extract_images_from_content] 시작 - 문서 개수: {len(context_documents) if context_documents else 0}")
+        images_info: List[Dict[str, Any]] = []
+
+        def _append_image(p: str, md: Dict[str, Any]):
+            print(f"🔍 [AppService._append_image] 경로 해결 시도: {p}")
+            # 경로 정규화 및 후보 탐색
+            resolved = AppService._resolve_image_path(p)
+            if not resolved:
+                print(f"🔍 [AppService._append_image] ❌ 경로 해결 실패: {p}")
+                return
+            print(f"🔍 [AppService._append_image] ✅ 경로 해결 성공: {resolved}")
+            filename = md.get('filename') or os.path.basename(resolved)
+            source = md.get('source') or md.get('file_name') or 'Unknown'
+            description = md.get('image_description') or md.get('description') or ''
+            image_info = {
+                'path': resolved,
+                'filename': filename,
+                'source': source,
+                'description': description
+            }
+            images_info.append(image_info)
+            print(f"🔍 [AppService._append_image] 이미지 정보 추가됨: {image_info}")
+
         try:
-            for doc in context_documents:
+            for i, doc in enumerate(context_documents):
+                print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1} 처리 시작")
+                # 일부 호출부는 (Document, score) 튜플을 전달할 수 있음
+                if isinstance(doc, (list, tuple)) and len(doc) > 0:
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: 튜플/리스트 형태, 첫 번째 요소 추출")
+                    doc = doc[0]
+
+                print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1} 타입: {type(doc)}")
+
+                # 문서가 dict 형태로 이미지 정보를 바로 포함할 수도 있음
+                if isinstance(doc, dict):
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: dict 형태, 키들: {list(doc.keys())}")
+                    # 예: {'image_file': '...'} 형태
+                    if 'image_file' in doc and doc.get('image_file'):
+                        print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: image_file 발견 - {doc.get('image_file')}")
+                        _append_image(doc.get('image_file'), doc)
+                        continue
+                    if 'image_path' in doc and doc.get('image_path'):
+                        print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: image_path 발견 - {doc.get('image_path')}")
+                        _append_image(doc.get('image_path'), doc)
+                        continue
+
+                metadata = None
                 if hasattr(doc, 'metadata') and doc.metadata:
                     metadata = doc.metadata
-                    
-                    # 이미지 경로 정보가 있는지 확인
-                    if 'image_paths' in metadata and metadata['image_paths']:
-                        for image_path in metadata['image_paths']:
-                            if os.path.exists(image_path):
-                                # 파일명과 소스 정보 추출
-                                filename = os.path.basename(image_path)
-                                source = metadata.get('source', 'Unknown')
-                                description = metadata.get('image_description', '')
-                                
-                                images_info.append({
-                                    'path': image_path,
-                                    'filename': filename,
-                                    'source': source,
-                                    'description': description
-                                })
-                    
-                    # 단일 이미지 경로가 있는지 확인
-                    elif 'image_path' in metadata and metadata['image_path']:
-                        image_path = metadata['image_path']
-                        if os.path.exists(image_path):
-                            filename = os.path.basename(image_path)
-                            source = metadata.get('source', 'Unknown')
-                            description = metadata.get('image_description', '')
-                            
-                            images_info.append({
-                                'path': image_path,
-                                'filename': filename,
-                                'source': source,
-                                'description': description
-                            })
-            
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: hasattr metadata 사용, 키들: {list(metadata.keys()) if metadata else 'None'}")
+                elif isinstance(doc, dict) and 'metadata' in doc:
+                    metadata = doc.get('metadata')
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: dict metadata 사용, 키들: {list(metadata.keys()) if metadata else 'None'}")
+
+                if not metadata:
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: 메타데이터 없음, 건너뜀")
+                    continue
+                
+                print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: 메타데이터 발견, 키들: {list(metadata.keys())}")
+
+                # 다양한 필드명을 지원: image_paths, image_files, images, intelligent_images, image_path, image_file, relative_path
+                # 1) 리스트 형태의 이미지 정보
+                if metadata.get('image_paths'):
+                    paths = metadata.get('image_paths', [])
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: image_paths 발견 - {len(paths)}개")
+                    for p in paths:
+                        if p:
+                            _append_image(p, metadata)
+
+                elif metadata.get('image_files'):
+                    files = metadata.get('image_files', [])
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: image_files 발견 - {len(files)}개")
+                    for p in files:
+                        if p:
+                            _append_image(p, metadata)
+
+                elif metadata.get('images') and isinstance(metadata.get('images'), list):
+                    images = metadata.get('images', [])
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: images 발견 - {len(images)}개")
+                    for j, item in enumerate(images):
+                        print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}, 이미지 {j+1}: {type(item)} - {item if isinstance(item, str) else list(item.keys()) if isinstance(item, dict) else 'unknown'}")
+                        if isinstance(item, dict):
+                            p = item.get('image_file') or item.get('path') or item.get('relative_path')
+                            if p:
+                                md = {**metadata, **item}
+                                _append_image(p, md)
+                        elif isinstance(item, str):
+                            _append_image(item, metadata)
+
+                elif metadata.get('intelligent_images') and isinstance(metadata.get('intelligent_images'), list):
+                    intelligent_images = metadata.get('intelligent_images', [])
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: intelligent_images 발견 - {len(intelligent_images)}개")
+                    for item in intelligent_images:
+                        if isinstance(item, dict):
+                            p = item.get('image_file') or item.get('image_path') or item.get('path')
+                            if p:
+                                md = {**metadata, **item}
+                                _append_image(p, md)
+
+                # 2) 단일 이미지 필드
+                elif metadata.get('image_file'):
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: 단일 image_file 발견 - {metadata.get('image_file')}")
+                    _append_image(metadata.get('image_file'), metadata)
+                elif metadata.get('image_path'):
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: 단일 image_path 발견 - {metadata.get('image_path')}")
+                    _append_image(metadata.get('image_path'), metadata)
+                elif metadata.get('relative_path'):
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: 단일 relative_path 발견 - {metadata.get('relative_path')}")
+                    # relative_path는 리포지토리 루트 기준 상대 경로일 수 있음
+                    _append_image(metadata.get('relative_path'), metadata)
+                else:
+                    print(f"🔍 [AppService.extract_images_from_content] 문서 {i+1}: 알려진 이미지 필드가 없음")
+
         except Exception as e:
+            print(f"🔍 [AppService.extract_images_from_content] ❌ 전체 오류: {str(e)}")
             logger.error(f"이미지 추출 중 오류: {str(e)}")
+
+        print(f"🔍 [AppService.extract_images_from_content] 완료 - 총 {len(images_info)}개 이미지 반환")
+        for i, img in enumerate(images_info):
+            print(f"🔍 [AppService.extract_images_from_content] 결과 {i+1}: {img.get('filename')} - {img.get('path')}")
         
         return images_info
+
+    @staticmethod
+    def _resolve_image_path(image_ref: str) -> Optional[str]:
+        """
+        다양한 경우의 이미지 경로를 시도하여 실제 파일 경로를 반환합니다.
+        - 절대 경로가 존재하면 즉시 반환
+        - static/images/pdf/ 경로는 data/extracted_images/ 경로로 매핑
+        - 상대 경로이면 프로젝트 루트와 몇몇 표준 디렉토리에서 탐색
+        - 파일명만 주어질 경우 다양한 디렉토리에서 검색
+        """
+        try:
+            if not image_ref:
+                return None
+
+            candidate = Path(image_ref)
+            # 이미 절대 경로로 존재하면 반환
+            if candidate.exists():
+                return str(candidate.resolve())
+
+            cwd = Path.cwd()
+            
+            # static/images/pdf/ 경로를 data/extracted_images/ 경로로 변환
+            if image_ref.startswith('static/images/pdf/'):
+                # static/images/pdf/filename.ext에서 filename.ext 추출
+                filename = os.path.basename(image_ref)
+                
+                # 파일명에서 문서명과 페이지/이미지 정보 추출
+                # 예: 2021년+몽촌토성+북문지+일원+발굴조사+자료집_page002_img031.png
+                if '_page' in filename and '_img' in filename:
+                    # 기존 형식에서 새 형식으로 변환
+                    parts = filename.split('_page')
+                    if len(parts) >= 2:
+                        doc_name = parts[0]
+                        page_img_part = '_page'.join(parts[1:])
+                        
+                        # page002_img031.png -> p002_i031.png로 변환
+                        page_img_part = page_img_part.replace('_page', '_p').replace('_img', '_i')
+                        new_filename = f"{doc_name}_p{page_img_part}"
+                        
+                        # data/extracted_images/doc_name/images/ 경로에서 검색
+                        extracted_images_path = cwd / 'data' / 'extracted_images' / doc_name / 'images' / new_filename
+                        if extracted_images_path.exists():
+                            return str(extracted_images_path.resolve())
+
+            # 후보 디렉토리 목록 - data/extracted_images 우선 추가
+            search_dirs = [
+                cwd / 'data' / 'extracted_images',
+                cwd,
+                cwd / 'processed_docs',
+                cwd / 'converted_docs',
+                cwd / 'data',
+                cwd / 'static',
+                cwd / 'static' / 'images',
+                cwd / 'static' / 'images' / 'pdf',
+                cwd / 'static' / 'images' / 'docx',
+                cwd / 'prompts',
+                cwd / 'docs'
+            ]
+
+            # 만약 image_ref이 상대 경로 형태이면 그대로 시도
+            for d in search_dirs:
+                p = (d / image_ref).resolve()
+                if p.exists():
+                    return str(p)
+
+            # 파일명만 있는 경우 파일명으로 검색
+            name = os.path.basename(image_ref)
+            
+            # data/extracted_images의 모든 하위 디렉토리에서 검색
+            extracted_images_dir = cwd / 'data' / 'extracted_images'
+            if extracted_images_dir.exists():
+                for doc_dir in extracted_images_dir.iterdir():
+                    if doc_dir.is_dir():
+                        images_dir = doc_dir / 'images'
+                        if images_dir.exists():
+                            image_path = images_dir / name
+                            if image_path.exists():
+                                return str(image_path.resolve())
+                                
+                            # 다양한 확장자로 시도
+                            name_without_ext = os.path.splitext(name)[0]
+                            for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
+                                test_path = images_dir / f"{name_without_ext}{ext}"
+                                if test_path.exists():
+                                    return str(test_path.resolve())
+            
+            # 기존 검색 디렉토리에서도 시도
+            for d in search_dirs:
+                p = (d / name).resolve()
+                if p.exists():
+                    return str(p)
+
+            return None
+        except Exception:
+            return None
     
     @staticmethod
     def display_images_in_response(content: str, context_documents: List[Any]) -> str:
@@ -136,31 +317,27 @@ class AppService:
         images_info = AppService.extract_images_from_content(content, context_documents)
         
         if images_info:
-            # 이미지가 있는 경우 HTML 추가
+            # 이미지가 있는 경우 Markdown 형식으로 이미지와 메타데이터를 추가합니다.
+            # Streamlit의 chat 컴포넌트는 HTML을 완전히 허용하지 않을 수 있으므로 Markdown 이미지 문법을 사용합니다.
             processed_content += "\n\n---\n\n**📷 관련 이미지:**\n\n"
-            
+
             for i, image_info in enumerate(images_info[:4], 1):  # 최대 4개 이미지만 표시
                 image_data_url = AppService.serve_image(image_info['path'])
                 if image_data_url:
                     clean_filename = image_info.get('filename', 'Unknown').replace('+', ' ')
                     clean_source = image_info.get('source', 'Unknown').replace('+', ' ')
-                    
+
                     if len(clean_source) > 35:
                         clean_source = clean_source[:32] + "..."
-                    
-                    # 간단한 이미지 표시
-                    processed_content += f"""
-                    <div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-                        <img src="{image_data_url}" style="max-width: 300px; max-height: 200px; border-radius: 3px;" />
-                        <br>
-                        <small><strong>파일:</strong> {clean_filename}</small><br>
-                        <small><strong>출처:</strong> {clean_source}</small>
-                    """
-                    
+
+                    # Markdown 이미지 문법 사용; Streamlit은 Markdown의 이미지 링크를 렌더링합니다.
+                    # 크기 제어는 Markdown에서 직접 지원되지 않으므로 필요하면 추후에 st.image로 대체할 수 있습니다.
+                    processed_content += f"\n{i}. **{clean_filename}**  \n"
+                    processed_content += f"![{clean_filename}]({image_data_url})\n\n"
+                    processed_content += f"- 출처: {clean_source}  \n"
                     if image_info.get('description'):
-                        processed_content += f"<br><small><strong>설명:</strong> {image_info['description']}</small>"
-                    
-                    processed_content += "</div>\n\n"
+                        processed_content += f"- 설명: {image_info['description']}  \n"
+                    processed_content += "\n"
         
         return processed_content
     

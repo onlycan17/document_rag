@@ -162,7 +162,6 @@ def render_chat_tab(controller: MainController):
     # 채팅 인터페이스
     render_chat_interface(
         rag_chain=controller.safe_get_rag_chain(),
-        display_images_in_response=AppService.display_images_in_response,
         sidebar_config=st.session_state.get('sidebar_config', {})
     )
     
