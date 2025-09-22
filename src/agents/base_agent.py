@@ -220,7 +220,7 @@ class LocalLLMAgent(ABC):
                     raise
                 logger.warning(f"⚠️ GGUF 호출 실패, HTTP 모드 폴백: {e}")
 
-        # 2) HTTP 폴백 (기존 동작)
+        # 2) HTTP 호출 (LM Studio 등 OpenAI 호환 서버)
         payload = {
             "model": self.model_name,
             "messages": [{"role": "user", "content": prompt}],
@@ -228,9 +228,6 @@ class LocalLLMAgent(ABC):
             "max_tokens": max_tokens,
             "stream": False,
         }
-
-        if settings.disable_http_fallback:
-            raise Exception("HTTP fallback disabled")
 
         try:
             response = requests.post(
