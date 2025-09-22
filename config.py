@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     local_llm_max_retries: int = int(os.getenv("LOCAL_LLM_MAX_RETRIES", "3"))  # 로컬 모델 재시도 횟수
     # 로컬 GGUF 경로(서버 없이 오프라인 추론)
     local_llm_gguf_path: Optional[str] = os.getenv("LOCAL_LLM_GGUF_PATH")
+    # 로컬 GGUF 백엔드 사용 금지(HTTP 서버(LM Studio)만 사용)
+    disable_local_gguf: bool = os.getenv("DISABLE_LOCAL_GGUF", "true").lower() == "true"
     # 업로드/전처리 과정에서 HTTP 폴백 비활성화 여부
     disable_http_fallback: bool = os.getenv("DISABLE_HTTP_FALLBACK", "false").lower() == "true"
     # 로컬 LLM 성능/안정성 파라미터
@@ -84,7 +86,7 @@ class Settings(BaseSettings):
 
     # LM Studio (로컬 모델 서버) 설정
     # 기본값은 내부 네트워크에서 운영 중인 LM Studio 인스턴스를 가리킵니다.
-    lm_studio_api_url: str = os.getenv("LM_STUDIO_API_URL", "http://192.168.0.227:3620")
+    lm_studio_api_url: str = os.getenv("LM_STUDIO_API_URL", "http://localhost:3620")
     lm_studio_model_dir: Optional[str] = os.getenv("LM_STUDIO_MODEL_DIR", os.path.join(Path.home(), 'Library', 'Application Support', 'lm-studio', 'models'))
 
     # OpenRouter (외부 API) 설정 — 사용자 .env에 OPNEROUTER_API_KEY 키가 존재

@@ -46,6 +46,10 @@ class ImageAnalyzer:
                     logger.warning("로컬 A.X 4.0 VL Light 디렉토리를 찾을 수 없어 이미지 분석 로컬 모드를 비활성화합니다.")
             except Exception as e:
                 logger.warning(f"로컬 멀티모달 모델 초기화 실패: {e}")
+        elif self.model_provider == "openrouter":
+            # OpenRouter는 별도 서비스로 처리. 키 존재 여부만 확인
+            if not self.api_key:
+                logger.warning("⚠️ OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다. 이미지 분석 기능이 제한됩니다.")
         else:
             if not self.api_key:
                 logger.warning(f"⚠️ {model_provider} API 키가 설정되지 않았습니다. 이미지 분석 기능이 비활성화됩니다.")
@@ -60,6 +64,9 @@ class ImageAnalyzer:
             return os.getenv("GOOGLE_API_KEY")
         elif self.model_provider == "anthropic":
             return os.getenv("ANTHROPIC_API_KEY")
+        elif self.model_provider == "openrouter":
+            # 프로젝트 사양상 철자 고정: OPNEROUTER_API_KEY
+            return os.getenv("OPNEROUTER_API_KEY")
         return None
     
     def _encode_image_to_base64(self, image_path: str) -> str:
@@ -173,6 +180,27 @@ class ImageAnalyzer:
             logger.error(f"OpenAI 이미지 분석 실패: {str(e)}")
             return None
 
+    def analyze_image_openrouter(self, image_path: str, context: str = "") -> Optional[str]:
+        """OpenRouter 멀티모달을 사용한 이미지 분석(간단 설명만 사용).
+
+        참고: 세부 평점/텍스트 추출은 OpenRouterImageService가 수행하며,
+        여기서는 설명(description)만 반환하여 PDF 전처리 주석에 사용합니다.
+        """
+        try:
+            if not self.api_key:
+                logger.warning("OpenRouter API 키가 없어 이미지 분석을 건너뜁니다.")
+                return None
+            from src.utils.openrouter_image_service import OpenRouterImageService
+            svc = OpenRouterImageService()
+            info = svc.analyze_image(image_path)
+            desc = (info or {}).get("description")
+            if desc:
+                return desc.strip()
+            return None
+        except Exception as e:
+            logger.error(f"OpenRouter 이미지 분석 실패: {str(e)}")
+            return None
+
     def analyze_image_local(self, image_path: str, context: str = "") -> Optional[str]:
         """로컬 Gemma 멀티모달 모델을 사용한 이미지 분석"""
         try:
@@ -256,7 +284,7 @@ class ImageAnalyzer:
         Returns:
             이미지 설명 텍스트 또는 None
         """
-        if self.model_provider != "local":
+        if self.model_provider not in ("local",):
             if not self.api_key:
                 logger.warning("API 키가 없어 이미지 분석을 건너뜁니다.")
                 return None
@@ -273,6 +301,8 @@ class ImageAnalyzer:
                 description = self.analyze_image_openai(image_path, context)
             elif self.model_provider == "google":
                 description = self.analyze_image_google(image_path, context)
+            elif self.model_provider == "openrouter":
+                description = self.analyze_image_openrouter(image_path, context)
             elif self.model_provider == "local":
                 description = self.analyze_image_local(image_path, context)
             else:
@@ -341,7 +371,15 @@ def create_image_analyzer(model_provider: str = None) -> ImageAnalyzer:
         ImageAnalyzer 인스턴스
     """
     if model_provider is None:
-        # 로컬 Gemma가 있으면 최우선 사용
+        # 설정 우선: OpenRouter가 기본 경로라면 우선 선택(키 필수)
+        try:
+            from config import settings as _settings
+            if getattr(_settings, "image_analysis_provider", "openrouter").lower() == "openrouter" and _settings.openrouter_api_key:
+                return ImageAnalyzer(model_provider="openrouter")
+        except Exception:
+            pass
+
+        # 로컬 Gemma가 있으면 그 다음 선택(오프라인 가용성)
         try:
             from src.utils.model_bootstrap import get_gemma_dir
             gemma_dir = get_gemma_dir(prefer_3n=True)
@@ -350,15 +388,17 @@ def create_image_analyzer(model_provider: str = None) -> ImageAnalyzer:
         except Exception:
             pass
 
-        # 환경 변수에서 사용 가능한 모델 확인
+        # 환경 변수에서 사용 가능한 외부 모델 확인
         if os.getenv("OPENAI_API_KEY"):
             model_provider = "openai"
         elif os.getenv("GOOGLE_API_KEY"):
             model_provider = "google"
         elif os.getenv("ANTHROPIC_API_KEY"):
             model_provider = "anthropic"
+        elif os.getenv("OPNEROUTER_API_KEY"):
+            model_provider = "openrouter"
         else:
-            # 기본은 로컬 시도 (사용자 요구: 로컬 우선)
+            # 마지막으로 로컬 시도
             model_provider = "local"
     
     return ImageAnalyzer(model_provider=model_provider)

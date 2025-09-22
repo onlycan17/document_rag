@@ -23,6 +23,8 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
         "openai": [
             "gpt-4o",
             "gpt-4o-mini",
+            "gpt-4.1",
+            "gpt-4.1-mini",
             # 공식 가격 페이지(미러) 확인: GPT-5 mini/nano
             # 참고: http(s)://openai.com/ko-KR/api/pricing/ (Cloudflare 우회 미러로 확인)
             "gpt-5-mini",

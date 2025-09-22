@@ -22,8 +22,17 @@ class MDPostProcessor(LocalLLMAgent):
     원본 MD → 문맥 연결된 고품질 MD 변환
     """
     
-    def __init__(self, output_dir: str = "processed_docs", target_quality: int = 90):
-        super().__init__("MDPostProcessor")
+    def __init__(self, output_dir: str = "processed_docs", target_quality: int = 90,
+                 provider: str | None = None, model_name: str | None = None, base_url: str | None = None):
+        # 선택한 제공자/모델을 그대로 사용(없으면 설정/세션)
+        if provider is None:
+            try:
+                import streamlit as st  # type: ignore
+                provider = st.session_state.get('current_provider', None)
+                model_name = model_name or st.session_state.get('current_model', None)
+            except Exception:
+                pass
+        super().__init__("MDPostProcessor", provider=provider, model_name=model_name, base_url=base_url)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.target_quality = target_quality
@@ -207,7 +216,8 @@ class MDPostProcessor(LocalLLMAgent):
 출력(교정된 텍스트만):"""
         
         try:
-            response = self._call_local_llm(prompt, temperature=0.1, max_tokens=3500)
+            # 현재 provider에 맞춰 외부/로컬 호출 자동 선택
+            response = self._call_llm(prompt, temperature=0.1, max_tokens=3500)
             
             if response.strip():
                 logger.debug(f"청크 {chunk_num} 처리 완료: {len(chunk)} → {len(response)}자")

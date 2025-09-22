@@ -48,33 +48,16 @@ class AgentBasedPDFConverter:
         # 이미지 분석기 초기화 (선택적)
         if enable_image_analysis:
             try:
-                # 이미지 분석기 제공자: 화면 선택(가능 시)과 일치시키되, 미설정이면 기존 heuristics 유지
-                analyzer_provider = None
-                try:
-                    import streamlit as st  # type: ignore
-                    analyzer_provider = st.session_state.get('current_provider', None)
-                except Exception:
-                    analyzer_provider = provider
-                # 'local' 외에는 로컬 멀티모달을 피하고 외부 API 사용
-                self.image_analyzer = create_image_analyzer(analyzer_provider)
+                # LM Studio는 이미지/멀티모달 엔드포인트를 제공하지 않으므로
+                # 이미지 분석은 항상 OpenRouter를 사용
+                self.image_analyzer = create_image_analyzer('openrouter')
                 logger.info("🖼️ 이미지 분석기 활성화됨")
             except Exception as e:
                 logger.warning(f"⚠️ 이미지 분석기 초기화 실패: {str(e)}")
                 self.image_analyzer = None
                 self.enable_image_analysis = False
-
-            # 로컬 제공자일 때만 로컬 멀티모달 연결
+            # 로컬 멀티모달은 비활성화 (항상 OpenRouter 사용)
             self.local_multimodal = None
-            if (provider or "local").lower() == "local":
-                try:
-                    from src.utils.model_bootstrap import get_ax_vl_dir
-                    from src.utils.ax_multimodal import AXMultimodalModel
-                    ax_path = get_ax_vl_dir()
-                    if ax_path and ax_path.exists():
-                        self.local_multimodal = AXMultimodalModel(model_path=str(ax_path), device="auto", max_memory_gb=8)
-                        logger.info("🔗 로컬 A.X 멀티모달 활성화(이미지 설명)")
-                except Exception as e:
-                    logger.warning(f"로컬 멀티모달 연결 건너뜀: {e}")
         else:
             self.image_analyzer = None
         
@@ -109,15 +92,13 @@ class AgentBasedPDFConverter:
                 model = getattr(_settings, 'anthropic_model', 'claude-3-5-haiku-20241022')
             else:
                 model = getattr(_settings, 'local_llm_model', 'local-model')
-        # 3) 로컬일 경우 1620 선호 포트 적용
+        # 3) 로컬일 경우 LM Studio API URL 우선 사용
         if provider == 'local':
             try:
-                prefer_port = int(getattr(_settings, 'local_mm_prefer_port', '1620'))
-                from urllib.parse import urlparse
-                p = urlparse(getattr(_settings, 'local_llm_base_url', 'http://localhost:3620'))
-                host = p.hostname or 'localhost'
-                scheme = p.scheme or 'http'
-                base_url = f"{scheme}://{host}:{prefer_port}"
+                base = getattr(_settings, 'lm_studio_api_url', None) or getattr(_settings, 'local_llm_base_url', 'http://localhost:3620')
+                if not (base.startswith('http://') or base.startswith('https://')):
+                    base = 'http://' + base
+                base_url = base.rstrip('/')
             except Exception:
                 base_url = getattr(_settings, 'local_llm_base_url', 'http://localhost:3620')
         return provider, model, base_url
@@ -233,30 +214,18 @@ class AgentBasedPDFConverter:
                         
                         logger.info(f"   🖼️  이미지 추출 성공: {image_filename} ({width}x{height})")
                         
-                        # 이미지 분석 및 설명 생성
+                        # 이미지 분석 및 설명 생성(OpenRouter 고정)
                         image_description = None
-                        if self.enable_image_analysis:
-                            # 우선 로컬 멀티모달을 사용하고, 실패 시 image_analyzer로 폴백
+                        if self.enable_image_analysis and self.image_analyzer:
                             context = page_text.strip()[:500] if page_text.strip() else ""
-                            desc_ok = False
-                            if getattr(self, 'local_multimodal', None):
-                                try:
-                                    analysis = self.local_multimodal.analyze_image(str(image_path), {"main_topic": "", "keywords": []}, context)
-                                    image_description = (analysis or {}).get("content_description")
-                                    if image_description:
-                                        logger.info(f"   ✅ 이미지 설명 생성: {len(image_description)}자")
-                                        desc_ok = True
-                                except Exception as e:
-                                    logger.warning(f"   ⚠️ 로컬 멀티모달 설명 실패: {e}")
-                            if not desc_ok and self.image_analyzer:
-                                try:
-                                    image_description = self.image_analyzer.analyze_image(str(image_path), context)
-                                    if image_description:
-                                        logger.info(f"   ✅ 이미지 설명 생성: {len(image_description)}자")
-                                    else:
-                                        logger.warning(f"   ⚠️ 이미지 설명 생성 실패: {image_filename}")
-                                except Exception as e:
-                                    logger.warning(f"   ⚠️ 이미지 분석 오류: {str(e)}")
+                            try:
+                                image_description = self.image_analyzer.analyze_image(str(image_path), context)
+                                if image_description:
+                                    logger.info(f"   ✅ 이미지 설명 생성: {len(image_description)}자")
+                                else:
+                                    logger.warning(f"   ⚠️ 이미지 설명 생성 실패: {image_filename}")
+                            except Exception as e:
+                                logger.warning(f"   ⚠️ 이미지 분석 오류: {str(e)}")
                         
                         # 상대 경로로 저장 (마크다운에서 사용)
                         relative_image_path = f"./images/{image_filename}"

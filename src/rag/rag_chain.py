@@ -283,41 +283,11 @@ class RAGChain:
     # 기존 API 호환성을 위한 메서드들
     def _get_model_max_tokens(self) -> Dict[str, int]:
         """모델별 최대 토큰 수 반환 (기존 호환성)"""
-        # 2025년 9월 18일 기준 최신 모델 정보로 업데이트
-        # 이 로직은 LLMManager로 이동되었을 수 있으나, 호환성을 위해 여기에도 최신화합니다.
-        return {
-            # OpenAI
-            "gpt-5-pro": 32768,
-            "gpt-5": 32768,
-            "gpt-5-lite": 16384,
-            # Google
-            "gemini-2.0-ultra": 32768,
-            "gemini-2.5-pro": 32768,
-            "gemini-2.5-flash": 16384,
-            # Anthropic
-            "claude-4-1-opus-20250901": 32768,
-            "claude-4-1-sonnet-20250901": 16384,
-            "claude-4-1-haiku-20250901": 16384,
-        }
         return self.llm_manager._get_model_max_tokens()
     
     def _get_model_context_window(self) -> Dict[str, int]:
         """모델별 컨텍스트 윈도우 크기 반환 (기존 호환성)"""
-        # 2025년 9월 18일 기준 최신 모델 정보로 업데이트
-        return {
-            # OpenAI (단위: 토큰)
-            "gpt-5-pro": 1024 * 1024,  # 1M
-            "gpt-5": 512 * 1024,      # 512K
-            "gpt-5-lite": 256 * 1024, # 256K
-            # Google (단위: 토큰)
-            "gemini-2.0-ultra": 8 * 1024 * 1024, # 8M
-            "gemini-2.5-pro": 4 * 1024 * 1024,   # 4M
-            "gemini-2.5-flash": 2 * 1024 * 1024, # 2M
-            # Anthropic (단위: 토큰)
-            "claude-4-1-opus-20250901": 2 * 1024 * 1024,  # 2M
-            "claude-4-1-sonnet-20250901": 1 * 1024 * 1024, # 1M
-            "claude-4-1-haiku-20250901": 500 * 1024,      # 500K
-        }
+        return self.llm_manager._get_model_context_window()
     
     def _get_max_tokens_for_model(self, provider: str, model: Optional[str] = None) -> int:
         """특정 모델의 최대 토큰 수 반환 (기존 호환성)"""

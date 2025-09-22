@@ -84,11 +84,20 @@ class LocalLLMAgent(ABC):
             else:
                 self.model_name = getattr(settings, 'local_llm_model', 'local-model')
 
-        # base_url 결정(로컬만 사용). 로컬이면 1620 멀티모달 선호 포트 적용
+        # base_url 결정
         if self.provider == "local":
-            self.base_url = self._prefer_local_mm_port(base_url or getattr(settings, 'local_llm_base_url', 'http://localhost:3620'))
+            # 로컬은 LM Studio HTTP 서버를 우선 사용 (디렉토리 GGUF 대신)
+            def _ensure_scheme(u: str) -> str:
+                if not u:
+                    return u
+                u = u.strip()
+                if not (u.startswith("http://") or u.startswith("https://")):
+                    return "http://" + u
+                return u
+            lm_base = getattr(settings, 'lm_studio_api_url', None) or getattr(settings, 'local_llm_base_url', 'http://localhost:3620')
+            self.base_url = _ensure_scheme(lm_base).rstrip('/')
         else:
-            self.base_url = base_url or ""
+            self.base_url = (base_url or "").rstrip('/')
 
         # 토큰/컨텍스트 설정(로컬/외부 공통 기본)
         self.max_tokens = getattr(settings, 'local_llm_max_tokens', 2048) if self.provider == 'local' else getattr(settings, 'max_tokens', 4096)
@@ -102,9 +111,30 @@ class LocalLLMAgent(ABC):
         else:
             logger.info(f"📡 LLM: provider={self.provider} model={self.model_name}")
 
-        # 로컬 선택 시에만 GGUF 백엔드 시도
-        if self.provider == 'local':
+        # 로컬 GGUF 백엔드는 기본 비활성화 (LM Studio HTTP 사용)
+        if self.provider == 'local' and not getattr(settings, 'disable_local_gguf', True):
             self._initialize_local_llm_backend()
+
+        # 로컬 모델명 유효성 점검: LM Studio에서 사용 가능한 모델을 조회하여 자동 보정
+        if self.provider == 'local':
+            try:
+                import requests as _req
+                r = _req.get(f"{self.base_url}/v1/models", timeout=3.0)
+                if r.status_code == 200:
+                    data = r.json()
+                    names = [m.get('id') or m.get('name') for m in data.get('data', [])]
+                    if names and self.model_name not in names:
+                        logger.warning(f"로컬 서버에 모델 '{self.model_name}'이 없습니다. 사용 가능: {names[:5]}{'...' if len(names)>5 else ''}")
+                        # 같은 계열 모델 자동 선택(간단 휴리스틱) 또는 첫 번째 모델
+                        fallback = None
+                        for n in names:
+                            if isinstance(n, str) and n.lower().split(':')[0] in (self.model_name or '').lower():
+                                fallback = n
+                                break
+                        self.model_name = fallback or names[0]
+                        logger.info(f"로컬 모델 자동 선택: {self.model_name}")
+            except Exception:
+                pass
 
     def _prefer_local_mm_port(self, url: str) -> str:
         """로컬 base URL을 멀티모달 선호 포트(기본 1620)로 정규화"""

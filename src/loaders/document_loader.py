@@ -116,8 +116,18 @@ class EnhancedDocumentLoader:
             from src.processing.preprocessing_factory import PreprocessingModelFactory
             
             # 선택된 전처리 모델로 초기화
+            # 멀티모달 활성화 시 UI에서 선택된 모델명을 우선 적용
+            selected_model_name = None
+            try:
+                import streamlit as st  # type: ignore
+                if st.session_state.get('enable_multimodal_preprocessing', False):
+                    selected_model_name = st.session_state.get('preproc_mm_model', None)
+            except Exception:
+                pass
+
             self._preprocessing_model = PreprocessingModelFactory.create_model(
-                self.preprocessing_model
+                self.preprocessing_model,
+                model_name=selected_model_name
             )
             logger.info(f"전처리 모델 초기화 완료: {self.preprocessing_model}")
             
@@ -449,13 +459,35 @@ class EnhancedDocumentLoader:
                     logger.info("🔧 2단계 MD 후처리 시작...")
                     
                     # MDPostProcessor 초기화
+                    # 에이전트/후처리도 현재 선택된 제공자/모델을 따르도록 동기화
+                    _prov = None
+                    _model = None
+                    try:
+                        import streamlit as st  # type: ignore
+                        _prov = st.session_state.get('current_provider', None)
+                        _model = st.session_state.get('current_model', None)
+                    except Exception:
+                        pass
+                    _prov = _prov or getattr(settings, 'llm_provider', 'local')
+                    if not _model:
+                        if _prov == 'openai':
+                            _model = getattr(settings, 'openai_model', None)
+                        elif _prov == 'google':
+                            _model = getattr(settings, 'google_model', None)
+                        elif _prov == 'anthropic':
+                            _model = getattr(settings, 'anthropic_model', None)
+                        else:
+                            _model = getattr(settings, 'local_llm_model', None)
+
                     postprocessor = MDPostProcessor(
                         output_dir="processed_docs",
-                        target_quality=settings.md_postprocess_target_quality
+                        target_quality=settings.md_postprocess_target_quality,
+                        provider=_prov,
+                        model_name=_model,
                     )
                     
-                    # 품질 검사기 초기화 및 연결
-                    quality_checker = QualityChecker()
+                    # 품질 검사기 초기화 및 연결(동일 제공자/모델)
+                    quality_checker = QualityChecker(provider=_prov, model_name=_model)
                     postprocessor.set_quality_checker(quality_checker)
                     
                     # 2단계 후처리 실행
@@ -656,9 +688,38 @@ class EnhancedDocumentLoader:
                 # 임시 출력 디렉토리 사용
                 import tempfile
                 temp_output_dir = tempfile.mkdtemp(prefix="agent_pdf_convert_")
+                # 에이전트 LLM 제공자/모델을 UI 선택값 또는 설정으로 강제 동기화
+                from config import settings as _settings
+                provider = None
+                model = None
+                try:
+                    import streamlit as st  # type: ignore
+                    provider = st.session_state.get('current_provider', None)
+                    model = st.session_state.get('current_model', None)
+                except Exception:
+                    pass
+                # 우선순위: UI 세션 → 전처리 선택값(self.preprocessing_model) → 설정 기본
+                # 전처리 제공자 값이 외부 API이면 이를 우선 적용하여 에이전트 단계도 동일 제공자 사용
+                preprocess_provider = (self.preprocessing_model or '').lower()
+                if preprocess_provider in ('openai', 'google', 'anthropic'):
+                    provider = preprocess_provider
+                provider = (provider or getattr(_settings, 'llm_provider', 'local'))
+                if not model:
+                    # 설정에서 제공자별 기본 모델 추론
+                    if provider == 'openai':
+                        model = getattr(_settings, 'openai_model', None)
+                    elif provider == 'google':
+                        model = getattr(_settings, 'google_model', None)
+                    elif provider == 'anthropic':
+                        model = getattr(_settings, 'anthropic_model', None)
+                    else:
+                        model = getattr(_settings, 'local_llm_model', None)
+
                 agent_converter = AgentBasedPDFConverter(
                     output_dir=temp_output_dir,
-                    enable_quality_validation=True
+                    enable_quality_validation=True,
+                    llm_provider=provider,
+                    llm_model=model,
                 )
                 
                 # 에이전트 기반 PDF 변환

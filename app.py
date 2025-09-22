@@ -65,9 +65,8 @@ from src.utils.logging_config import setup_logging, get_logger
 # UI 컴포넌트 임포트
 from ui.components.sidebar import render_sidebar
 from ui.components.chat_interface import render_chat_interface, render_chat_controls, render_feedback_interface
-from ui.components.file_uploader import render_file_upload_interface
+# 파일 업로드 인터페이스는 사이드바로 이동됨
 from ui.controllers.main_controller import MainController
-from ui.services.app_service import AppService
 
 # 로깅 설정
 setup_logging(logging.INFO)
@@ -172,15 +171,43 @@ def render_chat_tab(controller: MainController):
 def render_document_tab(controller: MainController):
     """문서 관리 탭 렌더링"""
     
-    # 전처리 설정 가져오기
-    sidebar_config = st.session_state.get('sidebar_config', {})
-    preprocessing_settings = controller.get_preprocessing_settings_from_sidebar(sidebar_config)
+    # 벡터 DB 상태 표시
+    vector_db_status = controller.get_vector_db_status()
     
-    # 파일 업로드 인터페이스
-    render_file_upload_interface(
-        safe_get_vector_db=controller.safe_get_vector_db,
-        preprocessing_settings=preprocessing_settings
-    )
+    st.subheader("📁 문서 데이터베이스 관리")
+    
+    # 문서 상태 정보
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if vector_db_status['is_initialized']:
+            st.success(f"✅ 데이터베이스 초기화됨")
+            st.info(f"📄 총 문서 수: {vector_db_status['document_count']}개")
+        else:
+            st.warning("⚠️ 데이터베이스가 초기화되지 않았습니다")
+            st.info("사이드바에서 문서를 업로드하여 시작하세요")
+    
+    with col2:
+        if vector_db_status['is_initialized']:
+            # 데이터베이스 초기화 버튼
+            if st.button("🗑️ 데이터베이스 초기화", type="secondary"):
+                if st.session_state.get('confirm_reset', False):
+                    vector_db = controller.safe_get_vector_db()
+                    if vector_db:
+                        vector_db.reset()
+                        st.success("데이터베이스가 초기화되었습니다")
+                        st.rerun()
+                    st.session_state.confirm_reset = False
+                else:
+                    st.session_state.confirm_reset = True
+                    st.warning("다시 클릭하면 모든 문서가 삭제됩니다")
+    
+    # 파일 업로드는 사이드바로 이동되었음을 안내
+    st.markdown("---")
+    st.info("💡 **파일 업로드**: 왼쪽 사이드바의 '문서 업로드' 섹션을 이용하세요")
+    st.markdown("- PDF, DOCX, TXT, MD 파일을 지원합니다")
+    st.markdown("- 이미지 추출 및 OCR 기능을 포함합니다")
+    st.markdown("- 멀티모달 전처리를 지원합니다")
 
 
 def render_debug_info():

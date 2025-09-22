@@ -44,7 +44,7 @@ def render_sidebar(
         sidebar_config.update(_render_image_extraction())
         
         # 도메인 파일 업로드 섹션
-        sidebar_config.update(_render_domain_upload())
+        sidebar_config.update(_render_document_upload(safe_get_vector_db, sidebar_config))
         
         # 벡터 DB 상태 및 관리
         sidebar_config.update(_render_vector_db_management(safe_get_vector_db, safe_get_rag_chain))
@@ -123,8 +123,31 @@ def _render_text_preprocessing() -> Dict[str, Any]:
     # 텍스트 전처리 상태 표시(제공자/모델/멀티모달)
     _display_preprocessing_status(selected_preprocessing_model, preprocessing_model_options, enable_multimodal)
     
-    # 멀티모달 모델 정보 표시
+    # 멀티모달 모델 정보 및 선택
     if enable_multimodal:
+        # 제공자별 멀티모달 후보 표시 및 선택 박스 제공
+        mm_map = PreprocessingModelFactory.get_multimodal_models()
+        mm_candidates = mm_map.get(selected_preprocessing_model, [])
+        if mm_candidates:
+            # 기본값은 현재 설정 모델 또는 첫 항목
+            default_model = None
+            if selected_preprocessing_model == 'openai':
+                default_model = settings.openai_model
+            elif selected_preprocessing_model == 'google':
+                default_model = settings.google_model
+            elif selected_preprocessing_model == 'anthropic':
+                default_model = settings.anthropic_model
+            if default_model not in mm_candidates:
+                default_model = mm_candidates[0]
+            idx = mm_candidates.index(default_model) if default_model in mm_candidates else 0
+            chosen_mm = st.selectbox(
+                "멀티모달 전처리 모델 선택",
+                options=mm_candidates,
+                index=idx,
+                key="preproc_mm_model_selectbox",
+                help="전처리(텍스트+이미지)에 사용할 멀티모달 모델을 선택하세요."
+            )
+            st.session_state['preproc_mm_model'] = chosen_mm
         _display_multimodal_models()
     
     # 전처리 모델 상태 표시
@@ -243,43 +266,71 @@ def _render_image_extraction() -> Dict[str, Any]:
     }
 
 
-def _render_domain_upload() -> Dict[str, Any]:
-    """도메인 파일 업로드 섹션 렌더링"""
+def _render_document_upload(safe_get_vector_db, preprocessing_settings) -> Dict[str, Any]:
+    """문서 업로드 섹션 렌더링"""
     st.divider()
-    st.subheader("📁 도메인 파일 업로드")
+    st.subheader("📁 문서 업로드")
     
-    uploaded_domain_file = st.file_uploader(
-        "도메인 컨텍스트 파일",
-        type=['txt', 'md'],
-        help="시스템이 참고할 도메인별 지식이나 컨텍스트를 업로드하세요"
+    # 전처리 설정 표시
+    if preprocessing_settings.get('use_agent_mode', False):
+        st.info("🤖 **에이전트 모드 활성화**: 고품질 전처리 사용 중")
+    
+    if preprocessing_settings.get('enable_postprocessing', False):
+        st.info("✨ **2단계 품질 개선 활성화**: PDF 변환 후 자동으로 텍스트 품질을 개선합니다.")
+    
+    # 파일 업로드 위젯
+    uploaded_files = st.file_uploader(
+        "문서 업로드 (TXT, MD, PDF, DOCX) 🆕 이미지 추출 지원",
+        type=['txt', 'md', 'pdf', 'docx'],
+        accept_multiple_files=True,
+        help="PDF/DOCX 파일의 이미지도 자동 추출됩니다"
     )
     
-    if uploaded_domain_file is not None:
-        if st.button("도메인 파일 저장", key="save_domain"):
-            with st.spinner("도메인 파일을 저장하는 중..."):
-                content = uploaded_domain_file.read().decode('utf-8')
-                with open('domain.md', 'w', encoding='utf-8') as f:
-                    f.write(content)
-                st.success("도메인 파일이 저장되었습니다!")
-                st.rerun()
+    # 파일 처리 버튼 및 로직
+    if uploaded_files:
+        if st.button("문서 처리 및 저장"):
+            from ui.components.file_uploader import _process_uploaded_files
+            from src.utils.document_processor import DocumentProcessor
+            
+            # 디렉토리 준비
+            DocumentProcessor.prepare_directories()
+            
+            # 파일 처리 실행
+            _process_uploaded_files(uploaded_files, safe_get_vector_db, preprocessing_settings)
     
-    # 도메인 파일 로드 버튼
-    if st.button("💾 도메인 파일 로드", key="load_domain"):
-        if os.path.exists('domain.md'):
-            with st.spinner("도메인 파일을 로드하는 중..."):
-                status_text = st.empty()
-                try:
-                    # 기존 domain.md를 벡터 DB에 추가하는 로직 필요
-                    st.success("도메인 파일이 로드되었습니다!")
-                except Exception as e:
-                    st.error(f"도메인 파일 로드 중 오류 발생: {str(e)}")
-                finally:
-                    status_text.empty()
+    # 기존 domain.md 파일 로드 버튼
+    if st.button("domain.md 파일 로드"):
+        domain_path = "./domain.md"
+        if os.path.exists(domain_path):
+            # 진행 상황 표시
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            def update_progress(progress, message):
+                progress_bar.progress(progress)
+                status_text.text(message)
+            
+            try:
+                documents = st.session_state.document_loader.load_document(domain_path, update_progress)
+                
+                update_progress(0.95, "벡터 데이터베이스에 저장 중...")
+                safe_get_vector_db().add_documents(documents)
+                
+                update_progress(1.0, "완료!")
+                st.success(f"✅ domain.md 로드 완료 ({len(documents)} 청크)")
+                
+                # 진행 표시 제거
+                progress_bar.empty()
+                status_text.empty()
+            except Exception as e:
+                st.error(f"❌ 파일 로드 실패: {str(e)}")
+                progress_bar.empty()
+                status_text.empty()
         else:
             st.error("domain.md 파일을 찾을 수 없습니다.")
     
     return {
-        'uploaded_domain_file': uploaded_domain_file
+        'uploaded_files': uploaded_files
     }
 
 

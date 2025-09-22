@@ -102,8 +102,31 @@ class ImprovedPDFConverter:
                     from .md_postprocessor import MDPostProcessor
                     from .quality_checker import QualityChecker
                     
-                    postprocessor = MDPostProcessor()
-                    quality_checker = QualityChecker()
+                    # 현재 선택된 제공자/모델을 후처리에 전달
+                    _prov = None
+                    _model = None
+                    try:
+                        from config import settings as _settings
+                        try:
+                            import streamlit as st  # type: ignore
+                            _prov = st.session_state.get('current_provider', None)
+                            _model = st.session_state.get('current_model', None)
+                        except Exception:
+                            pass
+                        _prov = _prov or getattr(_settings, 'llm_provider', 'local')
+                        if not _model:
+                            if _prov == 'openai':
+                                _model = getattr(_settings, 'openai_model', None)
+                            elif _prov == 'google':
+                                _model = getattr(_settings, 'google_model', None)
+                            elif _prov == 'anthropic':
+                                _model = getattr(_settings, 'anthropic_model', None)
+                            else:
+                                _model = getattr(_settings, 'local_llm_model', None)
+                    except Exception:
+                        pass
+                    postprocessor = MDPostProcessor(provider=_prov, model_name=_model)
+                    quality_checker = QualityChecker(provider=_prov, model_name=_model)
                     
                     # MD 파일 후처리
                     processed_md_path = self.processed_dir / md_filename
