@@ -5,12 +5,12 @@
 - 전처리: 텍스트 정리/불용어 제거 옵션, 청크 분할
 - 출력: LangChain `Document`(content+metadata)
  - 이미지 처리(지능형):
-   - 우선 순위: OpenRouter(기본) → 로컬 HTTP 서버 → 내장 로컬 모델
+   - 경로: OpenRouter만 사용(폴백 없음, 엄격 모드)
    - OpenRouter 기본 모델: `z-ai/glm-4.5v`
    - 공통: `POST {BASE}/v1/chat/completions` 멀티모달로 OCR/관련성/설명 동시 요청
  - 임계값(`LOCAL_IMAGE_RELEVANCE_THRESHOLD`) 이상만 저장
- - 실패 시 순차 폴백: OpenRouter → 로컬 서버 → 내장 로컬 모델
- - 큐 혼잡 대응: 로컬 서버 `/v1/queue/stats`로 혼잡 시 스로틀(소폭 대기)
+ - 실패 시 폴백 없음: 오류를 표면화하여 즉시 중단(운영 정책)
+ - 큐 혼잡 대응: OpenRouter 측 Rate Limit 재시도(지수 백오프) 적용
  - 선택적 이미지 향상: `ENABLE_IMAGE_ENHANCEMENT=true` 시 `/v1/images/edits`로 품질 개선 후 분석
 
 -## 2. 임베딩

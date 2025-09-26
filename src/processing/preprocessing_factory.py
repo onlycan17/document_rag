@@ -22,7 +22,8 @@ class PreprocessingModelFactory:
         "local": "로컬 모델",
         "openai": "OpenAI GPT",
         "google": "Google Gemini", 
-        "anthropic": "Anthropic Claude"
+        "anthropic": "Anthropic Claude",
+        "openrouter": "OpenRouter (OpenAI 호환)"
     }
     
     # 기본 모델 설정
@@ -33,7 +34,9 @@ class PreprocessingModelFactory:
         # Google: 저비용 멀티모달 기본값
         "google": "gemini-1.5-flash-8b",
         # Anthropic: 저비용 멀티모달 기본값
-        "anthropic": "claude-3-5-haiku-20241022"
+        "anthropic": "claude-3-5-haiku-20241022",
+        # OpenRouter: 텍스트 전처리용 모델(없으면 멀티모달 기본값으로 폴백)
+        "openrouter": getattr(settings, 'openrouter_model', None) or getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v'),
     }
     
     @classmethod
@@ -42,7 +45,7 @@ class PreprocessingModelFactory:
         전처리 모델을 생성합니다.
         
         Args:
-            model_type: 모델 유형 ('local', 'openai', 'google', 'anthropic')
+            model_type: 모델 유형 ('local', 'openai', 'google', 'anthropic', 'openrouter')
             model_name: 특정 모델 이름 (선택사항)
             **kwargs: 추가 매개변수
             
@@ -101,6 +104,8 @@ class PreprocessingModelFactory:
             model_name = settings.google_model
         elif model_type == "anthropic":
             model_name = settings.anthropic_model
+        elif model_type == "openrouter":
+            model_name = getattr(settings, 'openrouter_model', None) or getattr(settings, 'openrouter_mm_model', None)
         else:
             model_name = None
         
@@ -131,6 +136,8 @@ class PreprocessingModelFactory:
                 elif provider == "google" and settings.google_api_key:
                     model_info["available"] = True
                 elif provider == "anthropic" and settings.anthropic_api_key:
+                    model_info["available"] = True
+                elif provider == "openrouter" and getattr(settings, 'openrouter_api_key', None):
                     model_info["available"] = True
             else:
                 model_info["available"] = True
@@ -163,6 +170,8 @@ class PreprocessingModelFactory:
             return bool(settings.google_api_key)
         elif model_type == "anthropic":
             return bool(settings.anthropic_api_key)
+        elif model_type == "openrouter":
+            return bool(getattr(settings, 'openrouter_api_key', None))
         
         return False
     
@@ -197,6 +206,10 @@ class PreprocessingModelFactory:
             elif model_type == "anthropic":
                 requirements["api_key_name"] = "ANTHROPIC_API_KEY"
                 requirements["api_key_set"] = bool(settings.anthropic_api_key)
+            elif model_type == "openrouter":
+                # 주의: 사양상 철자 고정 (OPNEROUTER_API_KEY)
+                requirements["api_key_name"] = "OPNEROUTER_API_KEY"
+                requirements["api_key_set"] = bool(getattr(settings, 'openrouter_api_key', None))
         
         return requirements
     

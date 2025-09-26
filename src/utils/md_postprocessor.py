@@ -47,6 +47,26 @@ class MDPostProcessor(LocalLLMAgent):
             'processing_time': 0.0
         }
         
+        # 후처리 모델 정책 강제: 기본 glm-4.5v, 폴백은 Qwen3 VL 235B A22B Instruct
+        # - 항상 OpenRouter 경로를 사용하도록 base_agent에서 provider 강제됨
+        self.fallback_model = "qwen/qwen3-vl-235b-a22b-instruct"
+        try:
+            from config import settings as _settings
+            preferred = getattr(_settings, 'md_postprocess_model', None) or getattr(_settings, 'openrouter_mm_model', 'z-ai/glm-4.5v')
+        except Exception:
+            preferred = 'z-ai/glm-4.5v'
+        # 허용 모델만 유지
+        allowed_primary = {'z-ai/glm-4.5v'}
+        allowed_secondary = {self.fallback_model}
+        if preferred not in allowed_primary | allowed_secondary:
+            preferred = 'z-ai/glm-4.5v'
+        # 현재 모델이 허용 범위가 아니면 강제 교체
+        if self.model_name not in (allowed_primary | allowed_secondary):
+            self.model_name = preferred
+        # 허용이더라도 우선순위는 glm-4.5v가 먼저
+        if self.model_name == self.fallback_model:
+            self.model_name = 'z-ai/glm-4.5v'
+        
         logger.info(f"🔧 MD 후처리 엔진 초기화 완료: {self.output_dir}")
     
     def set_quality_checker(self, quality_checker):
@@ -216,16 +236,26 @@ class MDPostProcessor(LocalLLMAgent):
 출력(교정된 텍스트만):"""
         
         try:
-            # 현재 provider에 맞춰 외부/로컬 호출 자동 선택
-            response = self._call_llm(prompt, temperature=0.1, max_tokens=3500)
-            
+            # First try with primary model
+            response = self._call_llm(prompt, temperature=0.1, max_tokens=settings.local_llm_max_tokens)
             if response.strip():
                 logger.debug(f"청크 {chunk_num} 처리 완료: {len(chunk)} → {len(response)}자")
                 return response.strip()
-            else:
-                logger.warning(f"⚠️ 청크 {chunk_num} LLM 응답 없음, 원본 반환")
-                return chunk
-                
+            
+            # Try fallback model
+            original_model = self.model_name
+            self.model_name = self.fallback_model
+            response = self._call_llm(prompt, temperature=0.1, max_tokens=settings.local_llm_max_tokens)
+            self.model_name = original_model
+            
+            if response.strip():
+                logger.debug(f"청크 {chunk_num} fallback 처리 완료: {len(chunk)} → {len(response)}자")
+                return response.strip()
+            
+            # Both attempts failed, return original
+            logger.warning(f"⚠️ 청크 {chunk_num} LLM 응답 없음, 원본 반환")
+            return chunk
+            
         except Exception as e:
             logger.warning(f"⚠️ 청크 {chunk_num} 처리 실패: {str(e)}, 원본 반환")
             return chunk

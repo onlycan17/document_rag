@@ -53,6 +53,30 @@ class ModelRegistry:
             "context_window": 1000000,
             "description": "빠르고 저렴한 1M 토큰"
         },
+        "gpt-5-pro": {
+            "provider": "openai",
+            "max_tokens": 4096,
+            "context_window": 128000,
+            "description": "고성능 모델"
+        },
+        "gpt-5": {
+            "provider": "openai",
+            "max_tokens": 4096,
+            "context_window": 128000,
+            "description": "고성능 모델"
+        },
+        "gpt-5-lite": {
+            "provider": "openai",
+            "max_tokens": 8192,
+            "context_window": 65536,
+            "description": "경량 모델"
+        },
+        "gpt-5-mini": {
+            "provider": "openai",
+            "max_tokens": 16384,
+            "context_window": 128000,
+            "description": "가벼운 옴니 모델"
+        },
         
         # Google Gemini 모델
         "gemini-1.5-flash": {
@@ -97,6 +121,12 @@ class ModelRegistry:
             "context_window": 32768,
             "description": "안정적인 버전"
         },
+        "gemini-2.0-ultra": {
+            "provider": "google",
+            "max_tokens": 8192,
+            "context_window": 1048576,
+            "description": "고성능 멀티모달"
+        },
         
         # Anthropic Claude 모델
         "claude-3-5-sonnet-20241022": {
@@ -140,6 +170,24 @@ class ModelRegistry:
             "max_tokens": 4096,
             "context_window": 100000,
             "description": "빠른 응답"
+        },
+        "claude-4-1-opus-20250901": {
+            "provider": "anthropic",
+            "max_tokens": 8192,
+            "context_window": 200000,
+            "description": "최신 Claude 4 Opus"
+        },
+        "claude-4-sonnet": {
+            "provider": "anthropic",
+            "max_tokens": 8192,
+            "context_window": 200000,
+            "description": "Claude 4 Sonnet"
+        },
+        "claude-4-1-haiku-20250901": {
+            "provider": "anthropic",
+            "max_tokens": 8192,
+            "context_window": 200000,
+            "description": "Claude 4 Haiku"
         },
         
         # 로컬 모델 (동적 설정)

@@ -87,7 +87,8 @@ class QualityValidatorAgent(LocalLLMAgent):
             matches = re.findall(pattern, content)
             broken_count += len(matches)
             for match in matches:
-                issues.append(f"문맥 끊김 발견: '{match.replace(chr(10), '\\n')}'")
+                _safe = match.replace("\n", "\\n")
+                issues.append(f"문맥 끊김 발견: '{_safe}'")
         
         # 2. LLM을 활용한 자연스러움 평가 (샘플링)
         sample_score = self._llm_evaluate_naturalness(content)

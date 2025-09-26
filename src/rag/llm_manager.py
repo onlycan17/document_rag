@@ -57,11 +57,22 @@ class LLMManager:
         if provider is None:
             provider = settings.llm_provider
         
-        # 실제 사용할 모델명 결정
+        # 실제 사용할 모델명 결정 (+ 안전 보정)
         if provider == "local":
             actual_model = model or settings.local_llm_model
         else:
             actual_model = model or getattr(settings, f"{provider}_model", None)
+
+        # OpenRouter 방어로직: 비어있거나 잘못된 기본값이 들어오면 안전한 기본값으로 보정
+        if provider == "openrouter":
+            if not actual_model or str(actual_model).strip().lower() in ("", "local-model"):
+                try:
+                    fallback = getattr(settings, 'openrouter_model', None) or getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v')
+                except Exception:
+                    fallback = 'z-ai/glm-4.5v'
+                if actual_model != fallback:
+                    logger.warning(f"OpenRouter 모델 자동 보정: '{actual_model}' → '{fallback}'")
+                    actual_model = fallback
         
         # 모델별 최대 토큰 수 가져오기 (로컬은 설정값 우선)
         max_tokens = self.get_max_tokens_for_model(provider, actual_model) if actual_model else settings.max_tokens
@@ -88,6 +99,8 @@ class LLMManager:
             return self._create_anthropic_llm(actual_model, max_tokens, streaming, callbacks)
         elif provider == "local":
             return self._create_local_llm(actual_model, max_tokens, streaming, callbacks)
+        elif provider == "openrouter":
+            return self._create_openrouter_llm(actual_model, max_tokens, streaming, callbacks)
         else:
             raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
     
@@ -197,6 +210,23 @@ class LLMManager:
             timeout=LOCAL_MODEL_TIMEOUT,
             max_retries=getattr(settings, 'local_llm_max_retries', 3),
         )
+
+    def _create_openrouter_llm(self, model: str, max_tokens: int, streaming: bool, callbacks: List):
+        """OpenRouter(OpenAI 호환) LLM 생성"""
+        api_key = getattr(settings, 'openrouter_api_key', None)
+        if not api_key:
+            raise ValueError("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다.")
+        base = getattr(settings, 'openrouter_api_base', 'https://openrouter.ai/api').rstrip('/')
+        logger.info(f"ChatOpenAI(openrouter) 설정: base_url={base}/v1, model={model}")
+        return ChatOpenAI(
+            api_key=api_key,
+            base_url=f"{base}/v1",
+            model=model,
+            temperature=settings.temperature,
+            max_tokens=max_tokens,
+            streaming=streaming,
+            callbacks=callbacks,
+        )
     
     def create_prompt_template(self) -> PromptTemplate:
         """프롬프트 템플릿 생성 (Qwen GGUF는 ChatML 형식 사용)"""
@@ -205,7 +235,7 @@ class LLMManager:
                 "<|im_start|>system\n"
                 "역할: 한국 역사 주제를 한국어로 쉽고 정확하게 설명하는 조력자.\n"
                 "원칙: (1) 사실 근거 (2) 간결하고 쉬운 표현 (3) 번호/불릿으로 정리 (4) 한자/전문 용어는 괄호로 풀어쓰기.\n"
-                "중요: 아래 원칙이나 지침 문구를 답변에 출력하지 말 것. '초등학생 수준' 등 메타 문구 금지.\n"
+                "중요: 아래 원칙이나 지침 문구를 답변에 출력하지 말 것.\n"
                 "출력 형식: 질문에 대한 답변 본문만. 도입 멘트(예: '~설명해줄게요')와 예시/지침 제목 출력 금지.\n\n"
                 "<|im_end|>\n"
                 "<|im_start|>user\n"
@@ -215,14 +245,25 @@ class LLMManager:
                 "<|im_start|>assistant\n"
             )
         else:
-            template = """당신은 국사의 전문적인 지식을 초등학교 학생들도 알기쉽게 친절하게 전달하는 AI 어시스턴트입니다.
-상세하고 정확한 정보를 제공하면서도, 초등학생들도 이해할 수 있도록 쉽게 설명하는 것이 당신의 역할입니다.
+            template = """당신은 국사의 전문적인 지식을 누구든지 알기쉽게 친절하게 전달하는 AI 어시스턴트입니다.
+상세하고 정확한 정보를 제공하면서도, 남녀노소 누구든 이해할 수 있도록 쉽게 설명하는 것이 당신의 역할입니다.
 
 다음은 검색된 관련 문서들입니다:
 {context}
 
 위 문서들의 내용을 참고하여 다음 질문에 답변해주세요:
 {question}
+
+답변은 아래와 같은 명확한 구조로 작성해주세요. 각 섹션의 제목을 반드시 포함해야 합니다.
+
+### 핵심 요약
+(질문에 대한 핵심 답변을 1-2 문장으로 요약합니다.)
+
+### 상세 설명
+(핵심 요약에 대한 구체적인 내용을 번호나 글머리 기호를 사용하여 단계별로 설명합니다. 필요시 표를 사용할 수 있습니다.)
+
+### 참고 자료
+(답변을 생성하는 데 사용된 문서의 구체적인 내용을 간단히 언급합니다. 문서 제목이나 주요 내용을 기반으로 작성할 수 있습니다.)
 
 답변:"""
 

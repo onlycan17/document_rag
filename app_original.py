@@ -1251,14 +1251,20 @@ def main() -> None:
             "openai": "OpenAI",
             "google": "Google Gemini",
             "anthropic": "Anthropic Claude",
-            "local": "로컬 LLM"
+            "local": "로컬 LLM",
+            "openrouter": "OpenRouter",
         }
         
+        _prov_keys = list(provider_names.keys())
+        try:
+            _idx = _prov_keys.index(st.session_state.current_provider)
+        except Exception:
+            _idx = 0
         selected_provider = st.selectbox(
             "LLM 제공자 선택",
-            options=list(provider_names.keys()),
+            options=_prov_keys,
             format_func=lambda x: provider_names[x],
-            index=list(provider_names.keys()).index(st.session_state.current_provider)
+            index=_idx,
         )
         
         # 선택된 제공자의 모델 목록

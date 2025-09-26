@@ -91,6 +91,13 @@ class ParallelProcessor:
                 _model = st.session_state.get('current_model', None)
             except Exception:
                 pass
+            # 후처리 전용 오버라이드 우선
+            _md_override_provider = getattr(_settings, 'md_postprocess_provider', None)
+            _md_override_model = getattr(_settings, 'md_postprocess_model', None)
+            if _md_override_provider:
+                _prov = _md_override_provider
+                if _md_override_model:
+                    _model = _md_override_model
             _prov = _prov or getattr(_settings, 'llm_provider', 'local')
             if not _model:
                 if _prov == 'openai':
@@ -99,6 +106,8 @@ class ParallelProcessor:
                     _model = getattr(_settings, 'google_model', None)
                 elif _prov == 'anthropic':
                     _model = getattr(_settings, 'anthropic_model', None)
+                elif _prov == 'openrouter':
+                    _model = getattr(_settings, 'openrouter_model', None) or getattr(_settings, 'openrouter_mm_model', None)
                 else:
                     _model = getattr(_settings, 'local_llm_model', None)
         except Exception:

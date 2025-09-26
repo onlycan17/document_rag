@@ -72,15 +72,18 @@ class AgentBasedPDFConverter:
         provider = None
         model = None
         base_url = None
-        # 1) Streamlit 세션에서 시도
+        # 1) Streamlit 세션에서 시도 (전처리 섹션 전용 키 우선)
         try:
             import streamlit as st  # type: ignore
-            provider = st.session_state.get('current_provider', None)
-            model = st.session_state.get('current_model', None)
+            provider = st.session_state.get('preprocessing_model', None)
+            if st.session_state.get('enable_multimodal_preprocessing', False):
+                model = st.session_state.get('preproc_mm_model', None)
+            else:
+                model = st.session_state.get('preproc_text_model', None)
         except Exception:
             pass
         # 2) 인자값 우선
-        provider = (llm_provider or provider or _settings.llm_provider or 'local').lower()
+        provider = (llm_provider or provider or _settings.llm_provider or 'openrouter').lower()
         if not model:
             model = llm_model
         if not model:
@@ -90,6 +93,12 @@ class AgentBasedPDFConverter:
                 model = getattr(_settings, 'google_model', 'gemini-1.5-flash-8b')
             elif provider == 'anthropic':
                 model = getattr(_settings, 'anthropic_model', 'claude-3-5-haiku-20241022')
+            elif provider == 'openrouter':
+                # OpenRouter 기본 모델 결정(텍스트 우선, 없으면 멀티모달 기본값)
+                model = (
+                    getattr(_settings, 'openrouter_model', None)
+                    or getattr(_settings, 'openrouter_mm_model', 'z-ai/glm-4.5v')
+                )
             else:
                 model = getattr(_settings, 'local_llm_model', 'local-model')
         # 3) 로컬일 경우 LM Studio API URL 우선 사용

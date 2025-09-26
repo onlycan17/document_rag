@@ -19,13 +19,13 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain.schema import Document
 
-# 에이전트 및 처리 모듈 import
+# 에이전트 및 처리 모듈 import (현재 구현체 이름과 호환되도록 별칭 부여)
 try:
-    from src.agents.base_agent import BaseAgent
-    from src.agents.context_connector import ContextConnector
-    from src.agents.quality_validator import QualityValidator
-    from src.agents.structure_parser import StructureParser
-    from src.utils.agent_pdf_converter import AgentPDFConverter
+    from src.agents.base_agent import LocalLLMAgent as BaseAgent
+    from src.agents.context_connector import ContextConnectorAgent as ContextConnector
+    from src.agents.quality_validator import QualityValidatorAgent as QualityValidator
+    from src.agents.structure_parser import StructureParserAgent as StructureParser
+    from src.utils.agent_pdf_converter import AgentBasedPDFConverter as AgentPDFConverter
     from src.utils.openrouter_image_service import OpenRouterImageService
 except ImportError as e:
     logging.warning(f"일부 에이전트 모듈을 임포트할 수 없습니다: {e}")

@@ -246,7 +246,11 @@ class APIPreprocessingModel(PreprocessingModel):
                     raise ValueError("Anthropic API 키가 설정되지 않았습니다")
                 import anthropic
                 self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-                
+            elif self.provider == "openrouter":
+                # OpenRouter는 OpenAI 호환 HTTP를 사용하므로, 간단한 플래그만 유지
+                # 실제 호출은 preprocess_text에서 requests로 처리
+                from types import SimpleNamespace
+                self._client = SimpleNamespace(provider="openrouter")
             else:
                 raise ValueError(f"지원하지 않는 제공자: {self.provider}")
             
@@ -330,7 +334,32 @@ class APIPreprocessingModel(PreprocessingModel):
                     messages=[{"role": "user", "content": preprocessing_prompt}]
                 )
                 processed_text = response.content[0].text
-                
+            elif self.provider == "openrouter":
+                # OpenRouter(OpenAI 호환) - Chat Completions
+                import os
+                import requests
+                api_key = getattr(settings, 'openrouter_api_key', None) or os.getenv('OPNEROUTER_API_KEY')
+                if not api_key:
+                    raise ValueError("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다")
+                api_base = getattr(settings, 'openrouter_api_base', 'https://openrouter.ai/api')
+                url = f"{api_base.rstrip('/')}/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                    "X-Title": "RAG-Preprocessor"
+                }
+                body = {
+                    "model": self.model_name or getattr(settings, 'openrouter_model', getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v')),
+                    "messages": [{"role": "user", "content": preprocessing_prompt}],
+                    "temperature": float(settings.preprocessing_temperature),
+                    "max_tokens": 4000,
+                }
+                resp = requests.post(url, json=body, headers=headers, timeout=120)
+                if resp.status_code != 200:
+                    raise RuntimeError(f"OpenRouter 오류: {resp.status_code} - {resp.text}")
+                data = resp.json()
+                processed_text = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
+            
             else:
                 raise ValueError(f"지원하지 않는 제공자: {self.provider}")
             

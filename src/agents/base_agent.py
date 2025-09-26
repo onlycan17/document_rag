@@ -5,7 +5,7 @@
 import json
 import logging
 import requests
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from abc import ABC, abstractmethod
 import time
 import random
@@ -22,25 +22,41 @@ except Exception:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-def llm_retry_with_backoff(max_retries=2, base_delay=5.0, max_delay=60.0):
+
+class LocalLLMCircuitOpen(Exception):
+    """로컬 LLM 서킷 브레이커가 열린 상태 예외"""
+    pass
+
+def llm_retry_with_backoff():
     """
     로컬 LLM API 호출 재시도 데코레이터
     """
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
+            # 설정값과 동기화(시점 평가)
+            try:
+                from config import settings as _s  # 지연 임포트로 최신값 반영
+                _max_retries = max(0, int(getattr(_s, 'local_llm_max_retries', 3)))
+                _base_delay = float(getattr(_s, 'api_base_delay', 3.0))
+                _max_delay = float(getattr(_s, 'api_max_delay', 60.0))
+            except Exception:
+                _max_retries, _base_delay, _max_delay = 2, 5.0, 60.0
             last_exception = None
             
-            for attempt in range(max_retries + 1):
+            for attempt in range(_max_retries + 1):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
+                    # 서킷 오픈 예외는 즉시 중단(재시도 금지)
+                    if isinstance(e, LocalLLMCircuitOpen):
+                        raise
                     last_exception = e
                     error_message = str(e)
                     
-                    if attempt < max_retries:
-                        delay = min(base_delay * (2 ** attempt) + random.uniform(0, 0.5), max_delay)
-                        logger.warning(f"🔄 로컬 LLM 호출 재시도 {attempt + 1}/{max_retries + 1}: {delay:.1f}초 후")
+                    if attempt < _max_retries:
+                        delay = min(_base_delay * (2 ** attempt) + random.uniform(0, 0.5), _max_delay)
+                        logger.warning(f"🔄 로컬 LLM 호출 재시도 {attempt + 1}/{_max_retries + 1}: {delay:.1f}초 후")
                         time.sleep(delay)
                         continue
                     else:
@@ -56,7 +72,7 @@ class LocalLLMAgent(ABC):
     """
     LLM을 활용한 에이전트 베이스 클래스
 
-    - 기본은 로컬이지만, 화면/설정에서 선택한 제공자(openai/google/anthropic/local)를 따르도록 확장
+    - 기본은 로컬이지만, 화면/설정에서 선택한 제공자(openai/google/anthropic/local/openrouter)를 따르도록 확장
     - 로컬 선택 시: 1620 포트 멀티모달 서버 우선(base URL 강제 정규화)
     """
     
@@ -69,7 +85,17 @@ class LocalLLMAgent(ABC):
     ):
         self.agent_name = agent_name
         # 현재 제공자 결정: 명시값 → 세션설정값(.env) 순
-        self.provider = (provider or settings.llm_provider or "local").lower()
+        self.provider = (provider or settings.llm_provider or "openrouter").lower()
+
+        # 정책 강제: 에이전트 경로는 무조건 OpenRouter 사용
+        try:
+            if getattr(settings, 'enforce_openrouter_for_agents', True):
+                if self.provider != 'openrouter':
+                    logger.warning(f"에이전트 LLM 제공자 강제 적용: {self.provider} → openrouter")
+                self.provider = 'openrouter'
+        except Exception:
+            # 설정 접근 실패 시에도 안전하게 OpenRouter로 고정
+            self.provider = 'openrouter'
 
         # 모델명 결정(제공자별 기본값 사용)
         if model_name:
@@ -81,8 +107,25 @@ class LocalLLMAgent(ABC):
                 self.model_name = getattr(settings, 'google_model', 'gemini-1.5-flash-8b')
             elif self.provider == "anthropic":
                 self.model_name = getattr(settings, 'anthropic_model', 'claude-3-5-haiku-20241022')
+            elif self.provider == "openrouter":
+                # 텍스트용 openrouter_model 우선, 없으면 멀티모달 기본으로 폴백
+                try:
+                    self.model_name = getattr(settings, 'openrouter_model', None) or getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v')
+                except Exception:
+                    self.model_name = 'z-ai/glm-4.5v'
             else:
                 self.model_name = getattr(settings, 'local_llm_model', 'local-model')
+
+        # 방어 로직: OpenRouter인데 잘못된 로컬 기본값이 들어온 경우 자동 보정
+        if self.provider == 'openrouter' and (not self.model_name or self.model_name.strip().lower() == 'local-model'):
+            corrected = None
+            try:
+                corrected = getattr(settings, 'openrouter_model', None) or getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v')
+            except Exception:
+                corrected = 'z-ai/glm-4.5v'
+            if corrected != self.model_name:
+                logger.warning(f"OpenRouter에 잘못된 모델명이 감지되어 자동 보정: '{self.model_name}' → '{corrected}'")
+                self.model_name = corrected
 
         # base_url 결정
         if self.provider == "local":
@@ -95,7 +138,9 @@ class LocalLLMAgent(ABC):
                     return "http://" + u
                 return u
             lm_base = getattr(settings, 'lm_studio_api_url', None) or getattr(settings, 'local_llm_base_url', 'http://localhost:3620')
-            self.base_url = _ensure_scheme(lm_base).rstrip('/')
+            base = _ensure_scheme(lm_base).rstrip('/')
+            # 멀티모달 선호 포트 정규화 적용
+            self.base_url = self._prefer_local_mm_port(base)
         else:
             self.base_url = (base_url or "").rstrip('/')
 
@@ -135,6 +180,9 @@ class LocalLLMAgent(ABC):
                         logger.info(f"로컬 모델 자동 선택: {self.model_name}")
             except Exception:
                 pass
+
+        # 서킷 브레이커 상태: 인스턴스 단위로 유지(엔드포인트별)
+        self._circuit_state: Dict[str, Dict[str, Any]] = {}
 
     def _prefer_local_mm_port(self, url: str) -> str:
         """로컬 base URL을 멀티모달 선호 포트(기본 1620)로 정규화"""
@@ -224,29 +272,107 @@ class LocalLLMAgent(ABC):
         payload = {
             "model": self.model_name,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
+            "temperature": float(temperature),
+            "max_tokens": int(max_tokens),
             "stream": False,
         }
 
+        # 멀티 엔드포인트 후보 구성: 설정의 목록 → 기본(base_url) → 1620 선호 포트
+        candidate_bases: List[str] = []
         try:
-            response = requests.post(
-                f"{self.base_url}/v1/chat/completions",
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=120,
-            )
+            urls = getattr(settings, 'local_llm_base_urls', None)
+            if urls:
+                for u in str(urls).split(','):
+                    u = u.strip()
+                    if not u:
+                        continue
+                    candidate_bases.append(u.rstrip('/'))
+        except Exception:
+            pass
+        if self.base_url:
+            candidate_bases.append(self.base_url.rstrip('/'))
+        # 1620 선호 포트 보정 추가
+        try:
+            preferred = self._prefer_local_mm_port(self.base_url)
+            if preferred and preferred not in candidate_bases:
+                candidate_bases.append(preferred)
+        except Exception:
+            pass
 
-            if response.status_code == 200:
-                result = response.json()
-                return result["choices"][0]["message"]["content"].strip()
-            else:
-                raise Exception(f"API 호출 실패: {response.status_code} - {response.text}")
+        # 중복 제거(입력 순서 유지)
+        seen = set()
+        unique_bases = []
+        for b in candidate_bases:
+            if b not in seen:
+                unique_bases.append(b)
+                seen.add(b)
 
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"네트워크 오류: {str(e)}")
-        except Exception as e:
-            raise Exception(f"LLM 호출 오류: {str(e)}")
+        api_key = getattr(settings, 'local_llm_api_key', None)
+        headers = {"Content-Type": "application/json"}
+        if api_key and api_key not in ("", "not-needed"):
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        # 서킷 브레이커 파라미터
+        now = time.time()
+        cb_threshold = 3  # 연속 실패 허용 한계
+        cb_window = 120.0  # 초
+        cb_cooldown = 60.0  # 초
+
+        last_errors: List[Tuple[str, str]] = []
+
+        for base in unique_bases:
+            # 서킷 상태 확인
+            st = self._circuit_state.get(base)
+            if st and st.get('cooldown_until', 0) > now:
+                # 서킷 오픈 상태면 건너뛴다
+                logger.warning(f"⛔ 로컬 LLM 서킷 열림: {base} (남은 {int(st['cooldown_until']-now)}초)")
+                continue
+
+            try:
+                response = requests.post(
+                    f"{base}/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=getattr(settings, 'local_llm_timeout', 60),
+                )
+                if response.status_code == 200:
+                    # 성공 시 서킷 상태 초기화
+                    if base in self._circuit_state:
+                        self._circuit_state.pop(base, None)
+                    result = response.json()
+                    return result["choices"][0]["message"]["content"].strip()
+                else:
+                    msg = f"HTTP {response.status_code}: {response.text[:200]}"
+                    last_errors.append((base, msg))
+                    # 실패 누적 및 서킷 관리
+                    rec = self._circuit_state.setdefault(base, {"fails": 0, "first_ts": now, "cooldown_until": 0})
+                    rec["fails"] += 1
+                    # 윈도우 외면 리셋
+                    if now - rec.get("first_ts", now) > cb_window:
+                        rec["fails"], rec["first_ts"] = 1, now
+                    if rec["fails"] >= cb_threshold:
+                        rec["cooldown_until"] = now + cb_cooldown
+                        logger.error(f"🚧 로컬 LLM 서킷 열림: {base} (연속 실패 {rec['fails']}회)")
+            except requests.exceptions.RequestException as e:
+                msg = f"네트워크 오류: {str(e)}"
+                last_errors.append((base, msg))
+                rec = self._circuit_state.setdefault(base, {"fails": 0, "first_ts": now, "cooldown_until": 0})
+                rec["fails"] += 1
+                if now - rec.get("first_ts", now) > cb_window:
+                    rec["fails"], rec["first_ts"] = 1, now
+                if rec["fails"] >= cb_threshold:
+                    rec["cooldown_until"] = now + cb_cooldown
+                    logger.error(f"🚧 로컬 LLM 서킷 열림: {base} (연속 실패 {rec['fails']}회)")
+            except Exception as e:
+                msg = f"LLM 호출 오류: {str(e)}"
+                last_errors.append((base, msg))
+
+        # 모든 시도가 실패한 경우: 최근 오류 요약 포함
+        if last_errors:
+            details = "; ".join([f"{b} -> {m}" for b, m in last_errors[:3]])
+        else:
+            details = "no endpoints tried"
+        raise Exception(f"로컬 HTTP 호출 실패: {details}")
 
     # ===== 외부 API 호출 경로 =====
     def _call_openai(self, prompt: str, temperature: float, max_tokens: int) -> str:
@@ -342,6 +468,8 @@ class LocalLLMAgent(ABC):
             return self._call_google(prompt, temperature=temperature, max_tokens=max_tokens)
         if self.provider == 'anthropic':
             return self._call_anthropic(prompt, temperature=temperature, max_tokens=max_tokens)
+        if self.provider == 'openrouter':
+            return self._call_openrouter(prompt, temperature=temperature, max_tokens=max_tokens)
         raise Exception(f"지원하지 않는 provider: {self.provider}")
     
     def _create_korean_prompt(self, task_description: str, content: str, examples: List[str] = None) -> str:
@@ -390,3 +518,30 @@ class LocalLLMAgent(ABC):
             "max_tokens": self.max_tokens,
             "context_window": self.context_window
         }
+
+    # ===== OpenRouter 호출 경로 =====
+    def _call_openrouter(self, prompt: str, temperature: float, max_tokens: int) -> str:
+        """OpenRouter(OpenAI 호환) Chat Completions 호출"""
+        api_key = getattr(settings, 'openrouter_api_key', None) or os.getenv('OPNEROUTER_API_KEY')
+        if not api_key:
+            raise Exception("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다.")
+        model = self.model_name or getattr(settings, 'openrouter_model', getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v'))
+        api_base = getattr(settings, 'openrouter_api_base', 'https://openrouter.ai/api')
+        url = f"{api_base.rstrip('/')}/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            # 선택 헤더(권장): 서비스 명시
+            "X-Title": "RAG-Postprocessor"
+        }
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": float(temperature),
+            "max_tokens": int(max_tokens),
+        }
+        resp = requests.post(url, json=body, headers=headers, timeout=120)
+        if resp.status_code != 200:
+            raise Exception(f"OpenRouter 오류: {resp.status_code} - {resp.text}")
+        data = resp.json()
+        return (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()

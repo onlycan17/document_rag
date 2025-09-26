@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional
 from config import settings
 from src.processing.preprocessing_factory import PreprocessingModelFactory
 from src.rag.rag_chain import RAGChain
+from src.utils.openrouter_models import list_openrouter_models, search_openrouter_models
 
 
 def render_sidebar(
@@ -92,70 +93,65 @@ def _render_document_management() -> Dict[str, Any]:
 
 
 def _render_text_preprocessing() -> Dict[str, Any]:
-    """문서 전처리(텍스트) 섹션 렌더링"""
+    """문서 전처리(텍스트) 섹션 렌더링 — 단순화: 기본값 고정, 콤보박스 제거"""
     st.subheader("🤖 문서 전처리(텍스트)")
-    
-    preprocessing_model_options = {
-        "local": "로컬 모델 (기본)",
-        "openai": "OpenAI GPT",
-        "google": "Google Gemini",
-        "anthropic": "Anthropic Claude"
-    }
-    
-    selected_preprocessing_model = st.selectbox(
-        "문서 전처리 모델 선택",
-        options=list(preprocessing_model_options.keys()),
-        format_func=lambda x: preprocessing_model_options[x],
-        index=list(preprocessing_model_options.keys()).index(st.session_state.get('preprocessing_model', 'local')),
-        key="preprocessing_model_selectbox",
-        help="PDF 문서 전처리에 사용할 모델을 선택하세요.\n• 로컬 모델: 빠르고 무료, 하지만 성능은 제한적\n• 외부 API: 고품질 전처리, but API 키 필요"
-    )
-    
-    # 멀티모달 전처리 옵션
+
+    # 1) 멀티모달 전처리 on/off만 노출 (모델 선택 제거)
     enable_multimodal = st.checkbox(
         "🖼️ 멀티모달 전처리 활성화",
-        value=st.session_state.get('enable_multimodal_preprocessing', False),
+        value=st.session_state.get('enable_multimodal_preprocessing', settings.enable_multimodal_preprocessing),
         key="enable_multimodal_preprocessing_checkbox",
         help="이미지와 텍스트를 함께 분석하는 멀티모달 AI 모델을 사용합니다"
     )
     st.session_state.enable_multimodal_preprocessing = enable_multimodal
-    
-    # 텍스트 전처리 상태 표시(제공자/모델/멀티모달)
-    _display_preprocessing_status(selected_preprocessing_model, preprocessing_model_options, enable_multimodal)
-    
-    # 멀티모달 모델 정보 및 선택
-    if enable_multimodal:
-        # 제공자별 멀티모달 후보 표시 및 선택 박스 제공
-        mm_map = PreprocessingModelFactory.get_multimodal_models()
-        mm_candidates = mm_map.get(selected_preprocessing_model, [])
-        if mm_candidates:
-            # 기본값은 현재 설정 모델 또는 첫 항목
-            default_model = None
-            if selected_preprocessing_model == 'openai':
-                default_model = settings.openai_model
-            elif selected_preprocessing_model == 'google':
-                default_model = settings.google_model
-            elif selected_preprocessing_model == 'anthropic':
-                default_model = settings.anthropic_model
-            if default_model not in mm_candidates:
-                default_model = mm_candidates[0]
-            idx = mm_candidates.index(default_model) if default_model in mm_candidates else 0
-            chosen_mm = st.selectbox(
-                "멀티모달 전처리 모델 선택",
-                options=mm_candidates,
-                index=idx,
-                key="preproc_mm_model_selectbox",
-                help="전처리(텍스트+이미지)에 사용할 멀티모달 모델을 선택하세요."
-            )
-            st.session_state['preproc_mm_model'] = chosen_mm
-        _display_multimodal_models()
-    
-    # 전처리 모델 상태 표시
-    _display_preprocessing_model_status(selected_preprocessing_model, enable_multimodal)
-    
+
+    # 2) 전처리 모델은 설정 파일 기본값으로 고정
+    fixed_provider = settings.preprocessing_model  # 예: 'openrouter'
+
+    # 상태 안내(어려운 용어: 멀티모달(설명: 이미지와 텍스트를 함께 처리하는 방식))
+    provider_names = {
+        "local": "로컬 모델",
+        "openai": "OpenAI GPT",
+        "google": "Google Gemini",
+        "anthropic": "Anthropic Claude",
+        "openrouter": "OpenRouter"
+    }
+
+    # 현재 적용될 기본 모델 이름 표시
+    try:
+        if fixed_provider == 'openrouter':
+            text_model = getattr(settings, 'openrouter_model', 'z-ai/glm-4.5-air')
+            mm_model = getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v')
+        elif fixed_provider == 'openai':
+            text_model = settings.openai_model
+            mm_model = settings.openai_model
+        elif fixed_provider == 'google':
+            text_model = settings.google_model
+            mm_model = settings.google_model
+        elif fixed_provider == 'anthropic':
+            text_model = settings.anthropic_model
+            mm_model = settings.anthropic_model
+        else:
+            text_model = 'local_default'
+            mm_model = 'local_default'
+    except Exception:
+        text_model = 'default'
+        mm_model = 'default'
+
+    st.info(
+        f"전처리 모델은 기본 설정으로 고정됩니다 · 제공자: {provider_names.get(fixed_provider, fixed_provider)}"
+    )
+    st.caption(
+        f"텍스트: {text_model} · 멀티모달: {mm_model} · 멀티모달: {'ON' if enable_multimodal else 'OFF'}"
+    )
+
+    # 참고 정보(지원 모델 리스트만 안내용으로 표시)
+    _display_multimodal_models()
+
+    # 반환값: 선택 제거 → 고정값 전달
     return {
-        'selected_preprocessing_model': selected_preprocessing_model,
-        'enable_multimodal': enable_multimodal
+        'selected_preprocessing_model': fixed_provider,
+        'enable_multimodal': enable_multimodal,
     }
 
 
@@ -168,6 +164,11 @@ def _display_preprocessing_status(selected_model: str, model_options: Dict[str, 
             _model_name = settings.google_model
         elif selected_model == "anthropic":
             _model_name = settings.anthropic_model
+        elif selected_model == "openrouter":
+            try:
+                _model_name = settings.openrouter_model or settings.openrouter_mm_model
+            except Exception:
+                _model_name = "openrouter_default"
         else:
             _model_name = "local_default"
         st.caption(
@@ -218,6 +219,11 @@ def _check_api_key_exists(provider: str) -> bool:
         return bool(settings.google_api_key)
     elif provider == "anthropic":
         return bool(settings.anthropic_api_key)
+    elif provider == "openrouter":
+        try:
+            return bool(settings.openrouter_api_key)
+        except Exception:
+            return False
     return False
 
 
@@ -395,101 +401,169 @@ def _render_llm_settings(safe_get_rag_chain, bootstrap_models_with_file_lock) ->
     """LLM 모델 설정 섹션 렌더링"""
     st.divider()
     st.subheader("🤖 LLM 모델 설정")
-    
-    # 사용 가능한 모델 가져오기
-    available_models = safe_get_rag_chain().get_available_models()
-    
-    # LLM 제공자 선택
-    providers = ["local", "openai", "google", "anthropic"]
-    provider_names = {
-        "local": "로컬 모델",
-        "openai": "OpenAI GPT",
-        "google": "Google Gemini", 
-        "anthropic": "Anthropic Claude"
-    }
-    
-    current_provider = st.session_state.get('current_provider', 'local')
-    selected_provider = st.selectbox(
-        "LLM 제공자",
-        providers,
-        index=providers.index(current_provider),
-        format_func=lambda x: provider_names[x],
-        key="provider_selector"
+
+    # 공통 반환값 초기화
+    selected_provider: Optional[str] = None
+    selected_model: Optional[str] = None
+    available_models: Dict[str, Any] = {}
+
+    # OpenRouter 단일 제공자 모드 토글
+    use_openrouter_unified = st.checkbox(
+        "OpenRouter 단일 제공자 모드(추천)",
+        value=st.session_state.get('use_openrouter_unified', True),
+        help="모든 모델을 OpenRouter에서 직접 검색·선택합니다.",
+        key="use_openrouter_unified_checkbox",
     )
-    
-    # 선택된 제공자의 모델 선택
-    if selected_provider in available_models:
-        models_info = available_models[selected_provider]
-        
-        # 모델 정보가 리스트 형태인 경우 (ModelRegistry.get_all_models() 반환값)
-        if isinstance(models_info, list):
-            if models_info:  # 모델 목록이 비어있지 않은 경우
-                model_list = [model.get('model', model.get('id', '')) for model in models_info]
-                current_model = st.session_state.get('current_model')
-                
-                if not current_model or current_model not in model_list:
-                    current_model = model_list[0] if model_list else None
-                
-                if current_model and model_list:
-                    selected_model = st.selectbox(
-                        f"{provider_names[selected_provider]} 모델",
-                        model_list,
-                        index=model_list.index(current_model) if current_model in model_list else 0,
-                        key="model_selector"
-                    )
-                else:
-                    st.error(f"❌ {provider_names[selected_provider]} 모델을 찾을 수 없습니다.")
-                    selected_model = None
-            else:
-                st.error(f"❌ {provider_names[selected_provider]} 모델이 없습니다.")
-                selected_model = None
-        
-        # 모델 정보가 딕셔너리 형태인 경우 (레거시 지원)
-        elif isinstance(models_info, dict) and models_info.get('available', False):
-            model_list = models_info['models']
-            current_model = st.session_state.get('current_model', model_list[0])
-            
-            if current_model not in model_list:
-                current_model = model_list[0]
-            
-            selected_model = st.selectbox(
-                f"{provider_names[selected_provider]} 모델",
-                model_list,
-                index=model_list.index(current_model) if current_model in model_list else 0,
-                key="model_selector"
-            )
-        else:
-            st.error(f"❌ {provider_names[selected_provider]} API 키가 설정되지 않았습니다.")
-            selected_model = None
-    else:
-        st.error(f"❌ {provider_names[selected_provider]} 모델 정보를 가져올 수 없습니다.")
-        selected_model = None
-    
-    # 모델 설정 적용
-    if selected_model and (
-        selected_provider != st.session_state.get('current_provider') or 
-        selected_model != st.session_state.get('current_model')
-    ):
-        if st.button("모델 설정 적용", type="primary"):
-            with st.spinner("모델을 변경하는 중..."):
+    st.session_state['use_openrouter_unified'] = use_openrouter_unified
+
+    if use_openrouter_unified:
+        # OpenRouter 단일 제공자 모드 UI
+        st.caption("모델이 많으니 텍스트로 검색하세요.")
+        cols = st.columns([3, 1])
+        with cols[0]:
+            query = st.text_input("모델 검색", value=st.session_state.get('openrouter_model_query', ''), key="openrouter_model_query")
+        with cols[1]:
+            refresh = st.button("새로고침", key="openrouter_models_refresh_btn")
+
+        try:
+            models = search_openrouter_models(query, refresh=refresh, limit=500)
+        except Exception as e:
+            models = []
+            st.error(f"OpenRouter 모델 목록을 불러오지 못했습니다: {e}")
+
+        if not models:
+            st.info("검색어를 입력하거나 새로고침을 눌러 목록을 갱신하세요.")
+
+        # 현재 모델 기본값
+        current_model = st.session_state.get('current_model')
+        if not current_model or (models and current_model not in models):
+            current_model = models[0] if models else None
+
+        selected_model = st.selectbox(
+            "OpenRouter 모델",
+            options=models if models else ["(모델 없음)"] ,
+            index=(models.index(current_model) if (models and current_model in models) else 0),
+            key="openrouter_unified_model_selector",
+        ) if (models or current_model) else None
+
+        selected_provider = 'openrouter'
+        available_models = {'openrouter': models}
+
+        # 적용 버튼
+        if selected_model and (
+            st.session_state.get('current_provider') != 'openrouter' or
+            st.session_state.get('current_model') != selected_model
+        ):
+            if st.button("모델 설정 적용", type="primary", key="apply_openrouter_unified_model"):
                 try:
-                    safe_get_rag_chain().update_llm(selected_provider, selected_model)
-                    st.session_state.current_provider = selected_provider
+                    safe_get_rag_chain().update_llm('openrouter', selected_model)
+                    st.session_state.current_provider = 'openrouter'
                     st.session_state.current_model = selected_model
-                    st.success(f"✅ 모델이 {provider_names[selected_provider]} - {selected_model}로 변경되었습니다!")
+                    st.success(f"✅ 모델이 OpenRouter - {selected_model}로 변경되었습니다!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ 모델 변경 실패: {str(e)}")
-    
-    # 모델 부트스트랩 버튼
-    if st.button("🔄 모델 재부팅", help="로컬 모델을 다시 로드합니다"):
-        with st.spinner("모델을 재부팅하는 중..."):
-            bootstrap_models_with_file_lock()
-            st.success("✅ 모델 재부팅이 완료되었습니다!")
-            st.rerun()
-    
+
+        # 모델 부트스트랩 버튼(로컬에만 해당하나 일관 표시)
+        if st.button("🔄 모델 재부팅", help="로컬 모델을 다시 로드합니다", key="openrouter_mode_bootstrap"):
+            with st.spinner("모델을 재부팅하는 중..."):
+                bootstrap_models_with_file_lock()
+                st.success("✅ 모델 재부팅이 완료되었습니다!")
+
+    else:
+        # 레거시 제공자 모드(UI 유지)
+        try:
+            available_models = safe_get_rag_chain().get_available_models()
+        except Exception as e:
+            available_models = {}
+            st.error(f"모델 정보를 가져오지 못했습니다: {e}")
+
+        providers = ["local", "openai", "google", "anthropic"]
+        provider_names = {
+            "local": "로컬 모델",
+            "openai": "OpenAI GPT",
+            "google": "Google Gemini",
+            "anthropic": "Anthropic Claude",
+        }
+
+        current_provider = st.session_state.get('current_provider', 'local')
+        selected_provider = st.selectbox(
+            "LLM 제공자",
+            providers,
+            index=providers.index(current_provider) if current_provider in providers else 0,
+            format_func=lambda x: provider_names[x],
+            key="provider_selector",
+        )
+
+        # 선택된 제공자의 모델 선택
+        if selected_provider in available_models:
+            models_info = available_models[selected_provider]
+
+            # 모델 정보가 리스트 형태인 경우 (ModelRegistry.get_all_models() 반환값)
+            if isinstance(models_info, list):
+                if models_info:
+                    model_list = [m.get('model', m.get('id', '')) for m in models_info]
+                    current_model = st.session_state.get('current_model')
+                    if not current_model or current_model not in model_list:
+                        current_model = model_list[0] if model_list else None
+                    if current_model and model_list:
+                        selected_model = st.selectbox(
+                            f"{provider_names[selected_provider]} 모델",
+                            model_list,
+                            index=model_list.index(current_model) if current_model in model_list else 0,
+                            key="model_selector",
+                        )
+                    else:
+                        st.error(f"❌ {provider_names[selected_provider]} 모델을 찾을 수 없습니다.")
+                        selected_model = None
+                else:
+                    st.error(f"❌ {provider_names[selected_provider]} 모델이 없습니다.")
+                    selected_model = None
+
+            # 모델 정보가 딕셔너리 형태인 경우 (레거시 지원)
+            elif isinstance(models_info, dict) and models_info.get('available', False):
+                model_list = models_info.get('models', [])
+                current_model = st.session_state.get('current_model', model_list[0] if model_list else None)
+                if current_model not in model_list and model_list:
+                    current_model = model_list[0]
+                selected_model = st.selectbox(
+                    f"{provider_names[selected_provider]} 모델",
+                    model_list,
+                    index=model_list.index(current_model) if (model_list and current_model in model_list) else 0,
+                    key="model_selector",
+                ) if model_list else None
+            else:
+                st.warning(f"{provider_names[selected_provider]} API 키가 없거나 모델 정보를 찾지 못했습니다.")
+                selected_model = None
+        else:
+            st.warning("제공자 모델 정보를 가져올 수 없습니다.")
+            selected_model = None
+
+        # 모델 설정 적용
+        if selected_model and (
+            selected_provider != st.session_state.get('current_provider') or
+            selected_model != st.session_state.get('current_model')
+        ):
+            if st.button("모델 설정 적용", type="primary"):
+                with st.spinner("모델을 변경하는 중..."):
+                    try:
+                        safe_get_rag_chain().update_llm(selected_provider, selected_model)
+                        st.session_state.current_provider = selected_provider
+                        st.session_state.current_model = selected_model
+                        st.success(f"✅ 모델이 {provider_names[selected_provider]} - {selected_model}로 변경되었습니다!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ 모델 변경 실패: {e}")
+
+        # 모델 부트스트랩 버튼
+        if st.button("🔄 모델 재부팅", help="로컬 모델을 다시 로드합니다"):
+            with st.spinner("모델을 재부팅하는 중..."):
+                bootstrap_models_with_file_lock()
+                st.success("✅ 모델 재부팅이 완료되었습니다!")
+                st.rerun()
+
     return {
         'selected_provider': selected_provider,
         'selected_model': selected_model,
-        'available_models': available_models
+        'available_models': available_models,
     }

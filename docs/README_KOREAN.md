@@ -7,6 +7,7 @@
 - 📄 **다양한 문서 형식 지원**: TXT, Markdown, PDF, DOCX 등 다양한 형식의 문서를 처리합니다.
 - 🖼️ **멀티모달 처리 (NEW!)**: 문서 내의 텍스트뿐만 아니라 이미지도 분석하고 추출하여 답변에 활용합니다.
 - 🧠 **지능형 이미지 추출**: AI 모델을 사용하여 문서 내 이미지의 내용을 분석하고, 관련성 높은 이미지만 선별적으로 저장합니다. (OpenRouter 연동)
+- 🤖 **전처리/후처리 OpenRouter 선택**: PDF→MD 전처리(텍스트/멀티모달)와 MD 후처리에서 OpenAI/Google/Anthropic와 동일하게 OpenRouter를 선택할 수 있습니다.
 - 🚀 **고성능 RAG 파이프라인**:
   - **다중 LLM 지원**: OpenAI(GPT), Google(Gemini), Anthropic(Claude), Upstage(Solar) 및 로컬 LLM을 손쉽게 전환하며 사용할 수 있습니다.
   - **실시간 스트리밍 답변**: ChatGPT와 같이 답변이 실시간으로 타이핑되어 사용자 경험을 향상시킵니다.

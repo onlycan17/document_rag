@@ -77,7 +77,7 @@ class DocumentLoader:
             use_agent_preprocessing: 에이전트 기반 전처리 사용 여부
             enable_postprocessing: 후처리 활성화 여부
             use_intelligent_image_extraction: 지능형 이미지 추출 사용 여부
-            preprocessing_model: 전처리 모델 ('local', 'openai', 'google', 'anthropic')
+            preprocessing_model: 전처리 모델 ('local', 'openai', 'google', 'anthropic', 'openrouter')
             enable_multimodal_preprocessing: 멀티모달 전처리 활성화 여부
         """
         # 설정값 초기화 (매개변수가 None이면 settings에서 가져오기)

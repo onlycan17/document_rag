@@ -238,33 +238,19 @@ class FileLoaderManager:
                 output_dir.mkdir(parents=True, exist_ok=True)
 
                 extraction_results = None
-                # 1순위: 설정된 이미지 분석 프로바이더
-                if settings.image_analysis_provider.lower() == "openrouter":
-                    try:
-                        from ..utils.openrouter_image_service import OpenRouterImageService
-                        service = OpenRouterImageService()
-                        extraction_results = service.extract_and_analyze_pdf_images(
-                            file_path, str(output_dir)
-                        )
-                        if extraction_results:
-                            logger.info(f"✅ OpenRouter 이미지 추출 완료: {extraction_results.get('total_images', 0)}개")
-                        else:
-                            logger.warning("⚠️ OpenRouter 이미지 추출 결과가 비어있음")
-                    except Exception as e:
-                        logger.warning(f"❌ OpenRouter 이미지 추출 실패: {str(e)}")
-                        extraction_results = None
-
-                # 2순위: 로컬 OCR 기반 (pymupdf + OCR)
-                if not extraction_results:
-                    try:
-                        from ..utils.pymupdf_image_extractor import PyMuPDFImageExtractor
-                        extractor = PyMuPDFImageExtractor()
-                        extraction_results = extractor.extract_images(file_path, str(output_dir))
-                        if extraction_results:
-                            logger.info(f"✅ PyMuPDF 이미지 추출 완료: {extraction_results.get('total_images', 0)}개")
-                    except Exception as e:
-                        logger.warning(f"❌ PyMuPDF 이미지 추출 실패: {str(e)}")
-                        extraction_results = None
+                # 정책상 OpenRouter만 사용(폴백 없음)
+                try:
+                    from ..utils.openrouter_image_service import OpenRouterImageService
+                    service = OpenRouterImageService()
+                    extraction_results = service.extract_and_analyze_pdf_images(
+                        file_path, str(output_dir)
+                    )
+                    if extraction_results:
+                        logger.info(f"✅ OpenRouter 이미지 추출 완료: {extraction_results.get('total_images', 0)}개")
+                    else:
+                        raise RuntimeError("OpenRouter 이미지 추출 결과가 비어있음(폴백 금지)")
+                except Exception as e:
+                    raise RuntimeError(f"OpenRouter 이미지 추출 실패(폴백 금지): {e}")
 
                 # 이미지 추출 메타데이터 저장
                 if extraction_results:
