@@ -20,6 +20,7 @@ from transformers import (
     AutoProcessor,
     AutoModelForCausalLM,
 )
+from config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -597,7 +598,7 @@ class AXMultimodalModel:
                     outputs = self.model.generate(
                         **inputs,
                         max_new_tokens=max_new,
-                        temperature=0.3,
+                        temperature=settings.temperature,
                         do_sample=True,
                         top_p=0.9,
                     )
@@ -846,7 +847,7 @@ class AXMultimodalModel:
                     outputs = self.model.generate(
                         **inputs,
                         max_new_tokens=64,
-                        temperature=0.1,
+                        temperature=settings.temperature,
                         do_sample=False,
                     )
                 except Exception as gen_e:

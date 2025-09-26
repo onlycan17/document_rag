@@ -80,9 +80,40 @@ class ParallelProcessor:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # 처리 컴포넌트
-        self.md_processor = MDPostProcessor(str(self.output_dir))
-        self.quality_checker = QualityChecker()
+        # 처리 컴포넌트(현재 선택된 제공자/모델 반영)
+        _prov = None
+        _model = None
+        try:
+            from config import settings as _settings
+            try:
+                import streamlit as st  # type: ignore
+                _prov = st.session_state.get('current_provider', None)
+                _model = st.session_state.get('current_model', None)
+            except Exception:
+                pass
+            # 후처리 전용 오버라이드 우선
+            _md_override_provider = getattr(_settings, 'md_postprocess_provider', None)
+            _md_override_model = getattr(_settings, 'md_postprocess_model', None)
+            if _md_override_provider:
+                _prov = _md_override_provider
+                if _md_override_model:
+                    _model = _md_override_model
+            _prov = _prov or getattr(_settings, 'llm_provider', 'local')
+            if not _model:
+                if _prov == 'openai':
+                    _model = getattr(_settings, 'openai_model', None)
+                elif _prov == 'google':
+                    _model = getattr(_settings, 'google_model', None)
+                elif _prov == 'anthropic':
+                    _model = getattr(_settings, 'anthropic_model', None)
+                elif _prov == 'openrouter':
+                    _model = getattr(_settings, 'openrouter_model', None) or getattr(_settings, 'openrouter_mm_model', None)
+                else:
+                    _model = getattr(_settings, 'local_llm_model', None)
+        except Exception:
+            pass
+        self.md_processor = MDPostProcessor(str(self.output_dir), provider=_prov, model_name=_model)
+        self.quality_checker = QualityChecker(provider=_prov, model_name=_model)
         
         # 상태 관리
         self.tasks: Dict[str, ProcessingTask] = {}

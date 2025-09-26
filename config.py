@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
@@ -9,21 +10,23 @@ class Settings(BaseSettings):
     # Pydantic v2 설정: .env 사용, 알 수 없는 환경변수는 무시(에러 방지)
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     # LLM 제공자 설정
-    llm_provider: str = "local"  # "openai", "google", "anthropic", "local"
+    llm_provider: str = "openrouter"  # 기본값을 외부 API로 전환: "openai", "google", "anthropic", "local", "openrouter"
+    # 에이전트(전처리/후처리/구조파서 등) 호출 시 로컬 경로를 전면 차단하고 OpenRouter로 강제 여부
+    enforce_openrouter_for_agents: bool = os.getenv("ENFORCE_OPENROUTER_FOR_AGENTS", "true").lower() == "true"
     
     # OpenAI 설정
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
     # 권장 기본값: 경량 멀티모달 고성능-저비용 모델
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-5-mini"
     
     # Google Gemini 설정
     google_api_key: Optional[str] = os.getenv("GOOGLE_API_KEY")
-    google_model: str = "gemini-1.5-flash-8b"  # 또는 "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-pro"
+    google_model: str = "gemini-2.5-flash"  # 또는 "gemini-2.5-pro", "gemini-2.0-ultra"
     
     # Anthropic Claude 설정
     anthropic_api_key: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
-    # 권장 기본값: 최신 세대 Sonnet 4
-    anthropic_model: str = "claude-3-5-haiku-20241022"
+    # 권장 기본값: 최신 세대 Claude 4 Sonnet
+    anthropic_model: str = "claude-4-sonnet"
 
     # 멀티모달 추가 모델(.env에서 콤마로 확장)
     # 예) EXTRA_MULTIMODAL_OPENAI_MODELS=gpt-5-mini,gpt-5-nano
@@ -34,6 +37,15 @@ class Settings(BaseSettings):
     extra_multimodal_anthropic_models: Optional[str] = os.getenv("EXTRA_MULTIMODAL_ANTHROPIC_MODELS")
     # OpenRouter 멀티모달 추가 모델(.env에서 콤마로 확장)
     extra_multimodal_openrouter_models: Optional[str] = os.getenv("EXTRA_MULTIMODAL_OPENROUTER_MODELS")
+
+    # OpenRouter 공통 설정(키/엔드포인트/모델)
+    # 주의: 키 환경변수는 프로젝트 명세상 OPNEROUTER_API_KEY 철자 사용
+    openrouter_api_key: Optional[str] = os.getenv("OPNEROUTER_API_KEY")
+    openrouter_api_base: str = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api")
+    # 텍스트 기본 모델(선택)과 멀티모달 기본 모델
+    # 텍스트 기본 모델은 무료 모델인 glm-4.5-air로 고정(요청사항)
+    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "z-ai/glm-4.5-air")
+    openrouter_mm_model: str = os.getenv("OPENROUTER_MM_MODEL", "z-ai/glm-4.5v")
     
     # 로컬 LLM 설정 (OpenAI 호환 API)
     local_llm_base_url: str = os.getenv("LOCAL_LLM_BASE_URL", "http://210.126.109.57:1620")
@@ -41,12 +53,14 @@ class Settings(BaseSettings):
     local_llm_base_urls: str | None = os.getenv("LOCAL_LLM_BASE_URLS")
     local_llm_model: str = os.getenv("LOCAL_LLM_MODEL", "midm-2.0-base-instruct")
     local_llm_api_key: str = os.getenv("LOCAL_LLM_API_KEY", "not-needed")  # 일부 로컬 서버는 API 키 필요
-    local_llm_max_tokens: int = int(os.getenv("LOCAL_LLM_MAX_TOKENS", "512"))  # 로컬 모델 최대 토큰 (더 보수적으로)
+    local_llm_max_tokens: int = int(os.getenv("LOCAL_LLM_MAX_TOKENS", "4096"))  # 로컬 모델 최대 토큰 (더 보수적으로)
     local_llm_context_window: int = int(os.getenv("LOCAL_LLM_CONTEXT_WINDOW", "4096"))  # 로컬 모델 컨텍스트 윈도우
     local_llm_timeout: int = int(os.getenv("LOCAL_LLM_TIMEOUT", "120"))  # 로컬 모델 응답 타임아웃 (초)
     local_llm_max_retries: int = int(os.getenv("LOCAL_LLM_MAX_RETRIES", "3"))  # 로컬 모델 재시도 횟수
     # 로컬 GGUF 경로(서버 없이 오프라인 추론)
     local_llm_gguf_path: Optional[str] = os.getenv("LOCAL_LLM_GGUF_PATH")
+    # 로컬 GGUF 백엔드 사용 금지(HTTP 서버(LM Studio)만 사용)
+    disable_local_gguf: bool = os.getenv("DISABLE_LOCAL_GGUF", "true").lower() == "true"
     # 업로드/전처리 과정에서 HTTP 폴백 비활성화 여부
     disable_http_fallback: bool = os.getenv("DISABLE_HTTP_FALLBACK", "false").lower() == "true"
     # 로컬 LLM 성능/안정성 파라미터
@@ -69,15 +83,22 @@ class Settings(BaseSettings):
     embedding_provider: str = "upstage"  # "openai", "local", "upstage"
     embedding_model_name: str = "sentence-transformers/xlm-r-100langs-bert-base-nli-stsb-mean-tokens"
 
-    # 로컬 서버 기반 이미지 처리(Flux 등) 사용 여부
-    use_local_image_server: bool = os.getenv("USE_LOCAL_IMAGE_SERVER", "true").lower() == "true"
+    # 로컬 서버 기반 이미지 처리(Flux 등) 사용 여부 - 기본 비활성화(무조건 OpenRouter 사용)
+    use_local_image_server: bool = os.getenv("USE_LOCAL_IMAGE_SERVER", "false").lower() == "true"
     local_image_relevance_threshold: float = float(os.getenv("LOCAL_IMAGE_RELEVANCE_THRESHOLD", "0.6"))
 
     # 이미지 분석 프로바이더 (pdf 전처리용): "local" | "openrouter"
     # 요청에 따라 기본값을 openrouter로 설정 (OpenRouter 멀티모달 활용)
     image_analysis_provider: str = os.getenv("IMAGE_ANALYSIS_PROVIDER", "openrouter")
+    # 이미지 분석 폴백 비활성화(엄격 모드). true이면 OpenRouter 실패 시 즉시 에러 발생
+    disable_image_fallback: bool = os.getenv("DISABLE_IMAGE_FALLBACK", "true").lower() == "true"
     # 로컬 멀티모달 선호 포트(1620 고정 요청)
     local_mm_prefer_port: str = os.getenv("LOCAL_MM_PREFER_PORT", "1620")
+
+    # LM Studio (로컬 모델 서버) 설정
+    # 기본값은 내부 네트워크에서 운영 중인 LM Studio 인스턴스를 가리킵니다.
+    lm_studio_api_url: str = os.getenv("LM_STUDIO_API_URL", "http://localhost:3620")
+    lm_studio_model_dir: Optional[str] = os.getenv("LM_STUDIO_MODEL_DIR", os.path.join(Path.home(), 'Library', 'Application Support', 'lm-studio', 'models'))
 
     # OpenRouter (외부 API) 설정 — 사용자 .env에 OPNEROUTER_API_KEY 키가 존재
     # 주의: 오타 포함 정확한 이름을 사용 (OPNEROUTER_API_KEY)
@@ -85,6 +106,12 @@ class Settings(BaseSettings):
     openrouter_api_base: str = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api")
     # 데이터 전처리의 이미지 처리용 기본 모델: z-ai/glm-4.5v
     openrouter_mm_model: str = os.getenv("OPENROUTER_MM_MODEL", "z-ai/glm-4.5v")
+    # 텍스트 처리(후처리 등) 기본 모델: 별도 지정 없으면 멀티모달 기본값을 폴백 사용
+    openrouter_model: str = os.getenv("OPENROUTER_MODEL", os.getenv("OPENROUTER_MM_MODEL", "z-ai/glm-4.5v"))
+
+    # MD 후처리 전용 오버라이드(선택): 이 값이 설정되면 후처리만 별도 provider/model 사용
+    md_postprocess_provider: Optional[str] = os.getenv("MD_POSTPROCESS_PROVIDER")
+    md_postprocess_model: Optional[str] = os.getenv("MD_POSTPROCESS_MODEL")
 
     # 이미지 향상(선택) 설정
     enable_image_enhancement: bool = os.getenv("ENABLE_IMAGE_ENHANCEMENT", "false").lower() == "true"
@@ -134,7 +161,8 @@ class Settings(BaseSettings):
     langsmith_api_key: Optional[str] = os.getenv("LANGSMITH_API_KEY")
     langsmith_project: Optional[str] = os.getenv("LANGSMITH_PROJECT")
 
-    temperature: float = 0.3
+    # 일부 모델은 temperature를 변경할 수 없으므로 기본값을 1.0으로 설정(모델의 기본값과 일치)
+    temperature: float = 1.0
     max_tokens: int = 4096  # 기본값 - 모델별로 자동 조정됨
     
     # 스트리밍 설정
@@ -154,13 +182,14 @@ class Settings(BaseSettings):
     api_max_delay: float = float(os.getenv("API_MAX_DELAY", "300.0"))  # 최대 대기 시간 증가 (5분)
     
     # 문서 전처리 모델 설정
-    preprocessing_model: str = os.getenv("PREPROCESSING_MODEL", "local")  # "local", "openai", "google", "anthropic"
+    preprocessing_model: str = os.getenv("PREPROCESSING_MODEL", "openrouter")  # 전처리 기본 제공자를 외부 API로 전환
     preprocessing_max_tokens: int = int(os.getenv("PREPROCESSING_MAX_TOKENS", "2000"))  # 전처리 최대 토큰 수
-    preprocessing_temperature: float = float(os.getenv("PREPROCESSING_TEMPERATURE", "0.3"))  # 전처리 온도
+    # 전처리 단계에서 사용하는 온도 (환경변수로 오버라이드 가능)
+    preprocessing_temperature: float = float(os.getenv("PREPROCESSING_TEMPERATURE", "1.0"))  # 전처리 온도
     
     # 멀티모달 전처리 모델 설정 (이미지 처리용)
-    multimodal_preprocessing_model: str = os.getenv("MULTIMODAL_PREPROCESSING_MODEL", "gpt-4o-mini")  # 멀티모달 모델(저비용)
-    multimodal_preprocessing_provider: str = os.getenv("MULTIMODAL_PREPROCESSING_PROVIDER", "openai")  # 멀티모달 제공자
+    multimodal_preprocessing_model: str = os.getenv("MULTIMODAL_PREPROCESSING_MODEL", "z-ai/glm-4.5v")  # OpenRouter 전용 이미지 분석 모델 (문서 명세 고수)
+    multimodal_preprocessing_provider: str = os.getenv("MULTIMODAL_PREPROCESSING_PROVIDER", "openrouter")  # 문서 명세: 반드시 openrouter로 고정
     enable_multimodal_preprocessing: bool = os.getenv("ENABLE_MULTIMODAL_PREPROCESSING", "true").lower() == "true"  # 멀티모달 전처리 활성화(기본 on)
     
     # UI 설정

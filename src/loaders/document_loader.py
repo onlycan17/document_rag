@@ -116,8 +116,21 @@ class EnhancedDocumentLoader:
             from src.processing.preprocessing_factory import PreprocessingModelFactory
             
             # 선택된 전처리 모델로 초기화
+            # 멀티모달 활성화 시 UI에서 선택된 모델명을 우선 적용,
+            # 아니면 텍스트 전처리용 선택 모델(preproc_text_model) 사용
+            selected_model_name = None
+            try:
+                import streamlit as st  # type: ignore
+                if st.session_state.get('enable_multimodal_preprocessing', False):
+                    selected_model_name = st.session_state.get('preproc_mm_model', None)
+                else:
+                    selected_model_name = st.session_state.get('preproc_text_model', None)
+            except Exception:
+                pass
+
             self._preprocessing_model = PreprocessingModelFactory.create_model(
-                self.preprocessing_model
+                self.preprocessing_model,
+                model_name=selected_model_name
             )
             logger.info(f"전처리 모델 초기화 완료: {self.preprocessing_model}")
             
@@ -449,13 +462,46 @@ class EnhancedDocumentLoader:
                     logger.info("🔧 2단계 MD 후처리 시작...")
                     
                     # MDPostProcessor 초기화
+                    # 에이전트/후처리도 현재 선택된 제공자/모델을 따르도록 동기화
+                    _prov = None
+                    _model = None
+                    try:
+                        import streamlit as st  # type: ignore
+                        _prov = st.session_state.get('current_provider', None)
+                        _model = st.session_state.get('current_model', None)
+                    except Exception:
+                        pass
+                    # 후처리 전용 오버라이드 우선 적용(.env): MD_POSTPROCESS_PROVIDER/MODEL
+                    _md_override_provider = getattr(settings, 'md_postprocess_provider', None)
+                    _md_override_model = getattr(settings, 'md_postprocess_model', None)
+                    if _md_override_provider:
+                        _prov = _md_override_provider
+                        if _md_override_model:
+                            _model = _md_override_model
+                    # 그 다음 세션/전역 기본값
+                    _prov = _prov or getattr(settings, 'llm_provider', 'local')
+                    if not _model:
+                        if _prov == 'openai':
+                            _model = getattr(settings, 'openai_model', None)
+                        elif _prov == 'google':
+                            _model = getattr(settings, 'google_model', None)
+                        elif _prov == 'anthropic':
+                            _model = getattr(settings, 'anthropic_model', None)
+                        elif _prov == 'openrouter':
+                            # 텍스트용 openrouter_model 우선, 없으면 멀티모달 기본 사용
+                            _model = getattr(settings, 'openrouter_model', None) or getattr(settings, 'openrouter_mm_model', None)
+                        else:
+                            _model = getattr(settings, 'local_llm_model', None)
+
                     postprocessor = MDPostProcessor(
                         output_dir="processed_docs",
-                        target_quality=settings.md_postprocess_target_quality
+                        target_quality=settings.md_postprocess_target_quality,
+                        provider=_prov,
+                        model_name=_model,
                     )
                     
-                    # 품질 검사기 초기화 및 연결
-                    quality_checker = QualityChecker()
+                    # 품질 검사기 초기화 및 연결(동일 제공자/모델)
+                    quality_checker = QualityChecker(provider=_prov, model_name=_model)
                     postprocessor.set_quality_checker(quality_checker)
                     
                     # 2단계 후처리 실행
@@ -506,6 +552,8 @@ class EnhancedDocumentLoader:
             try:
                 if progress_callback:
                     progress_callback(0.1, "🧠 지능형 이미지 추출 중...")
+                else:
+                    logger.info("🧠 지능형 이미지 추출 시작 (provider=openrouter, 정책상 강제)")
                 from pathlib import Path
                 # PDF 파일명 기반으로 출력 디렉토리 생성
                 pdf_name = Path(file_path).stem
@@ -513,45 +561,21 @@ class EnhancedDocumentLoader:
                 output_dir = output_base_dir / pdf_name
                 output_dir.mkdir(parents=True, exist_ok=True)
 
+                # OpenRouter만 사용(정책 강제), 폴백 없음
+                from ..utils.openrouter_image_service import OpenRouterImageService
                 extraction_results = None
-                # 1순위: 설정된 이미지 분석 프로바이더
-                if settings.image_analysis_provider.lower() == "openrouter" and settings.openrouter_api_key:
-                    try:
-                        from ..utils.openrouter_image_service import OpenRouterImageService
-                        svc = OpenRouterImageService()
-                        extraction_results = svc.process_pdf(
-                            pdf_path=file_path,
-                            output_dir=str(output_dir),
-                            relevance_threshold=settings.local_image_relevance_threshold,
-                        )
-                        logger.info("OpenRouter를 이용한 지능형 추출 완료")
-                    except Exception as e:
-                        logger.warning(f"OpenRouter 사용 실패, 다른 방법으로 폴백: {e}")
-                if not extraction_results and settings.use_local_image_server:
-                    # 2순위: 로컬 서버(OpenAI 호환)로 이미지 분석/OCR 수행(1620 우선)
-                    try:
-                        from ..utils.local_image_service import LocalImageService
-                        svc = LocalImageService()
-                        extraction_results = svc.process_pdf(
-                            pdf_path=file_path,
-                            output_dir=str(output_dir),
-                            relevance_threshold=settings.local_image_relevance_threshold,
-                            progress_callback=progress_callback,
-                        )
-                        logger.info("로컬 이미지 서버를 이용한 지능형 추출 완료")
-                    except Exception as e:
-                        logger.warning(f"로컬 이미지 서버 사용 실패, 내장 추출기로 폴백: {e}")
-
-                if not extraction_results:
-                    # 내장 로컬 모델 기반 추출기로 폴백
-                    from ..utils.intelligent_image_extractor_korean import IntelligentImageExtractorKorean
-                    extractor = IntelligentImageExtractorKorean(
+                try:
+                    svc = OpenRouterImageService()
+                    logger.info("OpenRouter 기반 지능형 이미지 추출 경로 선택(정책 강제)")
+                    extraction_results = svc.process_pdf(
+                        pdf_path=file_path,
                         output_dir=str(output_dir),
                         relevance_threshold=settings.local_image_relevance_threshold,
-                        enable_ocr=self.use_ocr,
-                        use_local_models=True
                     )
-                    extraction_results = extractor.process_pdf(file_path, progress_callback)
+                    logger.info("OpenRouter를 이용한 지능형 추출 완료")
+                except Exception as e:
+                    # 정책상 폴백 금지: 즉시 중단
+                    raise RuntimeError(f"OpenRouter 이미지 분석 실패(폴백 금지 정책): {e}") from e
                 
                 # 추출된 텍스트와 관련 이미지 정보를 Document로 변환
                 if extraction_results and extraction_results.get('images'):
@@ -641,9 +665,41 @@ class EnhancedDocumentLoader:
                 # 임시 출력 디렉토리 사용
                 import tempfile
                 temp_output_dir = tempfile.mkdtemp(prefix="agent_pdf_convert_")
+                # 에이전트 LLM 제공자/모델을 UI 선택값 또는 설정으로 강제 동기화
+                from config import settings as _settings
+                provider = None
+                model = None
+                try:
+                    import streamlit as st  # type: ignore
+                    # 전처리 섹션의 선택값을 최우선으로 사용
+                    provider = st.session_state.get('preprocessing_model', None) or self.preprocessing_model
+                    if st.session_state.get('enable_multimodal_preprocessing', False):
+                        model = st.session_state.get('preproc_mm_model', None)
+                    else:
+                        model = st.session_state.get('preproc_text_model', None)
+                except Exception:
+                    # 세션을 사용할 수 없으면 인자로 받은 전처리 모델 타입 사용
+                    provider = self.preprocessing_model
+                # 우선순위: 전처리 세션/인자 → 설정 기본
+                provider = (provider or getattr(_settings, 'llm_provider', 'openrouter')).lower()
+                if not model:
+                    # 설정에서 제공자별 기본 모델 추론
+                    if provider == 'openai':
+                        model = getattr(_settings, 'openai_model', None)
+                    elif provider == 'google':
+                        model = getattr(_settings, 'google_model', None)
+                    elif provider == 'anthropic':
+                        model = getattr(_settings, 'anthropic_model', None)
+                    elif provider == 'openrouter':
+                        model = getattr(_settings, 'openrouter_model', None) or getattr(_settings, 'openrouter_mm_model', None)
+                    else:
+                        model = getattr(_settings, 'local_llm_model', None)
+
                 agent_converter = AgentBasedPDFConverter(
                     output_dir=temp_output_dir,
-                    enable_quality_validation=True
+                    enable_quality_validation=True,
+                    llm_provider=provider,
+                    llm_model=model,
                 )
                 
                 # 에이전트 기반 PDF 변환
@@ -664,6 +720,8 @@ class EnhancedDocumentLoader:
         try:
             if progress_callback:
                 progress_callback(0.1, "개선된 PDF 변환기로 처리 중...")
+            else:
+                logger.info("📝 개선된 PDF 변환기 시작: 텍스트/이미지 추출 수행")
             
             # 임시 출력 디렉토리 사용
             import tempfile

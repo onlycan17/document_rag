@@ -8,6 +8,9 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
 import logging
 from pathlib import Path
+from config import settings
+
+from .document_pipeline import build_metadata, concatenate_documents, load_documents
 
 logger = logging.getLogger(__name__)
 
@@ -140,51 +143,38 @@ class LocalPreprocessingModel(PreprocessingModel):
         self._initialize_model()
         
         try:
-            from src.loaders.document_loader import DocumentLoader
-            from src.utils.document_processor import DocumentProcessor
-            
-            # 기존 DocumentLoader를 사용하여 텍스트 추출
-            loader = DocumentLoader(
+            result = load_documents(
+                file_path,
                 use_ocr=kwargs.get('use_ocr', True),
-                use_agent_preprocessing=False,  # 로컬 모델은 에이전트 모드 사용 안 함
-                enable_postprocessing=kwargs.get('enable_postprocessing', True)
+                use_agent_preprocessing=False,
+                enable_postprocessing=kwargs.get('enable_postprocessing', True),
             )
-            
-            # 파일 로드
-            documents = loader.load_document(file_path)
-            
-            if not documents:
+            if not result.success:
                 return {
                     "text": "",
-                    "metadata": {"error": "문서를 추출할 수 없습니다"},
-                    "processing_method": "local_extraction_failed"
+                    "metadata": {"error": result.error or "문서를 추출할 수 없습니다"},
+                    "processing_method": "local_extraction_failed",
                 }
-            
-            # 텍스트 추출 및 전처리
-            extracted_text = "\n\n".join([doc.page_content for doc in documents])
+            extracted_text = concatenate_documents(result.documents)
             processed_text = self.preprocess_text(extracted_text, **kwargs)
-            
-            # 메타데이터 수집
-            metadata = {
-                "original_length": len(extracted_text),
-                "processed_length": len(processed_text),
-                "document_count": len(documents),
-                "file_path": file_path,
-                "processing_method": "local_preprocessing"
-            }
-            
+            metadata = build_metadata(
+                original_length=len(extracted_text),
+                processed_length=len(processed_text),
+                document_count=len(result.documents),
+                file_path=file_path,
+                extra={"processing_method": "local_preprocessing"},
+            )
             return {
                 "text": processed_text,
                 "metadata": metadata,
-                "processing_method": "local_preprocessing"
+                "processing_method": "local_preprocessing",
             }
-            
         except Exception as e:
             self.logger.error(f"로컬 파일 전처리 실패: {e}")
             return {
                 "text": "",
                 "metadata": {"error": str(e)},
-                "processing_method": "local_preprocessing_failed"
+                "processing_method": "local_preprocessing_failed",
             }
     
     def is_available(self) -> bool:
@@ -256,7 +246,11 @@ class APIPreprocessingModel(PreprocessingModel):
                     raise ValueError("Anthropic API 키가 설정되지 않았습니다")
                 import anthropic
                 self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-                
+            elif self.provider == "openrouter":
+                # OpenRouter는 OpenAI 호환 HTTP를 사용하므로, 간단한 플래그만 유지
+                # 실제 호출은 preprocess_text에서 requests로 처리
+                from types import SimpleNamespace
+                self._client = SimpleNamespace(provider="openrouter")
             else:
                 raise ValueError(f"지원하지 않는 제공자: {self.provider}")
             
@@ -305,7 +299,7 @@ class APIPreprocessingModel(PreprocessingModel):
                         resp = self._client.responses.create(
                             model=self.model_name,
                             input=preprocessing_prompt,
-                            temperature=0.3,
+                            temperature=settings.preprocessing_temperature,
                             max_output_tokens=4000,
                         )
                         # openai>=1.0.0 에서 제공되는 편의 프로퍼티 시도
@@ -340,7 +334,32 @@ class APIPreprocessingModel(PreprocessingModel):
                     messages=[{"role": "user", "content": preprocessing_prompt}]
                 )
                 processed_text = response.content[0].text
-                
+            elif self.provider == "openrouter":
+                # OpenRouter(OpenAI 호환) - Chat Completions
+                import os
+                import requests
+                api_key = getattr(settings, 'openrouter_api_key', None) or os.getenv('OPNEROUTER_API_KEY')
+                if not api_key:
+                    raise ValueError("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다")
+                api_base = getattr(settings, 'openrouter_api_base', 'https://openrouter.ai/api')
+                url = f"{api_base.rstrip('/')}/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                    "X-Title": "RAG-Preprocessor"
+                }
+                body = {
+                    "model": self.model_name or getattr(settings, 'openrouter_model', getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v')),
+                    "messages": [{"role": "user", "content": preprocessing_prompt}],
+                    "temperature": float(settings.preprocessing_temperature),
+                    "max_tokens": 4000,
+                }
+                resp = requests.post(url, json=body, headers=headers, timeout=120)
+                if resp.status_code != 200:
+                    raise RuntimeError(f"OpenRouter 오류: {resp.status_code} - {resp.text}")
+                data = resp.json()
+                processed_text = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
+            
             else:
                 raise ValueError(f"지원하지 않는 제공자: {self.provider}")
             
@@ -365,54 +384,42 @@ class APIPreprocessingModel(PreprocessingModel):
         self._initialize_client()
         
         try:
-            from src.loaders.document_loader import DocumentLoader
-            
-            # 기본 DocumentLoader를 사용하여 텍스트 추출
-            loader = DocumentLoader(
+            result = load_documents(
+                file_path,
                 use_ocr=kwargs.get('use_ocr', True),
-                use_agent_preprocessing=False,  # API 모델은 직접 전처리
-                enable_postprocessing=False     # API 모델이 전처리 담당
+                use_agent_preprocessing=False,
+                enable_postprocessing=False,
             )
-            
-            # 파일 로드
-            documents = loader.load_document(file_path)
-            
-            if not documents:
+            if not result.success:
                 return {
                     "text": "",
-                    "metadata": {"error": "문서를 추출할 수 없습니다"},
-                    "processing_method": f"{self.provider}_extraction_failed"
+                    "metadata": {"error": result.error or "문서를 추출할 수 없습니다"},
+                    "processing_method": f"{self.provider}_extraction_failed",
                 }
-            
-            # 텍스트 추출
-            extracted_text = "\n\n".join([doc.page_content for doc in documents])
-            
-            # API를 사용하여 전처리
+            extracted_text = concatenate_documents(result.documents)
             processed_text = self.preprocess_text(extracted_text, **kwargs)
-            
-            # 메타데이터 수집
-            metadata = {
-                "original_length": len(extracted_text),
-                "processed_length": len(processed_text),
-                "document_count": len(documents),
-                "file_path": file_path,
-                "api_provider": self.provider,
-                "api_model": self.model_name,
-                "processing_method": f"{self.provider}_api_preprocessing"
-            }
-            
+            metadata = build_metadata(
+                original_length=len(extracted_text),
+                processed_length=len(processed_text),
+                document_count=len(result.documents),
+                file_path=file_path,
+                extra={
+                    "api_provider": self.provider,
+                    "api_model": self.model_name,
+                    "processing_method": f"{self.provider}_api_preprocessing",
+                },
+            )
             return {
                 "text": processed_text,
                 "metadata": metadata,
-                "processing_method": f"{self.provider}_api_preprocessing"
+                "processing_method": f"{self.provider}_api_preprocessing",
             }
-            
         except Exception as e:
             self.logger.error(f"API 파일 전처리 실패: {e}")
             return {
                 "text": "",
                 "metadata": {"error": str(e)},
-                "processing_method": f"{self.provider}_api_preprocessing_failed"
+                "processing_method": f"{self.provider}_api_preprocessing_failed",
             }
     
     def is_available(self) -> bool:

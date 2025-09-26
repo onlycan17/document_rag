@@ -6,6 +6,7 @@ import re
 import logging
 from typing import Tuple, Optional, List, Dict, Any
 from .base_agent import LocalLLMAgent
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +16,8 @@ class ContextConnectorAgent(LocalLLMAgent):
     로컬 LLM을 활용하여 문맥이 끊어진 텍스트를 지능적으로 연결하는 에이전트
     """
     
-    def __init__(self):
-        super().__init__("ContextConnector")
+    def __init__(self, provider: str | None = None, model_name: str | None = None, base_url: str | None = None):
+        super().__init__("ContextConnector", provider=provider, model_name=model_name, base_url=base_url)
         
         # 한국어 문장 완성도 판단을 위한 예시들
         self.completion_examples = [
@@ -95,7 +96,7 @@ class ContextConnectorAgent(LocalLLMAgent):
 교정된 텍스트(설명 없이 결과만):"""
         
         try:
-            response = self._call_local_llm(prompt, temperature=0.1, max_tokens=4000)
+            response = self._call_llm(prompt, temperature=settings.temperature, max_tokens=4000)
             
             if response.strip():
                 # LLM 응답에서 불필요한 텍스트 제거

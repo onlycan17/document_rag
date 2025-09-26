@@ -1,206 +1,29 @@
-# 업스테이지 Solar Embedding 모델 설정 가이드
+# 🌞 업스테이지 Solar 및 임베딩 설정 가이드
 
-## 🚀 개요
+이 프로젝트는 업스테이지(Upstage)의 Solar LLM과 고성능 한국어 임베딩 모델을 지원합니다. 이 가이드는 업스테이지 관련 설정을 안내합니다.
 
-업스테이지의 `solar-embedding-1-large-query` 모델을 성공적으로 통합했습니다!  
-이 가이드는 모델 설정부터 벡터 데이터베이스 재구축까지의 전체 과정을 안내합니다.
+## 1. API 키 설정
 
-## 📋 설정 단계
+먼저, 업스테이지에서 발급받은 API 키를 `.env` 파일에 추가해야 합니다.
 
-### 1단계: 업스테이지 API 키 발급
+```env
+# .env 파일
+UPSTAGE_API_KEY="your-upstage-api-key-here"
+```
 
-1. **업스테이지 콘솔 접속**
-   - 🌐 [https://console.upstage.ai/](https://console.upstage.ai/)
-   - 회원가입 또는 로그인
+API 키를 설정하면, 앱 사이드바의 "LLM 모델 설정"에서 Upstage Solar 모델을 선택하여 사용할 수 있습니다.
 
-2. **API 키 생성**
-   - API 키 생성 페이지로 이동
-   - 새 API 키 생성
-   - **생성된 키를 안전한 곳에 복사 보관**
+## 2. 업스테이지 임베딩 설치 (선택 사항)
 
-### 2단계: 환경 변수 설정
+이 프로젝트의 기본 임베딩 모델 외에 업스테이지의 임베딩 모델을 사용하고 싶을 경우, 별도의 설치가 필요합니다.
 
-1. **`.env` 파일 생성**
-   ```bash
-   # 프로젝트 루트에서 실행
-   cp .env.example .env
-   ```
-
-2. **API 키 설정**
-   ```bash
-   # .env 파일을 열어서 다음과 같이 설정
-   UPSTAGE_API_KEY=your_actual_api_key_here
-   ```
-
-   **⚠️ 주의사항:**
-   - `your_actual_api_key_here` 부분을 실제 발급받은 API 키로 교체
-   - API 키는 절대 공개하지 마세요
-   - `.env` 파일은 git에 커밋하지 마세요
-
-### 3단계: 패키지 설치 확인
-
-`langchain-upstage`는 `requirements.txt`에 포함되어 있지 않습니다(토크나이저 버전 충돌 회피).  
-업스테이지 임베딩을 사용할 경우 다음과 같이 설치하세요:
+**⚠️ 중요**: `langchain-upstage` 패키지는 `tokenizers<0.21` 버전을 강제하여, 최신 `transformers` 라이브러리와 버전 충돌을 일으킬 수 있습니다. 이 문제를 피하기 위해 `--no-deps` 플래그를 사용하여 의존성 없이 설치하는 것을 권장합니다.
 
 ```bash
+# 가상환경이 활성화된 상태에서 실행
 pip install --no-deps langchain-upstage
 ```
 
-## 🔧 벡터 데이터베이스 재구축
+설치 후, `.env` 파일에 `UPSTAGE_API_KEY`가 설정되어 있다면, 문서 처리 시 업스테이지 임베딩 모델이 자동으로 사용될 수 있습니다. (단, `config.py`의 `embedding_model_name` 설정에 따라 동작이 달라질 수 있습니다.)
 
-통합 벡터 DB 관리 스크립트를 사용하세요:
-
-```bash
-# 기본 모드
-python scripts/data_management/vector_db_manager.py
-
-# 안전 모드 (OCR 비활성화)
-python scripts/data_management/vector_db_manager.py --safe-mode
-
-# 마크다운만 처리
-python scripts/data_management/vector_db_manager.py --markdown-only
-
-# 특정 파일만 처리
-python scripts/data_management/vector_db_manager.py --files "file1.pdf" "file2.md"
-```
-
-## 🧪 테스트
-
-### 임베딩 모델 테스트
-
-```bash
-python tests/test_upstage_embedding.py
-```
-
-**예상 출력:**
-```
-✅ 모델 정보:
-   - 타입: upstage
-   - 모델명: solar-embedding-1-large-query
-   - 차원: 4096
-
-📊 단일 쿼리 임베딩 테스트:
-   임베딩 차원: 4096
-   임베딩 샘플: [0.1234, -0.5678, ...] (처음 5개 값)
-
-✅ 모든 테스트가 성공적으로 완료되었습니다!
-```
-
-### RAG 시스템 테스트
-
-```bash
-python test_simple.py
-```
-
-## 📊 모델 정보
-
-### 업스테이지 Solar Embedding 1 Large Query
-
-- **모델명**: `solar-embedding-1-large-query`
-- **차원**: 4096 (기존 1536에서 크게 증가)
-- **언어**: 한국어/영어 모두 뛰어난 성능
-- **최적화**: 쿼리 검색에 특화된 모델
-- **성능**: 한국어 임베딩 업계 최고 수준
-
-### 기대 효과
-
-1. **🎯 향상된 검색 정확도**
-   - 4096 차원으로 더 정밀한 의미 표현
-   - 미세한 의미 차이까지 포착
-
-2. **🇰🇷 한국어 특화 성능**
-   - 한국어 문서에 대한 우수한 이해
-   - 한국어 쿼리-문서 매칭 성능 향상
-
-3. **⚡ 효율적인 클라우드 서비스**
-   - 로컬 GPU 리소스 절약
-   - 업스테이지 최적화된 인프라 활용
-
-## 🔍 문제 해결
-
-### 자주 발생하는 문제
-
-1. **API 키 오류**
-   ```
-   ❌ UPSTAGE_API_KEY 환경 변수가 설정되지 않았습니다.
-   ```
-   **해결**: `.env` 파일에 올바른 API 키 설정 확인
-
-2. **차원 불일치 오류**
-   ```
-   ❌ 벡터 차원이 맞지 않습니다.
-   ```
-   **해결**: 기존 벡터 DB 삭제 후 재구축
-
-3. **PDF 로딩 실패**
-   ```
-   ❌ cannot pickle '_thread.RLock' object
-   ```
-   **해결**: `safe_rebuild_vector_db.py` 사용
-
-4. **메모리 부족**
-   ```
-   ❌ OutOfMemoryError
-   ```
-   **해결**: 대용량 파일을 작은 단위로 분할
-
-### 로그 확인
-
-문제 발생 시 로그 파일 확인:
-```bash
-tail -f logs/app.log
-```
-
-## 📈 성능 최적화
-
-### 설정 조정
-
-`config.py`에서 다음 설정을 조정할 수 있습니다:
-
-```python
-# 청크 크기 조정 (기본: 1200)
-chunk_size: int = 1200
-
-# 오버랩 크기 조정 (기본: 200)  
-chunk_overlap: int = 200
-
-# 검색 결과 수 조정 (기본: 8)
-k_documents: int = 8
-
-# 검색 임계값 조정
-search_threshold_faiss: float = 1.24
-```
-
-### 모니터링
-
-벡터 DB 상태 확인:
-```bash
-# 벡터 DB 디렉토리 크기
-du -sh vector_db/
-
-# 저장된 문서 수 확인 (로그에서)
-grep "청크" logs/app.log | tail -10
-```
-
-## 🎉 완료!
-
-모든 설정이 완료되면 웹 인터페이스를 통해 향상된 RAG 시스템을 사용할 수 있습니다:
-
-```bash
-streamlit run app.py
-```
-
-**새로운 기능:**
-- 🔍 더 정확한 한국어 검색
-- 📚 향상된 문서 이해도
-- ⚡ 빠른 응답 속도
-- 🎯 정밀한 의미 매칭
-
----
-
-## 📞 지원
-
-추가 도움이 필요하면:
-- 📚 [업스테이지 문서](https://developers.upstage.ai/)
-- 🔧 `tests/test_upstage_embedding.py` 실행하여 진단
-- 💬 로그 파일 확인: `logs/` 디렉터리 
+만약 버전 충돌 문제가 발생하면, `langchain-upstage`를 삭제하고 다시 `pip install -r requirements.txt`를 실행하여 기본 환경으로 복구할 수 있습니다.

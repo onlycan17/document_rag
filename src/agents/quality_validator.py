@@ -6,6 +6,7 @@ import re
 import logging
 from typing import Dict, List, Any, Tuple
 from .base_agent import LocalLLMAgent
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +16,8 @@ class QualityValidatorAgent(LocalLLMAgent):
     전처리된 문서의 품질을 검증하고 문제점을 식별하는 에이전트
     """
     
-    def __init__(self):
-        super().__init__("QualityValidator")
+    def __init__(self, provider: str | None = None, model_name: str | None = None, base_url: str | None = None):
+        super().__init__("QualityValidator", provider=provider, model_name=model_name, base_url=base_url)
         
         # 품질 검증 기준 예시들
         self.quality_examples = [
@@ -86,7 +87,8 @@ class QualityValidatorAgent(LocalLLMAgent):
             matches = re.findall(pattern, content)
             broken_count += len(matches)
             for match in matches:
-                issues.append(f"문맥 끊김 발견: '{match.replace(chr(10), '\\n')}'")
+                _safe = match.replace("\n", "\\n")
+                issues.append(f"문맥 끊김 발견: '{_safe}'")
         
         # 2. LLM을 활용한 자연스러움 평가 (샘플링)
         sample_score = self._llm_evaluate_naturalness(content)
@@ -177,7 +179,7 @@ class QualityValidatorAgent(LocalLLMAgent):
 """
         
         try:
-            response = self._call_local_llm(prompt, temperature=0.1, max_tokens=10)
+            response = self._call_llm(prompt, temperature=settings.temperature, max_tokens=10)
             score = float(re.search(r'\d+', response).group()) / 10.0
             return min(1.0, max(0.0, score))
         except Exception as e:

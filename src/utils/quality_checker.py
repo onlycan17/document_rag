@@ -8,6 +8,7 @@ from typing import Dict, List, Any, Tuple
 from pathlib import Path
 
 from src.agents.base_agent import LocalLLMAgent
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +19,16 @@ class QualityChecker(LocalLLMAgent):
     문맥 연결성, 띄어쓰기, 문장 완성도 등을 종합 평가
     """
     
-    def __init__(self):
-        super().__init__("QualityChecker")
+    def __init__(self, provider: str | None = None, model_name: str | None = None, base_url: str | None = None):
+        # 선택한 제공자/모델 수용(없으면 세션/설정)
+        if provider is None:
+            try:
+                import streamlit as st  # type: ignore
+                provider = st.session_state.get('current_provider', None)
+                model_name = model_name or st.session_state.get('current_model', None)
+            except Exception:
+                pass
+        super().__init__("QualityChecker", provider=provider, model_name=model_name, base_url=base_url)
         
         # 품질 평가 기준
         self.quality_criteria = {
@@ -210,7 +219,7 @@ class QualityChecker(LocalLLMAgent):
 띄어쓰기 정확도 (0-100): """
         
         try:
-            response = self._call_local_llm(prompt, temperature=0.1, max_tokens=100)
+            response = self._call_llm(prompt, temperature=0.1, max_tokens=100)
             
             # 숫자 추출
             numbers = re.findall(r'\d+', response)
@@ -252,7 +261,7 @@ class QualityChecker(LocalLLMAgent):
 문맥 연결성 점수 (0-100): """
         
         try:
-            response = self._call_local_llm(prompt, temperature=0.1, max_tokens=100)
+            response = self._call_llm(prompt, temperature=0.1, max_tokens=100)
             
             numbers = re.findall(r'\d+', response)
             if numbers:

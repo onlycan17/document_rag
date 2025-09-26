@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Any
 import logging
 from pathlib import Path
 import base64
+import os
 
 from .preprocessing_model import APIPreprocessingModel
 from config import settings
@@ -22,11 +23,8 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
         # OpenAI 멀티모달 지원 모델
         "openai": [
             "gpt-4o",
-            "gpt-4o-mini",
-            # 공식 가격 페이지(미러) 확인: GPT-5 mini/nano
-            # 참고: http(s)://openai.com/ko-KR/api/pricing/ (Cloudflare 우회 미러로 확인)
-            "gpt-5-mini",
-            "gpt-5-nano",
+            # gpt-4o-mini, gpt-5-mini, gpt-5-nano: 문서 명세에 따라 OpenRouter 전용 파이프라인과 혼동 방지
+            # 이 모델들은 RAG 전처리에서 사용되지 않음. OpenAI는 텍스트 생성용으로만 사용.
         ],
         # Google Gemini 멀티모달 지원 모델 (최신 문서 기준)
         # 참고: https://ai.google.dev/gemini-api/docs/models
@@ -141,6 +139,8 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
                 return self._process_google_multimodal(multimodal_prompt, images)
             elif self.provider == "anthropic":
                 return self._process_anthropic_multimodal(multimodal_prompt, images)
+            elif self.provider == "openrouter":
+                return self._process_openrouter_multimodal(multimodal_prompt, images)
             else:
                 logger.warning(f"지원하지 않는 멀티모달 제공자: {self.provider}")
                 return self.preprocess_text(text, **kwargs)
@@ -297,6 +297,65 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
             
         except Exception as e:
             logger.error(f"Anthropic 멀티모달 처리 실패: {e}")
+            raise
+
+    def _process_openrouter_multimodal(self, prompt: str, images: List[Dict[str, Any]]) -> str:
+        """OpenRouter 비전 모델을 사용한 멀티모달 처리"""
+        try:
+            import requests
+            from config import settings as _s
+
+            api_key = getattr(_s, 'openrouter_api_key', None)
+            if not api_key:
+                raise RuntimeError("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다")
+            api_base = getattr(_s, 'openrouter_api_base', 'https://openrouter.ai/api')
+            url = f"{api_base.rstrip('/')}/v1/chat/completions"
+
+            # 메시지 구성: 텍스트 + data URL 이미지
+            content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+            for image_info in images[:10]:
+                image_path = image_info.get('path', '')
+                if image_path and os.path.exists(image_path):
+                    with open(image_path, "rb") as f:
+                        encoded = base64.b64encode(f.read()).decode()
+                    ext = Path(image_path).suffix.lower()
+                    if ext in ['.jpg', '.jpeg']:
+                        mime = 'image/jpeg'
+                    elif ext == '.png':
+                        mime = 'image/png'
+                    elif ext == '.gif':
+                        mime = 'image/gif'
+                    else:
+                        mime = 'image/png'
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime};base64,{encoded}",
+                            "detail": "high",
+                        },
+                    })
+
+            payload = {
+                "model": self.model_name or getattr(_s, 'openrouter_mm_model', 'z-ai/glm-4.5v'),
+                "messages": [{"role": "user", "content": content}],
+                "max_tokens": self.preprocessing_max_tokens,
+                "temperature": self.preprocessing_temperature,
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                "X-Title": "RAG-Multimodal-Preprocessor",
+            }
+
+            resp = requests.post(url, json=payload, headers=headers, timeout=180)
+            if resp.status_code != 200:
+                raise RuntimeError(f"OpenRouter 멀티모달 오류: {resp.status_code} - {resp.text[:200]}")
+            data = resp.json()
+            processed_text = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
+            logger.info(f"OpenRouter 멀티모달 전처리 완료: {len(processed_text)}자")
+            return processed_text
+        except Exception as e:
+            logger.error(f"OpenRouter 멀티모달 처리 실패: {e}")
             raise
     
     def extract_and_preprocess_with_images(self, file_path: str, images: List[Dict[str, Any]], **kwargs) -> Dict[str, Any]:

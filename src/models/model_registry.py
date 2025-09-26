@@ -53,6 +53,30 @@ class ModelRegistry:
             "context_window": 1000000,
             "description": "빠르고 저렴한 1M 토큰"
         },
+        "gpt-5-pro": {
+            "provider": "openai",
+            "max_tokens": 4096,
+            "context_window": 128000,
+            "description": "고성능 모델"
+        },
+        "gpt-5": {
+            "provider": "openai",
+            "max_tokens": 4096,
+            "context_window": 128000,
+            "description": "고성능 모델"
+        },
+        "gpt-5-lite": {
+            "provider": "openai",
+            "max_tokens": 8192,
+            "context_window": 65536,
+            "description": "경량 모델"
+        },
+        "gpt-5-mini": {
+            "provider": "openai",
+            "max_tokens": 16384,
+            "context_window": 128000,
+            "description": "가벼운 옴니 모델"
+        },
         
         # Google Gemini 모델
         "gemini-1.5-flash": {
@@ -97,6 +121,12 @@ class ModelRegistry:
             "context_window": 32768,
             "description": "안정적인 버전"
         },
+        "gemini-2.0-ultra": {
+            "provider": "google",
+            "max_tokens": 8192,
+            "context_window": 1048576,
+            "description": "고성능 멀티모달"
+        },
         
         # Anthropic Claude 모델
         "claude-3-5-sonnet-20241022": {
@@ -140,6 +170,24 @@ class ModelRegistry:
             "max_tokens": 4096,
             "context_window": 100000,
             "description": "빠른 응답"
+        },
+        "claude-4-1-opus-20250901": {
+            "provider": "anthropic",
+            "max_tokens": 8192,
+            "context_window": 200000,
+            "description": "최신 Claude 4 Opus"
+        },
+        "claude-4-sonnet": {
+            "provider": "anthropic",
+            "max_tokens": 8192,
+            "context_window": 200000,
+            "description": "Claude 4 Sonnet"
+        },
+        "claude-4-1-haiku-20250901": {
+            "provider": "anthropic",
+            "max_tokens": 8192,
+            "context_window": 200000,
+            "description": "Claude 4 Haiku"
         },
         
         # 로컬 모델 (동적 설정)
@@ -264,5 +312,25 @@ class ModelRegistry:
                     "model": model.model_id,
                     "description": f"{model.description} ({cls.format_context_size(model.context_window)} 컨텍스트, 최대 {model.max_tokens}토큰)"
                 })
-        
+        # LM Studio(로컬 모델 탐색)가 활성화되어 있으면 해당 결과를 병합
+        try:
+            from src.models.lm_studio import list_lm_studio_models
+            lm_models = list_lm_studio_models()
+            local_models = lm_models.get('local', [])
+            if local_models:
+                # LM Studio에서 제공하는 모델을 우선적으로 'local'에 추가
+                lm_entries = []
+                for m in local_models:
+                    lm_entries.append({
+                        'name': m.get('name') or m.get('id'),
+                        'model': m.get('id') or m.get('name'),
+                        'description': m.get('description') or ''
+                    })
+                # 기존 로컬 모델 리스트 앞에 위치시키기
+                result.setdefault('local', [])
+                result['local'] = lm_entries + result.get('local', [])
+        except Exception:
+            # LM Studio 통합 실패 시 무시
+            pass
+
         return result

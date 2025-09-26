@@ -11,6 +11,7 @@ from typing import Optional, Dict, List, Any
 from pathlib import Path
 import json
 from llama_cpp import Llama
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,7 @@ class KoreanTextModel:
             response = self.model(
                 prompt,
                 max_tokens=512,
-                temperature=0.3,
+                temperature=settings.temperature,
                 top_p=0.9,
                 stop=["</answer>", "\n\n\n"]
             )
@@ -223,7 +224,7 @@ class KoreanTextModel:
             response = self.model(
                 prompt,
                 max_tokens=50,
-                temperature=0.1,
+                temperature=settings.temperature,
                 top_p=0.9
             )
             
