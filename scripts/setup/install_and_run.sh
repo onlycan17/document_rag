@@ -37,4 +37,4 @@ export CHROMA_TELEMETRY=False
 
 # 앱 실행
 echo "🚀 Streamlit 앱을 시작합니다..."
-streamlit run app.py
+streamlit run app.py --server.port=8503

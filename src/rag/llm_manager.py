@@ -349,11 +349,6 @@ class LLMManager:
             ],
             "google": [
                 {
-                    "id": "gemini-2.0-ultra",
-                    "name": "Gemini 2.0 Ultra",
-                    "description": f"최고 성능 모델 (출력: {self.get_model_max_tokens('gemini-2.0-ultra'):,}, 컨텍스트: {self.get_model_context_window('gemini-2.0-ultra'):,}K)"
-                },
-                {
                     "id": "gemini-2.5-pro",
                     "name": "Gemini 2.5 Pro",
                     "description": f"고성능 모델 (출력: {self.get_model_max_tokens('gemini-2.5-pro'):,}, 컨텍스트: {self.get_model_context_window('gemini-2.5-pro'):,}K)"

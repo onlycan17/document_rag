@@ -51,13 +51,13 @@ def print_menu() -> None:
 def run_streamlit_app():
     """Streamlit 앱 실행"""
     print("🚀 Streamlit 앱을 실행합니다...")
-    print("브라우저에서 http://localhost:8501 에 접속하세요")
+    print("브라우저에서 http://localhost:8502 에 접속하세요")
     print("종료하려면 Ctrl+C를 누르세요")
     print()
     
     try:
         subprocess.run([
-            sys.executable, "-m", "streamlit", "run", "app.py"
+            sys.executable, "-m", "streamlit", "run", "app.py", "--server.port=8502"
         ], cwd=PROJECT_ROOT)
     except KeyboardInterrupt:
         print("\n앱이 종료되었습니다.")

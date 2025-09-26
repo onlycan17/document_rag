@@ -24,7 +24,7 @@ class PlaywrightTestHelper:
     Playwright MCP를 사용한 브라우저 자동화 테스트 헬퍼
     """
     
-    def __init__(self, streamlit_port: int = 8501):
+    def __init__(self, streamlit_port: int = 8502):
         self.streamlit_port = streamlit_port
         self.streamlit_url = f"http://localhost:{streamlit_port}"
         self.streamlit_process = None
@@ -348,7 +348,7 @@ class RealPlaywrightHelper(PlaywrightTestHelper):
     (현재는 스켈레톤 코드)
     """
     
-    def __init__(self, streamlit_port: int = 8501):
+    def __init__(self, streamlit_port: int = 8502):
         super().__init__(streamlit_port)
         self.use_real_playwright = True
     
