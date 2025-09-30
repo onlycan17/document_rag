@@ -12,6 +12,7 @@ import re
 
 from config import settings
 from src.utils import TextProcessor
+from src.utils.answer_formatter import AnswerFormatter
 from src.constants import (
     LOCAL_MODEL_MAX_DOCUMENTS
 )
@@ -50,6 +51,7 @@ class QueryEngine:
         self.vector_db = vector_db
         self.llm_manager = llm_manager
         self.document_processor = document_processor
+        self.answer_formatter = AnswerFormatter()
         self._last_context_tokens = 0
         
         # 체인 초기화는 외부에서 설정
@@ -203,39 +205,33 @@ class QueryEngine:
                 "context": context,
                 "question": question
             }):
-                # 응답 텍스트 추출
-                if hasattr(chunk, 'content'):
-                    chunk_text = chunk.content
-                elif isinstance(chunk, dict) and 'text' in chunk:
-                    chunk_text = chunk['text']
-                elif isinstance(chunk, str):
-                    chunk_text = chunk
-                else:
-                    chunk_text = str(chunk)
-                
-                if chunk_text:
-                    # 스트리밍 중 간단한 정화 필터 적용
-                    cleaned = self.document_processor.sanitize_output_chunk(chunk_text)
-                    full_response += cleaned
-                    yield {
-                        "type": "content",
-                        "content": cleaned,
-                        "full_content": full_response,
-                        "status": "streaming"
-                    }
+                chunk_text = self._extract_chunk_text(chunk)
+                if not chunk_text:
+                    continue
+                cleaned = self.document_processor.sanitize_output_chunk(chunk_text)
+                full_response += cleaned
+                formatted_preview = self.answer_formatter.format(full_response)
+                yield {
+                    "type": "content",
+                    "content": cleaned,
+                    "full_content": formatted_preview,
+                    "status": "streaming"
+                }
             
             # 4. 스트리밍 완료 후 최종 정보 전송
             sources = self.document_processor.generate_enhanced_sources(relevant_docs)
             search_info = self.get_search_info(question, relevant_docs)
+            formatted_full = self.answer_formatter.format(full_response, sources)
             
             yield {
                 "type": "complete",
-                "content": "",
-                "full_content": full_response,
+                "content": formatted_full,
+                "full_content": formatted_full,
                 "sources": sources,
                 "status": "success",
                 "search_info": search_info,
-                "context_tokens": self._last_context_tokens
+                "context_tokens": self._last_context_tokens,
+                "context_documents": [doc for doc, _ in relevant_docs]
             }
             
         except Exception as e:
@@ -395,20 +391,35 @@ class QueryEngine:
             # 출처 정보 생성
             sources = self.document_processor.generate_enhanced_sources(relevant_docs)
             search_info = self.get_search_info(question, relevant_docs)
+            formatted_answer = self.answer_formatter.format(answer, sources)
             
+            context_documents = [doc for doc, _ in relevant_docs]
             return {
-                "answer": answer,
+                "answer": formatted_answer,
                 "sources": sources,
                 "status": "success",
                 "search_info": search_info,
                 "context_tokens": self._last_context_tokens,
-                "context_documents": relevant_docs
+                "context_documents": context_documents
             }
             
         except Exception as e:
             logger.error(f"표준 컨텍스트 처리 중 오류: {str(e)}")
             raise
     
+    def _extract_chunk_text(self, chunk: Any) -> str:
+        """스트리밍 청크에서 텍스트를 추출한다."""
+        if hasattr(chunk, 'content'):
+            return str(chunk.content)
+        if isinstance(chunk, dict):
+            if 'text' in chunk:
+                return str(chunk['text'])
+            if 'content' in chunk:
+                return str(chunk['content'])
+        if isinstance(chunk, str):
+            return chunk
+        return str(chunk)
+
     def process_large_context(self, question: str, relevant_docs: List[tuple]) -> Dict[str, Any]:
         """대량 컨텍스트 처리 (병렬 처리 사용)"""
         try:

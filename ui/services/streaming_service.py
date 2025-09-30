@@ -82,12 +82,13 @@ def _append_text(result: StreamingResult, chunk: Dict[str, Any], response_placeh
 
 
 def _handle_final_chunk(chunk: Dict[str, Any], result: StreamingResult, response_placeholder: Any) -> None:
-    final_data = chunk.get("content") or chunk.get("full_content") or {}
-    if isinstance(final_data, dict):
-        result.answer = final_data.get("answer", result.answer)
-        result.context_documents = final_data.get("context_documents", result.context_documents)
-        result.search_info = final_data.get("search_info", result.search_info)
-    elif isinstance(final_data, str):
-        result.answer = final_data or result.answer
+    result.search_info = chunk.get("search_info", result.search_info)
+    result.context_documents = chunk.get("context_documents", result.context_documents)
+    final_text = chunk.get("full_content") or chunk.get("content")
+    if isinstance(final_text, dict):
+        result.answer = str(final_text.get("answer", result.answer))
+    elif isinstance(final_text, str) and final_text.strip():
+        result.answer = final_text
+    result.answer = result.answer or chunk.get("full_content") or chunk.get("content") or result.answer
     response_placeholder.markdown(result.answer)
     result.status = "success"

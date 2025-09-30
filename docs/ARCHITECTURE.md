@@ -25,6 +25,7 @@
   - 대용량 컨텍스트 처리(ContextChunker, Summarizer, 병렬 처리)
   - 프롬프트 템플릿(Qwen ChatML/일반 템플릿)
   - 스트리밍/비스트리밍 체인
+- `src/utils/answer_formatter`(신규 예정): RAG 응답을 구조화(`핵심 요약/상세 설명/참고 자료`)하고 글머리표/표/문단 간 간격을 자동으로 정리하는 계층. 스트리밍 및 동기 응답 모두에서 재사용할 예정.
 - `config.py`: 전역 설정(모델/토큰/DB 경로/검색 옵션 등).
 - `run_rag.py`: 실행 허브(앱 실행/벡터DB 관리/테스트/설정).
 - `app.py`: Streamlit UI(사이드바 옵션/스트리밍 토글 등).
@@ -34,10 +35,10 @@
 ```
  [data/documents/*] → Loader → Chunks → Embeddings → Vector DB(FAISS/Chroma)
                                                 ↑
-  User Query → RAGChain.preprocess → VectorDB.search → 후보 문서 → 컨텍스트 최적화/요약 → Prompt → LLM → 답변 스트리밍
+  User Query → RAGChain.preprocess → VectorDB.search → 후보 문서 → 컨텍스트 최적화/요약 → Prompt → LLM → 답변 스트리밍 → AnswerFormatter 구조화 출력
 ```
 
-비유: “도서관에서(벡터 DB) 관련 책(문서)을 고른 뒤(검색), 필요한 페이지만 추려서(컨텍스트 최적화) 선생님(LLM)에게 보여주고 답을 듣는 과정”과 같습니다.
+비유: “도서관에서(벡터 DB) 관련 책(문서)을 고른 뒤(검색), 필요한 페이지만 추려서(컨텍스트 최적화) 선생님(LLM)에게 보여주고, 필기 선생님(AnswerFormatter)이 보기 좋게 정리해주는 과정”과 같습니다.
 
 ## 4. LLM/컨텍스트 전략
 - 모델별 컨텍스트/토큰 한도 계산(안전 마진) 후 최대 컨텍스트를 문자 수로 환산.
