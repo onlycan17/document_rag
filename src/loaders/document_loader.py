@@ -313,43 +313,54 @@ class EnhancedDocumentLoader:
             loader = TextLoader(file_path, encoding='utf-8')
             return loader.load()
     
-    def _process_converted_content(self, markdown_content: str, file_path: str, temp_output_dir: str, 
+    def _process_converted_content(self, markdown_content: str, file_path: str, temp_output_dir: str,
                                  progress_callback=None, processing_method: str = 'pdf_converter', image_count: int = 0) -> List[Document]:
         """변환된 마크다운 콘텐츠와 이미지를 처리하여 Document 객체 생성"""
-        
+
         # PDF에서 추출된 이미지 정보 수집
         pdf_stem = Path(file_path).stem
         extracted_images = []
-        
-        # 이미지 디렉토리에서 해당 PDF의 이미지들 찾기
-        images_dir = Path(temp_output_dir) / "images"
-        if images_dir.exists():
-            # 파일명 정규화가 적용되도록 안전화된 스템으로 매칭 폭을 넓힘
-            for img_path in images_dir.glob(f"*_page*_img*.png"):
-                try:
-                    stat = img_path.stat()
-                    # 페이지/인덱스 파싱
-                    page_num = None
+
+        # 우선순위 1: 지능형 이미지 추출 정보가 있으면 우선 사용
+        if hasattr(self, 'image_extraction_metadata') and self.image_extraction_metadata:
+            intelligent_images = self.image_extraction_metadata.get('extracted_images', []) or []
+            if intelligent_images:
+                logger.info(f"   🎯 지능형 이미지 추출 정보 발견: {len(intelligent_images)}개 이미지")
+                extracted_images = intelligent_images
+
+        # 우선순위 2: temp_output_dir의 이미지 디렉토리에서 찾기
+        if not extracted_images:
+            images_dir = Path(temp_output_dir) / "images"
+            if images_dir.exists():
+                # 파일명 정규화가 적용되도록 안전화된 스템으로 매칭 폭을 넓힘
+                for img_path in images_dir.glob(f"*_page*_img*.png"):
                     try:
-                        m = re.search(r"_page(\d+)_img(\d+)", img_path.name)
-                        if m:
-                            page_num = int(m.group(1))
-                    except Exception:
+                        stat = img_path.stat()
+                        # 페이지/인덱스 파싱
                         page_num = None
-                    image_info = {
-                        'filename': img_path.name,
-                        'path': str(img_path),
-                        'relative_path': f"converted_docs/images/{img_path.name}",
-                        'size': stat.st_size,
-                        'format': 'PNG',
-                        'content_type': 'image/png',
-                        'extracted_at': datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                        'page': page_num,
-                        'description': f"페이지 {page_num} 이미지" if page_num else "추출된 이미지"
-                    }
-                    extracted_images.append(image_info)
-                except Exception as e:
-                    logger.warning(f"PDF 이미지 정보 수집 실패: {str(e)}")
+                        try:
+                            m = re.search(r"_page(\d+)_img(\d+)", img_path.name)
+                            if m:
+                                page_num = int(m.group(1))
+                        except Exception:
+                            page_num = None
+                        image_info = {
+                            'filename': img_path.name,
+                            'path': str(img_path),
+                            'relative_path': f"converted_docs/images/{img_path.name}",
+                            'size': stat.st_size,
+                            'format': 'PNG',
+                            'content_type': 'image/png',
+                            'extracted_at': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                            'page': page_num,
+                            'description': f"페이지 {page_num} 이미지" if page_num else "추출된 이미지"
+                        }
+                        extracted_images.append(image_info)
+                    except Exception as e:
+                        logger.warning(f"PDF 이미지 정보 수집 실패: {str(e)}")
+
+                if extracted_images:
+                    logger.info(f"   📁 temp_output_dir에서 {len(extracted_images)}개 이미지 발견")
         
         # 이미지를 영구 위치로 복사
         if extracted_images:
@@ -381,48 +392,23 @@ class EnhancedDocumentLoader:
             'conversion_status': 'success'
         }
         
-        # 지능형 이미지 추출 정보가 있으면 병합
+        # 지능형 이미지 추출 정보가 있으면 추가 메타데이터 병합
         if hasattr(self, 'image_extraction_metadata') and self.image_extraction_metadata:
-            # 지능형 추출 정보 병합
+            # 지능형 추출 정보 병합 (images는 이미 extracted_images에 포함되어 있음)
             base_metadata.update({
                 'intelligent_extraction_completed': True,
                 'document_topic': self.image_extraction_metadata.get('document_topic', {}),
                 'total_images': self.image_extraction_metadata.get('total_images', 0),
                 'relevant_images': self.image_extraction_metadata.get('relevant_images', 0),
                 'text_images_converted': self.image_extraction_metadata.get('text_images_converted', 0),
-                'extracted_images': self.image_extraction_metadata.get('extracted_images', []),
                 'image_extraction_dir': self.image_extraction_metadata.get('image_extraction_dir', ''),
             })
+            logger.info(f"   ✅ 지능형 이미지 추출 메타데이터 병합 완료 (관련 이미지: {base_metadata.get('relevant_images', 0)}개)")
 
-            # UI 표시를 위해 지능형 추출 이미지들을 공통 'images' 필드에도 병합
-            try:
-                intelligent_images = self.image_extraction_metadata.get('extracted_images', []) or []
-                if intelligent_images:
-                    merged_images = list(base_metadata.get('images', []))
-                    existing_paths = {img.get('path') for img in merged_images if isinstance(img, dict)}
-                    for img in intelligent_images:
-                        # intelligent_images 항목은 {'image_file': ..., 'filename': ..., 'description': ...} 형태
-                        image_path = img.get('image_file') or img.get('path')
-                        filename = img.get('filename') or (os.path.basename(image_path) if image_path else None)
-                        if image_path and image_path not in existing_paths:
-                            merged_images.append({
-                                'filename': filename or 'image',
-                                'path': image_path,
-                                'page': img.get('page'),
-                                'type': img.get('type', 'unknown'),
-                                'relevance_score': img.get('relevance_score', 0),
-                                'description': img.get('description', '')
-                            })
-                    base_metadata['images'] = merged_images
-            except Exception as merge_err:
-                logger.warning(f"지능형 이미지 메타데이터 병합 중 경고: {str(merge_err)}")
-            
             # 이미지 추출 내용을 PDF 텍스트 내용 앞에 추가
             image_content = self.image_extraction_metadata.get('image_markdown_content', '')
             if image_content:
                 markdown_content = f"{image_content}\n\n---\n\n# PDF 텍스트 내용\n\n{markdown_content}"
-            
-            logger.info(f"   ✅ 지능형 이미지 추출 정보 병합 완료 ({self.image_extraction_metadata.get('relevant_images', 0)}개 이미지)")
         
         # 마크다운 내용을 Document 객체로 변환
         document = Document(
@@ -431,7 +417,13 @@ class EnhancedDocumentLoader:
         )
         
         method_name = "에이전트 기반 변환기" if "agent" in processing_method else "개선된 PDF 변환기"
-        logger.info(f"{method_name}로 처리 완료: {file_path} ({len(extracted_images)}개 이미지 추출)")
+        
+        # 이미지 메타데이터 검증 로그
+        total_images = len(base_metadata.get('images', []))
+        logger.info(f"{method_name}로 처리 완료: {file_path}")
+        logger.info(f"   🖼️  Document 메타데이터: images 필드 포함={('images' in base_metadata)}, 총 {total_images}개 이미지")
+        if total_images > 0:
+            logger.info(f"   ✅ 이미지 메타데이터가 Document 객체에 정상적으로 포함됨")
         
         # MD 파일 저장 (전처리 확인용)
         try:
@@ -704,11 +696,43 @@ class EnhancedDocumentLoader:
                 
                 # 에이전트 기반 PDF 변환
                 markdown_path = agent_converter.convert_pdf_to_markdown(file_path)
-                
+
                 if markdown_path and os.path.exists(markdown_path):
                     with open(markdown_path, 'r', encoding='utf-8') as f:
                         markdown_content = f.read()
-                    
+
+                    # 에이전트 변환기에서 추출한 이미지 메타데이터 가져오기
+                    if hasattr(agent_converter, 'extracted_images_info') and agent_converter.extracted_images_info:
+                        logger.info(f"🖼️  에이전트 변환기에서 추출된 이미지 정보 발견")
+
+                        # 에이전트 형식 {page_num: [(path, description), ...]} 을
+                        # 지능형 추출 형식 [{'filename': ..., 'path': ..., 'page': ..., 'description': ...}, ...] 으로 변환
+                        extracted_images = []
+                        for page_num, images in agent_converter.extracted_images_info.items():
+                            for img_path, img_description in images:
+                                # 상대 경로를 절대 경로로 변환
+                                if not os.path.isabs(img_path):
+                                    img_path = os.path.join(temp_output_dir, img_path)
+
+                                extracted_images.append({
+                                    'filename': os.path.basename(img_path),
+                                    'path': img_path,
+                                    'page': page_num,
+                                    'description': img_description,
+                                    'source': 'agent_converter'
+                                })
+
+                        # 지능형 이미지 추출 메타데이터 형식으로 저장
+                        self.image_extraction_metadata = {
+                            'extracted_images': extracted_images,
+                            'total_images': len(extracted_images),
+                            'relevant_images': len(extracted_images),
+                            'text_images_converted': 0,
+                            'image_extraction_dir': os.path.join(temp_output_dir, 'images'),
+                            'document_topic': {'main_topic': 'PDF 문서', 'keywords': []},
+                        }
+                        logger.info(f"   ✅ 에이전트 이미지 메타데이터 변환 완료: {len(extracted_images)}개")
+
                     # 기존 이미지 처리 로직 재사용
                     return self._process_converted_content(markdown_content, file_path, temp_output_dir, progress_callback, processing_method='agent_based_converter')
                     
@@ -740,15 +764,6 @@ class EnhancedDocumentLoader:
                 # 공통 이미지 처리 로직 사용
                 return self._process_converted_content(markdown_content, file_path, temp_output_dir, progress_callback, 
                                                      processing_method='improved_pdf_converter_with_images', image_count=image_count)
-                
-                # 임시 디렉토리 정리
-                import shutil
-                try:
-                    shutil.rmtree(temp_output_dir)
-                except:
-                    pass
-                
-                return [document]
             else:
                 logger.warning(f"개선된 PDF 변환기에서 내용 추출 실패: {file_path}")
                 # 임시 디렉토리 정리
@@ -1141,8 +1156,8 @@ class EnhancedDocumentLoader:
                 except Exception as e:
                     logger.error(f"전처리 모델 적용 실패: {e}. 원본 텍스트를 사용합니다.")
             
-            # 5. 너무 짧은 내용 필터링 강화 (300자 이상)
-            if len(content.strip()) >= 300:  # 최소 길이를 300자로 증가
+            # 5. 너무 짧은 내용 필터링 (100자 이상)
+            if len(content.strip()) >= 100:  # 최소 길이 100자
                 processed_docs.append(Document(
                     page_content=content,
                     metadata=doc.metadata
@@ -1287,26 +1302,60 @@ class EnhancedDocumentLoader:
         - 마크다운 파일은 마크다운 전용 분할기 사용
         - 설정에 따라 의미 기반 또는 일반 분할 선택
         - 한국어 문장 구조 고려
+        - 이미지 메타데이터 보존
         """
+        # 청킹 전에 원본 문서들의 이미지 메타데이터 수집
+        original_image_metadata = {}
+        for doc in documents:
+            if 'images' in doc.metadata and doc.metadata['images']:
+                # 파일명을 키로 사용하여 이미지 메타데이터 저장
+                file_name = doc.metadata.get('file_name', doc.metadata.get('source', 'unknown'))
+                original_image_metadata[file_name] = {
+                    'images': doc.metadata['images'],
+                    'image_count': doc.metadata.get('image_count', len(doc.metadata['images'])),
+                    'intelligent_extraction_completed': doc.metadata.get('intelligent_extraction_completed', False),
+                    'extracted_images': doc.metadata.get('extracted_images', []),
+                    'image_extraction_dir': doc.metadata.get('image_extraction_dir', ''),
+                }
+                logger.info(f"   🖼️  청킹 전 이미지 메타데이터 보존: {file_name} - {len(doc.metadata['images'])}개 이미지")
+        
         # 마크다운 파일은 마크다운 전용 분할기 사용
         if file_extension == '.md':
             logger.info("마크다운 특화 청킹 사용")
             chunks = self.markdown_splitter.split_documents(documents)
-            return self._post_process_markdown_chunks(chunks)
-        
+            chunks = self._post_process_markdown_chunks(chunks)
         # 기타 파일 타입
-        if settings.use_semantic_chunking and self.semantic_splitter:
+        elif settings.use_semantic_chunking and self.semantic_splitter:
             logger.info("의미 기반 청킹 사용")
             try:
                 chunks = self.semantic_splitter.split_documents(documents)
                 # 의미 기반 청킹 성공 시 후처리
-                return self._post_process_semantic_chunks(chunks)
+                chunks = self._post_process_semantic_chunks(chunks)
             except Exception as e:
                 logger.warning(f"의미 기반 청킹 실패, 기본 청킹 사용: {str(e)}")
+                chunks = self._enhanced_default_chunking(documents)
+        else:
+            # 기본 청킹 (향상된 버전)
+            logger.info("향상된 기본 청킹 사용")
+            chunks = self._enhanced_default_chunking(documents)
         
-        # 기본 청킹 (향상된 버전)
-        logger.info("향상된 기본 청킹 사용")
-        return self._enhanced_default_chunking(documents)
+        # 청킹 후 각 청크에 이미지 메타데이터 복원
+        if original_image_metadata:
+            restored_count = 0
+            for chunk in chunks:
+                file_name = chunk.metadata.get('file_name', chunk.metadata.get('source', 'unknown'))
+                if file_name in original_image_metadata:
+                    # 원본 이미지 메타데이터를 청크에 추가
+                    img_meta = original_image_metadata[file_name]
+                    chunk.metadata.update(img_meta)
+                    restored_count += 1
+            
+            if restored_count > 0:
+                logger.info(f"   ✅ 청킹 후 이미지 메타데이터 복원 완료: {restored_count}개 청크")
+            else:
+                logger.warning(f"   ⚠️  경고: 이미지 메타데이터 복원 실패 - 파일명 매칭 안됨")
+        
+        return chunks
     
     def _post_process_markdown_chunks(self, chunks: List[Document]) -> List[Document]:
         """마크다운 청킹 후처리 - 짧은 청크 병합 및 품질 개선"""
@@ -1342,6 +1391,10 @@ class EnhancedDocumentLoader:
 
     def _enhanced_default_chunking(self, documents: List[Document]) -> List[Document]:
         """향상된 기본 청킹"""
+        logger.debug(f"청킹 입력: {len(documents)}개 문서")
+        for i, doc in enumerate(documents):
+            logger.debug(f"  문서 {i}: {len(doc.page_content)}자 - '{doc.page_content[:50]}...'")
+
         # 한국어에 최적화된 분리자 순서
         korean_optimized_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.chunk_size,
@@ -1362,39 +1415,54 @@ class EnhancedDocumentLoader:
                 ""         # 문자 단위
             ]
         )
-        
+
         chunks = korean_optimized_splitter.split_documents(documents)
-        
+        logger.debug(f"스플리터 결과: {len(chunks)}개 청크")
+        for i, chunk in enumerate(chunks):
+            logger.debug(f"  청크 {i}: {len(chunk.page_content)}자")
+
         # 기본 청킹에도 후처리 적용
-        return self._post_process_semantic_chunks(chunks)
+        processed = self._post_process_semantic_chunks(chunks)
+        logger.debug(f"후처리 결과: {len(processed)}개 청크")
+        return processed
     
     def _post_process_semantic_chunks(self, chunks: List[Document]) -> List[Document]:
         """의미 기반 청킹 후처리 - 짧은 청크 병합 강화"""
+        logger.debug(f"후처리 시작: {len(chunks)}개 청크 입력")
         processed_chunks = []
-        
-        for chunk in chunks:
+
+        for i, chunk in enumerate(chunks):
             content = chunk.page_content.strip()
-            
+            logger.debug(f"  처리 중 청크 {i}: {len(content)}자")
+
             # 너무 짧은 청크는 이전 청크와 합치기 (500자 미만)
             if len(content) < 500 and processed_chunks:
+                logger.debug(f"    → 병합 시도: {len(content)}자 < 500, processed_chunks 있음")
                 last_chunk = processed_chunks[-1]
                 combined_content = last_chunk.page_content + "\n\n" + content
-                
+
                 # 합쳐도 최대 크기를 넘지 않으면 합치기
                 if len(combined_content) <= settings.chunk_size * 1.5:  # 1.2에서 1.5로 증가
                     processed_chunks[-1] = Document(
                         page_content=combined_content,
                         metadata=last_chunk.metadata
                     )
-                    logger.debug(f"짧은 청크 병합: {len(content)}자 -> {len(combined_content)}자")
+                    logger.debug(f"    ✓ 짧은 청크 병합: {len(content)}자 -> {len(combined_content)}자")
                     continue
-            
+                else:
+                    # 합쳐도 너무 크면 별도 청크로 추가
+                    logger.debug(f"    → 병합 시 크기 초과, 별도 청크로 유지: {len(content)}자")
+            elif len(content) < 500:
+                logger.debug(f"    → 병합 불가: {len(content)}자 < 500, 하지만 processed_chunks 비어있음")
+
             # 여전히 너무 짧은 청크는 제외
-            if len(content) >= 300:  # 최소 크기 보장
+            if len(content) >= 100:  # 최소 크기 보장 (300 → 100으로 완화)
                 processed_chunks.append(chunk)
+                logger.debug(f"    ✓ 청크 추가: {len(content)}자 >= 100")
             else:
-                logger.debug(f"너무 짧은 청크 제외: {len(content)}자 - {content[:50]}...")
-        
+                logger.debug(f"    ✗ 너무 짧은 청크 제외: {len(content)}자 < 100 - {content[:50]}...")
+
+        logger.debug(f"후처리 완료: {len(processed_chunks)}개 청크 출력")
         return processed_chunks
     
     def _enhance_metadata(self, chunks: List[Document], file_path: str) -> List[Document]:
@@ -1402,6 +1470,15 @@ class EnhancedDocumentLoader:
         enhanced_chunks = []
         file_name = Path(file_path).name
         file_extension = Path(file_path).suffix.lower()
+        
+        # 디버깅: 첫 번째 청크의 원본 메타데이터 확인
+        if chunks and len(chunks) > 0:
+            first_chunk_metadata = chunks[0].metadata
+            has_images = 'images' in first_chunk_metadata
+            image_count = len(first_chunk_metadata.get('images', [])) if has_images else 0
+            logger.info(f"   🔍 청킹 후 메타데이터 검증: images 필드 존재={has_images}, 이미지 개수={image_count}")
+            if not has_images or image_count == 0:
+                logger.warning(f"   ⚠️  경고: 청킹 후 이미지 메타데이터 손실! 원본 Document의 images 필드가 청크에 전달되지 않았습니다.")
         
         for i, chunk in enumerate(chunks):
             # 기존 메타데이터 복사
@@ -1422,6 +1499,12 @@ class EnhancedDocumentLoader:
                     'enhanced_default'
                 )
             })
+            
+            # 디버깅: 개별 청크의 이미지 메타데이터 확인
+            if i == 0:  # 첫 번째 청크만 로그
+                logger.debug(f"   📝 첫 번째 청크 메타데이터 키: {list(metadata.keys())}")
+                if 'images' in metadata:
+                    logger.debug(f"   🖼️  첫 번째 청크 이미지 개수: {len(metadata['images'])}")
             
             enhanced_chunks.append(Document(
                 page_content=chunk.page_content,

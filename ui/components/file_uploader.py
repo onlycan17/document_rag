@@ -89,19 +89,19 @@ def _reinitialize_document_loader(preprocessing_settings: Dict[str, Any]) -> Non
     
     # 설정 변경 감지
     settings_changed = (
-        preprocessing_settings['use_agent_mode'] != current_loader.use_agent_preprocessing or
-        preprocessing_settings['enable_postprocessing'] != getattr(current_loader, 'enable_postprocessing', False) or
-        preprocessing_settings['use_intelligent_extraction'] != getattr(current_loader, 'use_intelligent_image_extraction', False) or
-        preprocessing_settings['selected_preprocessing_model'] != getattr(current_loader, 'preprocessing_model', 'local')
+        preprocessing_settings.get('use_agent_mode', False) != current_loader.use_agent_preprocessing or
+        preprocessing_settings.get('enable_postprocessing', False) != getattr(current_loader, 'enable_postprocessing', False) or
+        preprocessing_settings.get('use_intelligent_extraction', False) != getattr(current_loader, 'use_intelligent_image_extraction', False) or
+        preprocessing_settings.get('selected_preprocessing_model', 'local') != getattr(current_loader, 'preprocessing_model', 'local')
     )
-    
+
     if settings_changed:
         st.session_state.document_loader = DocumentLoader(
             use_ocr=current_loader.use_ocr,
-            use_agent_preprocessing=preprocessing_settings['use_agent_mode'],
-            enable_postprocessing=preprocessing_settings['enable_postprocessing'],
-            use_intelligent_image_extraction=preprocessing_settings['use_intelligent_extraction'],
-            preprocessing_model=preprocessing_settings['selected_preprocessing_model'],
+            use_agent_preprocessing=preprocessing_settings.get('use_agent_mode', False),
+            enable_postprocessing=preprocessing_settings.get('enable_postprocessing', False),
+            use_intelligent_image_extraction=preprocessing_settings.get('use_intelligent_extraction', False),
+            preprocessing_model=preprocessing_settings.get('selected_preprocessing_model', 'local'),
             enable_multimodal_preprocessing=st.session_state.enable_multimodal_preprocessing
         )
 
@@ -255,8 +255,8 @@ def _execute_document_processing(
         
         # 지능형 이미지 추출 결과 확인
         image_extraction_result = _check_image_extraction_result(
-            uploaded_file, 
-            preprocessing_settings['use_intelligent_extraction']
+            uploaded_file,
+            preprocessing_settings.get('use_intelligent_extraction', False)
         )
         
         # 문서 처리 및 저장

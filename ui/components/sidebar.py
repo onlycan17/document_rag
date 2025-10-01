@@ -248,12 +248,12 @@ def _render_image_extraction() -> Dict[str, Any]:
         help="추출된 이미지에서 텍스트를 OCR로 인식합니다"
     )
     
-    # 지능형 이미지 분석 옵션
+    # 지능형 이미지 분석 옵션 (기본값: True)
     intelligent_extraction = st.checkbox(
         "🧠 지능형 이미지 분석 (OpenRouter 경로)",
-        value=st.session_state.get('intelligent_extraction', False),
+        value=st.session_state.get('intelligent_extraction', True),
         key="intelligent_extraction_checkbox",
-        help="AI 모델을 사용하여 이미지의 내용을 분석하고 설명을 생성합니다"
+        help="AI 모델을 사용하여 이미지의 내용을 분석하고 설명을 생성합니다 (권장)"
     )
     
     # 이미지 추출 경로 캡션

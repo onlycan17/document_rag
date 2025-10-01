@@ -82,7 +82,7 @@ class MainController:
             'use_ocr': sidebar_config.get('use_ocr', True),
             'use_agent_mode': sidebar_config.get('use_agent_mode', False),
             'enable_postprocessing': sidebar_config.get('enable_postprocessing', False),
-            'use_intelligent_extraction': sidebar_config.get('use_intelligent_extraction', False),
+            'use_intelligent_extraction': sidebar_config.get('use_intelligent_extraction', True),  # 기본값: True
             'selected_preprocessing_model': sidebar_config.get('selected_preprocessing_model', 'local')
         }
     
@@ -99,7 +99,7 @@ class MainController:
                 use_ocr=True,
                 use_agent_preprocessing=False,
                 enable_postprocessing=False,
-                use_intelligent_image_extraction=False,
+                use_intelligent_image_extraction=True,  # 기본값: True (권장)
                 preprocessing_model='local',
                 enable_multimodal_preprocessing=False
             )

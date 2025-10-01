@@ -69,7 +69,7 @@ from ui.components.chat_interface import render_chat_interface, render_chat_cont
 from ui.controllers.main_controller import MainController
 
 # 로깅 설정
-setup_logging(logging.INFO)
+setup_logging(logging.DEBUG)  # DEBUG 레벨로 변경하여 상세 로그 출력
 logger = get_logger(__name__)
 
 # 페이지 설정

@@ -63,7 +63,10 @@ class AgentBasedPDFConverter:
         
         # 기존 변환기 (비교용)
         self.fallback_converter = ImprovedPDFConverter(output_dir=f"{output_dir}_fallback")
-        
+
+        # 이미지 정보 저장용 (document_loader에서 접근)
+        self.extracted_images_info = {}
+
         logger.info("🤖 에이전트 기반 PDF 변환기 초기화 완료")
 
     def _resolve_runtime_llm(self, llm_provider: str | None, llm_model: str | None) -> tuple[str, str | None, str | None]:
@@ -248,7 +251,8 @@ class AgentBasedPDFConverter:
                     
             doc.close()
             
-            # 2단계: 추출된 이미지 개수 로깅
+            # 2단계: 추출된 이미지 개수 로깅 및 인스턴스 변수 저장
+            self.extracted_images_info = extracted_images  # 인스턴스 변수로 저장
             total_images = sum(len(imgs) for imgs in extracted_images.values())
             if total_images > 0:
                 logger.info(f"📊 총 {total_images}개 이미지 추출 및 분석 완료")
