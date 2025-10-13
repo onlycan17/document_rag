@@ -522,9 +522,9 @@ class LocalLLMAgent(ABC):
     # ===== OpenRouter 호출 경로 =====
     def _call_openrouter(self, prompt: str, temperature: float, max_tokens: int) -> str:
         """OpenRouter(OpenAI 호환) Chat Completions 호출"""
-        api_key = getattr(settings, 'openrouter_api_key', None) or os.getenv('OPNEROUTER_API_KEY')
+        api_key = getattr(settings, 'openrouter_api_key', None) or os.getenv('OPENROUTER_API_KEY')
         if not api_key:
-            raise Exception("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다.")
+            raise Exception("OpenRouter API 키(OPENROUTER_API_KEY)가 설정되지 않았습니다.")
         model = self.model_name or getattr(settings, 'openrouter_model', getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v'))
         api_base = getattr(settings, 'openrouter_api_base', 'https://openrouter.ai/api')
         url = f"{api_base.rstrip('/')}/v1/chat/completions"
