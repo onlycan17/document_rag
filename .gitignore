@@ -33,6 +33,7 @@ static/images/pdf/
 benchmark_report.json
 test_*.py
 !tests/utils/test_answer_formatter.py
+!tests/test_smoke_offline.py
 tests/outputs/
 
 # Logs
@@ -116,6 +117,7 @@ test_intelligent_real_output/
 # Specific test files in root
 test_*.py
 !tests/utils/test_answer_formatter.py
+!tests/test_smoke_offline.py
 test_korean*.txt
 test_korean*.html
 test_small.pdf

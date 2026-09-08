@@ -1,0 +1,27 @@
+# 도구 설정 전용 (패키지 배포용 아님)
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    "venv",
+    "ragtest_env",
+    "data",
+    "processed_docs",
+    "converted_docs",
+    "vector_db",
+    "logs",
+    ".tmp_meta",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# import 전에 환경변수/경로 설정이 선행되는 진입점·스크립트·테스트
+"app.py" = ["E402"]
+"scripts/**" = ["E402"]
+"tests/**" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
