@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional
 import streamlit as st
 
 from src.utils.image_tools import (
-    ImageInfo,
     encode_image_to_data_url,
     extract_images_from_documents,
 )

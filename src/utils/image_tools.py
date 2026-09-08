@@ -162,7 +162,12 @@ def _iter_image_references(metadata: Dict[str, Any]) -> Iterator[Tuple[str, Dict
         if isinstance(items, list):
             for item in items:
                 if isinstance(item, dict):
-                    ref = item.get("image_file") or item.get("image_path") or item.get("path") or item.get("relative_path")
+                    ref = (
+                        item.get("image_file")
+                        or item.get("image_path")
+                        or item.get("path")
+                        or item.get("relative_path")
+                    )
                     if ref:
                         yield ref, {**metadata, **item}
                 elif isinstance(item, str):

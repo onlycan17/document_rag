@@ -1,5 +1,4 @@
 """프로젝트 전체에서 사용되는 상수 정의"""
-from typing import Dict, Set, Any
 
 # 파일 경로 패턴
 LOG_FILE_PATTERN = "./logs/rag_app_{date}.log"
@@ -13,7 +12,6 @@ PROGRESS_UPDATE_INTERVAL = 0.05  # 5%
 # 검색 관련 상수
 DEFAULT_MMR_DIVERSITY = 0.3
 MODEL_SAFETY_MARGIN = 0.7  # 기본 모델 안전 마진
-LOCAL_MODEL_SAFETY_MARGIN = 0.5  # 로컬 모델 안전 마진
 MIN_SEARCH_RESULTS = 2  # 필터링 후 최소 결과 수
 MIN_RELEVANCE_SCORE = 0.1  # TF-IDF 최소 관련성 점수
 
@@ -24,21 +22,11 @@ MAX_CONTEXT_TERMS = 20
 DEFAULT_TOP_KEYWORDS = 10
 
 # 모델별 설정
-MODEL_PROMPT_TOKENS = {
-    "default": 800,
-    "local": 600
-}
+MODEL_PROMPT_TOKENS = {"default": 800, "local": 600}
 
-MODEL_MIN_CONTEXT = {
-    "default": 4000,
-    "local": 2000
-}
+MODEL_MIN_CONTEXT = {"default": 4000, "local": 2000}
 
-MODEL_MAX_CONTEXT = {
-    "default": 500000,
-    "local": 6000,
-    "gpt-3.5": 30000
-}
+MODEL_MAX_CONTEXT = {"default": 500000, "local": 6000, "gpt-3.5": 30000}
 
 # 문서 처리 관련
 OPTIMAL_DOC_LENGTH_RANGE = (200, 1000)  # 문서 최적 길이 범위
@@ -63,7 +51,6 @@ SEMANTIC_CHUNK_SENTENCES = 3
 # 검색 결과 상수
 MAX_SEARCH_RESULTS = 20
 DEFAULT_K_DOCUMENTS = 8
-LOCAL_MODEL_MAX_DOCUMENTS = 4
 
 # TF-IDF 설정
 TFIDF_MAX_FEATURES = 5000
@@ -72,7 +59,6 @@ TFIDF_MIN_DF = 1
 
 # 재시도 및 타임아웃 설정
 REQUEST_TIMEOUT = 2  # 초 (일반 모델)
-LOCAL_MODEL_TIMEOUT = 120  # 초 (로컬 모델 - 응답 시간이 길 수 있음)
 MAX_RETRIES = 3
 RETRY_DELAY = 1  # 초
 RETRY_DELAY_LOCAL = 2  # 초 (로컬 모델용)

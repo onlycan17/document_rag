@@ -25,13 +25,12 @@ def process_streaming_response(
     response_placeholder: Any,
     status_placeholder: Any,
     *,
-    is_local_model: bool = False,
     logger: Optional[logging.Logger] = None,
 ) -> StreamingResult:
     log = logger or LOGGER
     result = StreamingResult()
     for chunk in stream_generator:
-        _apply_chunk(chunk, result, response_placeholder, status_placeholder, is_local_model)
+        _apply_chunk(chunk, result, response_placeholder, status_placeholder)
         if result.status in {"error", "success"}:
             break
     status_placeholder.empty()
@@ -45,11 +44,10 @@ def _apply_chunk(
     result: StreamingResult,
     response_placeholder: Any,
     status_placeholder: Any,
-    is_local_model: bool,
 ) -> None:
     chunk_type = chunk.get("type", "")
     if chunk_type == "status":
-        _update_status(status_placeholder, chunk.get("content", ""), is_local_model)
+        _update_status(status_placeholder, chunk.get("content", ""))
     elif chunk_type in {"response", "content"}:
         _append_text(result, chunk, response_placeholder)
     elif chunk_type == "sources":
@@ -64,11 +62,8 @@ def _apply_chunk(
         status_placeholder.error(result.error)
 
 
-def _update_status(status_placeholder: Any, message: str, is_local_model: bool) -> None:
+def _update_status(status_placeholder: Any, message: str) -> None:
     if not message:
-        return
-    if is_local_model and "생성" in message:
-        status_placeholder.warning("⏳ 로컬 모델이 답변을 생성 중입니다. 시간이 걸릴 수 있습니다...")
         return
     status_placeholder.info(message)
 

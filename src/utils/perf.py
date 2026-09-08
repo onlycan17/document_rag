@@ -26,4 +26,3 @@ def time_block(name: str) -> Iterator[float]:
 def now() -> float:
     """고해상도 현재 시간 반환(초)."""
     return time.perf_counter()
-

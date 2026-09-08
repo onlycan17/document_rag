@@ -38,8 +38,7 @@ def test_format_respects_existing_headings():
 def test_format_fills_reference_placeholder_when_missing():
     formatter = AnswerFormatter()
     raw_text = (
-        "몽촌토성은 백제 왕성으로 추정되는 유적입니다.\n\n"
-        "발굴 과정에서 확인된 건물터는 궁궐 공간을 보여줍니다."
+        "몽촌토성은 백제 왕성으로 추정되는 유적입니다.\n\n" "발굴 과정에서 확인된 건물터는 궁궐 공간을 보여줍니다."
     )
 
     formatted = formatter.format(raw_text, None)

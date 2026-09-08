@@ -74,12 +74,10 @@ def _generate_assistant_response(
         if stream_gen is not None:
             response_placeholder = st.empty()
             status_placeholder = st.empty()
-            is_local = (rag_chain.current_provider or "") == "local"
             stream_result = process_streaming_response(
                 stream_gen,
                 response_placeholder,
                 status_placeholder,
-                is_local_model=is_local,
                 logger=logger,
             )
             response.text = stream_result.answer

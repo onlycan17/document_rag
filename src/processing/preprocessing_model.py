@@ -5,9 +5,8 @@ PDF 문서의 텍스트 추출 및 전처리를 위한 로컬 및 외부 API 모
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any
 import logging
-from pathlib import Path
 from config import settings
 
 from .document_pipeline import build_metadata, concatenate_documents, load_documents
@@ -17,40 +16,40 @@ logger = logging.getLogger(__name__)
 
 class PreprocessingModel(ABC):
     """문서 전처리 모델의 추상 기본 클래스"""
-    
+
     def __init__(self, model_name: str = "default"):
         """
         전처리 모델 초기화
-        
+
         Args:
             model_name: 사용할 모델 이름
         """
         self.model_name = model_name
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-    
+
     @abstractmethod
     def preprocess_text(self, text: str, **kwargs) -> str:
         """
         텍스트를 전처리합니다.
-        
+
         Args:
             text: 전처리할 텍스트
             **kwargs: 추가 매개변수
-            
+
         Returns:
             전처리된 텍스트
         """
         pass
-    
+
     @abstractmethod
     def extract_and_preprocess(self, file_path: str, **kwargs) -> Dict[str, Any]:
         """
         파일에서 텍스트를 추출하고 전처리합니다.
-        
+
         Args:
             file_path: 처리할 파일 경로
             **kwargs: 추가 매개변수
-            
+
         Returns:
             전처리 결과를 포함한 딕셔너리
             - text: 전처리된 텍스트
@@ -58,159 +57,28 @@ class PreprocessingModel(ABC):
             - processing_method: 사용된 처리 방법
         """
         pass
-    
+
     @abstractmethod
     def is_available(self) -> bool:
         """모델 사용 가능 여부를 확인합니다."""
         pass
-    
+
     def get_model_info(self) -> Dict[str, str]:
         """모델 정보를 반환합니다."""
         return {
             "model_type": self.__class__.__name__,
             "model_name": self.model_name,
-            "description": self.__doc__ or "문서 전처리 모델"
+            "description": self.__doc__ or "문서 전처리 모델",
         }
-
-
-class LocalPreprocessingModel(PreprocessingModel):
-    """로컬 모델을 사용한 문서 전처리"""
-    
-    def __init__(self, model_name: str = "local_default"):
-        """
-        로컬 전처리 모델 초기화
-        
-        Args:
-            model_name: 로컬 모델 이름
-        """
-        super().__init__(model_name)
-        self._initialized = False
-    
-    def _initialize_model(self):
-        """로컬 모델을 초기화합니다."""
-        if self._initialized:
-            return
-            
-        try:
-            # 로컬 모델 초기화 로직
-            self.logger.info(f"로컬 전처리 모델 초기화: {self.model_name}")
-            self._initialized = True
-        except Exception as e:
-            self.logger.error(f"로컬 모델 초기화 실패: {e}")
-            raise
-    
-    def preprocess_text(self, text: str, **kwargs) -> str:
-        """
-        로컬 모델을 사용하여 텍스트를 전처리합니다.
-        
-        Args:
-            text: 전처리할 텍스트
-            **kwargs: 추가 매개변수
-            
-        Returns:
-            전처리된 텍스트
-        """
-        self._initialize_model()
-        
-        try:
-            # 기본적인 텍스트 정리
-            processed_text = text.strip()
-            
-            # 한국어 문장 연결 개선
-            processed_text = self._improve_korean_text_connection(processed_text)
-            
-            # 불필요한 공백 제거
-            processed_text = self._remove_excessive_whitespace(processed_text)
-            
-            self.logger.info(f"로컬 전처리 완료: {len(text)} -> {len(processed_text)} 문자")
-            return processed_text
-            
-        except Exception as e:
-            self.logger.error(f"로컬 텍스트 전처리 실패: {e}")
-            return text  # 실패 시 원본 반환
-    
-    def extract_and_preprocess(self, file_path: str, **kwargs) -> Dict[str, Any]:
-        """
-        파일에서 텍스트를 추출하고 로컬 모델로 전처리합니다.
-        
-        Args:
-            file_path: 처리할 파일 경로
-            **kwargs: 추가 매개변수
-            
-        Returns:
-            전처리 결과 딕셔너리
-        """
-        self._initialize_model()
-        
-        try:
-            result = load_documents(
-                file_path,
-                use_ocr=kwargs.get('use_ocr', True),
-                use_agent_preprocessing=False,
-                enable_postprocessing=kwargs.get('enable_postprocessing', True),
-            )
-            if not result.success:
-                return {
-                    "text": "",
-                    "metadata": {"error": result.error or "문서를 추출할 수 없습니다"},
-                    "processing_method": "local_extraction_failed",
-                }
-            extracted_text = concatenate_documents(result.documents)
-            processed_text = self.preprocess_text(extracted_text, **kwargs)
-            metadata = build_metadata(
-                original_length=len(extracted_text),
-                processed_length=len(processed_text),
-                document_count=len(result.documents),
-                file_path=file_path,
-                extra={"processing_method": "local_preprocessing"},
-            )
-            return {
-                "text": processed_text,
-                "metadata": metadata,
-                "processing_method": "local_preprocessing",
-            }
-        except Exception as e:
-            self.logger.error(f"로컬 파일 전처리 실패: {e}")
-            return {
-                "text": "",
-                "metadata": {"error": str(e)},
-                "processing_method": "local_preprocessing_failed",
-            }
-    
-    def is_available(self) -> bool:
-        """로컬 모델 사용 가능 여부를 확인합니다."""
-        try:
-            # 로컬 모델 사용 가능성 확인
-            return True  # 기본적으로 로컬 모델은 항상 사용 가능
-        except Exception:
-            return False
-    
-    def _improve_korean_text_connection(self, text: str) -> str:
-        """한국어 텍스트의 문장 연결을 개선합니다."""
-        # 기본적인 한국어 문장 연결 개선
-        # 실제로는 더 정교한 로컬 모델을 사용할 수 있습니다
-        improved = text.replace(".\n", ". ")
-        improved = improved.replace("?\n", "? ")
-        improved = improved.replace("!\n", "! ")
-        return improved
-    
-    def _remove_excessive_whitespace(self, text: str) -> str:
-        """과도한 공백을 제거합니다."""
-        import re
-        # 연속된 공백 제거
-        text = re.sub(r'\s+', ' ', text)
-        # 줄바꿈 정리
-        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)
-        return text.strip()
 
 
 class APIPreprocessingModel(PreprocessingModel):
     """외부 API 모델을 사용한 문서 전처리"""
-    
+
     def __init__(self, model_name: str = "gpt-4o-mini", provider: str = "openai"):
         """
         API 전처리 모델 초기화
-        
+
         Args:
             model_name: 사용할 API 모델 이름
             provider: API 제공자 (openai, google, anthropic)
@@ -219,61 +87,65 @@ class APIPreprocessingModel(PreprocessingModel):
         self.provider = provider
         self._client = None
         self._initialized = False
-    
+
     def _initialize_client(self):
         """API 클라이언트를 초기화합니다."""
         if self._initialized:
             return
-            
+
         try:
             from config import settings
-            
+
             if self.provider == "openai":
                 if not settings.openai_api_key:
                     raise ValueError("OpenAI API 키가 설정되지 않았습니다")
                 import openai
+
                 self._client = openai.OpenAI(api_key=settings.openai_api_key)
-                
+
             elif self.provider == "google":
                 if not settings.google_api_key:
                     raise ValueError("Google API 키가 설정되지 않았습니다")
                 import google.generativeai as genai
+
                 genai.configure(api_key=settings.google_api_key)
                 self._client = genai.GenerativeModel(self.model_name)
-                
+
             elif self.provider == "anthropic":
                 if not settings.anthropic_api_key:
                     raise ValueError("Anthropic API 키가 설정되지 않았습니다")
                 import anthropic
+
                 self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
             elif self.provider == "openrouter":
                 # OpenRouter는 OpenAI 호환 HTTP를 사용하므로, 간단한 플래그만 유지
                 # 실제 호출은 preprocess_text에서 requests로 처리
                 from types import SimpleNamespace
+
                 self._client = SimpleNamespace(provider="openrouter")
             else:
                 raise ValueError(f"지원하지 않는 제공자: {self.provider}")
-            
+
             self._initialized = True
             self.logger.info(f"API 전처리 모델 초기화 완료: {self.provider} - {self.model_name}")
-            
+
         except Exception as e:
             self.logger.error(f"API 클라이언트 초기화 실패: {e}")
             raise
-    
+
     def preprocess_text(self, text: str, **kwargs) -> str:
         """
         API 모델을 사용하여 텍스트를 전처리합니다.
-        
+
         Args:
             text: 전처리할 텍스트
             **kwargs: 추가 매개변수
-            
+
         Returns:
             전처리된 텍스트
         """
         self._initialize_client()
-        
+
         try:
             # 전처리 프롬프트
             preprocessing_prompt = f"""
@@ -290,7 +162,7 @@ class APIPreprocessingModel(PreprocessingModel):
 
             전처리된 텍스트만 반환해주세요.
             """
-            
+
             if self.provider == "openai":
                 processed_text = None
                 # 최신 모델(o3/o4/gpt-5/4.1 등) 호환: Responses API 우선 시도, 실패 시 Chat Completions 폴백
@@ -322,34 +194,34 @@ class APIPreprocessingModel(PreprocessingModel):
                         temperature=0.3,
                     )
                     processed_text = response.choices[0].message.content
-                
+
             elif self.provider == "google":
                 response = self._client.generate_content(preprocessing_prompt)
                 processed_text = response.text
-                
+
             elif self.provider == "anthropic":
                 response = self._client.messages.create(
-                    model=self.model_name,
-                    max_tokens=4000,
-                    messages=[{"role": "user", "content": preprocessing_prompt}]
+                    model=self.model_name, max_tokens=4000, messages=[{"role": "user", "content": preprocessing_prompt}]
                 )
                 processed_text = response.content[0].text
             elif self.provider == "openrouter":
                 # OpenRouter(OpenAI 호환) - Chat Completions
                 import os
                 import requests
-                api_key = getattr(settings, 'openrouter_api_key', None) or os.getenv('OPNEROUTER_API_KEY')
+
+                api_key = getattr(settings, "openrouter_api_key", None) or os.getenv("OPNEROUTER_API_KEY")
                 if not api_key:
                     raise ValueError("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다")
-                api_base = getattr(settings, 'openrouter_api_base', 'https://openrouter.ai/api')
+                api_base = getattr(settings, "openrouter_api_base", "https://openrouter.ai/api")
                 url = f"{api_base.rstrip('/')}/v1/chat/completions"
                 headers = {
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {api_key}",
-                    "X-Title": "RAG-Preprocessor"
+                    "X-Title": "RAG-Preprocessor",
                 }
                 body = {
-                    "model": self.model_name or getattr(settings, 'openrouter_model', getattr(settings, 'openrouter_mm_model', 'z-ai/glm-4.5v')),
+                    "model": self.model_name
+                    or getattr(settings, "openrouter_model", getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")),
                     "messages": [{"role": "user", "content": preprocessing_prompt}],
                     "temperature": float(settings.preprocessing_temperature),
                     "max_tokens": 4000,
@@ -359,34 +231,34 @@ class APIPreprocessingModel(PreprocessingModel):
                     raise RuntimeError(f"OpenRouter 오류: {resp.status_code} - {resp.text}")
                 data = resp.json()
                 processed_text = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
-            
+
             else:
                 raise ValueError(f"지원하지 않는 제공자: {self.provider}")
-            
+
             self.logger.info(f"API 전처리 완료: {self.provider} - {len(text)} -> {len(processed_text)} 문자")
             return processed_text.strip()
-            
+
         except Exception as e:
             self.logger.error(f"API 텍스트 전처리 실패: {e}")
             return text  # 실패 시 원본 반환
-    
+
     def extract_and_preprocess(self, file_path: str, **kwargs) -> Dict[str, Any]:
         """
         파일에서 텍스트를 추출하고 API 모델로 전처리합니다.
-        
+
         Args:
             file_path: 처리할 파일 경로
             **kwargs: 추가 매개변수
-            
+
         Returns:
             전처리 결과 딕셔너리
         """
         self._initialize_client()
-        
+
         try:
             result = load_documents(
                 file_path,
-                use_ocr=kwargs.get('use_ocr', True),
+                use_ocr=kwargs.get("use_ocr", True),
                 use_agent_preprocessing=False,
                 enable_postprocessing=False,
             )
@@ -421,7 +293,7 @@ class APIPreprocessingModel(PreprocessingModel):
                 "metadata": {"error": str(e)},
                 "processing_method": f"{self.provider}_api_preprocessing_failed",
             }
-    
+
     def is_available(self) -> bool:
         """API 모델 사용 가능 여부를 확인합니다."""
         try:

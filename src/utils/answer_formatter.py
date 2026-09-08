@@ -21,8 +21,7 @@ class AnswerFormatter:
         "references": {"참고 자료", "출처", "근거", "참고문헌", "참고"},
     }
     LOWER_ALIASES: Dict[str, set[str]] = {
-        key: {alias.lower() for alias in value}
-        for key, value in SECTION_ALIASES.items()
+        key: {alias.lower() for alias in value} for key, value in SECTION_ALIASES.items()
     }
 
     ERROR_KEYWORDS = ("오류", "에러", "키", "다시 시도", "업로드", "문서를", "없습니다")

@@ -44,6 +44,13 @@
 - Embeddings: `src/embeddings/` 내 Upstage/OpenAI 등.
 - Orchestration: `src/rag/`의 `RAGChain`; `run_rag.py`의 앱 메뉴.
 
+## 최근 변경 요약(내장 모델 → 외부 API 전면 전환)
+- 모든 내장(로컬) 모델 호출 경로 제거: LM Studio·GGUF(llama.cpp)·Gemma/A.X 멀티모달·로컬 임베딩·로컬 이미지 서버 코드 삭제
+- LLM/전처리/후처리/이미지분석/임베딩 전부 외부 API만 사용 (openrouter 기본, openai/google/anthropic/upstage)
+- `LocalLLMAgent` → `BaseAgent`(외부 API 전용)으로 교체, 임베딩 키 미설정 시 명확한 한국어 오류
+- config.py: local_*/lm_studio_*/gemma/ax 설정 삭제, openrouter 중복 정의 제거, OPENROUTER_API_KEY 양쪽 철자 인식
+- 상세: `docs/improvement/IMPROVEMENT_PLAN.md` Phase 0
+
 ## 최근 변경 요약(전처리/멀티모달/모델)
 - 기본 전처리 모델(저비용·멀티모달 지향) 업데이트
   - OpenAI: `gpt-4o-mini`

@@ -11,6 +11,7 @@ from PIL import Image
 import logging
 
 from config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,11 +26,13 @@ class OpenRouterImageService:
         self.base = settings.openrouter_api_base.rstrip("/")
         self.key = settings.openrouter_api_key or ""
         self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"Bearer {self.key}",
-            "HTTP-Referer": "https://local",  # OpenRouter 권장 헤더(없어도 작동)
-            "X-Title": "RAG-Pipeline-Preprocessing",
-        })
+        self.session.headers.update(
+            {
+                "Authorization": f"Bearer {self.key}",
+                "HTTP-Referer": "https://local",  # OpenRouter 권장 헤더(없어도 작동)
+                "X-Title": "RAG-Pipeline-Preprocessing",
+            }
+        )
 
     def _image_data_url(self, image_path: str) -> str:
         with Image.open(image_path) as im:
@@ -95,7 +98,9 @@ class OpenRouterImageService:
             image_list = page.get_images(full=True)
             # 페이지 단위 하트비트 로그 (과도한 로그 방지: 10페이지마다)
             if (page_index + 1) % 10 == 0 or page_index == 0:
-                logger.info(f"   ⏳ 이미지 분석 진행: {page_index + 1}/{total_pages}페이지 (이미지 {len(image_list)}개)")
+                logger.info(
+                    f"   ⏳ 이미지 분석 진행: {page_index + 1}/{total_pages}페이지 (이미지 {len(image_list)}개)"
+                )
             for img_idx, img in enumerate(image_list):
                 stats["total_images_found"] += 1
                 xref = img[0]
@@ -119,14 +124,16 @@ class OpenRouterImageService:
                 if info.get("text"):
                     stats["text_images_converted"] += 1
 
-                results.append({
-                    "page": page_index + 1,
-                    "image_file": str(saved_path or ""),
-                    "saved": bool(keep),
-                    "relevance_score": float(info.get("relevance", 0.0)),
-                    "description": info.get("description", ""),
-                    "extracted_text": info.get("text", ""),
-                })
+                results.append(
+                    {
+                        "page": page_index + 1,
+                        "image_file": str(saved_path or ""),
+                        "saved": bool(keep),
+                        "relevance_score": float(info.get("relevance", 0.0)),
+                        "description": info.get("description", ""),
+                        "extracted_text": info.get("text", ""),
+                    }
+                )
         logger.info(
             f"✅ OpenRouter 이미지 분석 완료: 총 이미지 {stats['total_images_found']}개, "
             f"저장 {stats['relevant_images_saved']}개, 텍스트 변환 {stats['text_images_converted']}개"

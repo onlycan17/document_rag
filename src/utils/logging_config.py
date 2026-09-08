@@ -19,7 +19,7 @@ def setup_logging(log_level: int = logging.INFO):
     log_file = os.path.join(log_dir, f"rag_app_{datetime.now().strftime('%Y%m%d')}.log")
 
     # 포맷터
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # 루트 로거 가져오기 및 레벨 설정
     root_logger = logging.getLogger()
@@ -31,11 +31,13 @@ def setup_logging(log_level: int = logging.INFO):
         if isinstance(h, logging.FileHandler):
             try:
                 # 동일 파일로 기록 중인 핸들러가 있으면서 레벨/포맷이 다른 경우 교체
-                same_file = os.path.abspath(getattr(h, 'baseFilename', '')) == os.path.abspath(log_file)
+                same_file = os.path.abspath(getattr(h, "baseFilename", "")) == os.path.abspath(log_file)
                 if same_file:
                     file_handler_exists = True
                     # 포맷터/레벨 정합성 점검
-                    if getattr(h, 'level', None) != log_level or getattr(h, 'formatter', None) != logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'):
+                    if getattr(h, "level", None) != log_level or getattr(h, "formatter", None) != logging.Formatter(
+                        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                    ):
                         root_logger.removeHandler(h)
                         file_handler_exists = False
                 else:
@@ -45,7 +47,7 @@ def setup_logging(log_level: int = logging.INFO):
                 continue
 
     if not file_handler_exists:
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
@@ -69,11 +71,12 @@ def setup_logging(log_level: int = logging.INFO):
         root_logger.addHandler(stream_handler)
 
     # 시끄러운 서드파티 로거 억제
-    logging.getLogger('langchain').setLevel(logging.WARNING)
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
-    logging.getLogger('sentence_transformers').setLevel(logging.WARNING)
+    logging.getLogger("langchain").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 
     return logging.getLogger(__name__)
+
 
 def get_logger(name):
     """로거 인스턴스 반환"""

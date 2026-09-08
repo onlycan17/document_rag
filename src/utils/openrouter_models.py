@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 import requests
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from config import settings
 
@@ -37,7 +37,7 @@ def list_openrouter_models(refresh: bool = False) -> List[str]:
     """
     cache_ttl = 600
     try:
-        cache_ttl = int(getattr(settings, 'openrouter_models_cache_seconds', 600))
+        cache_ttl = int(getattr(settings, "openrouter_models_cache_seconds", 600))
     except Exception:
         pass
 
@@ -45,10 +45,10 @@ def list_openrouter_models(refresh: bool = False) -> List[str]:
     if (not refresh) and _cache["models"] and (now - float(_cache["ts"])) < cache_ttl:
         return list(_cache["models"])  # 복사본 반환
 
-    base = getattr(settings, 'openrouter_api_base', 'https://openrouter.ai/api').rstrip('/')
+    base = getattr(settings, "openrouter_api_base", "https://openrouter.ai/api").rstrip("/")
     url = f"{base}/v1/models"
     headers = {"Content-Type": "application/json"}
-    api_key = getattr(settings, 'openrouter_api_key', None)
+    api_key = getattr(settings, "openrouter_api_key", None)
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
@@ -81,4 +81,3 @@ def search_openrouter_models(query: str, refresh: bool = False, limit: int = 200
         return models[:limit]
     filtered = [m for m in models if q in m.lower()]
     return filtered[:limit]
-
