@@ -1,4 +1,9 @@
 ## 현재 작업
+- [x] CI/자동화: pyproject.toml(ruff) + GitHub Actions(ci.yml) + 오프라인 스모크 테스트 6종 (Phase 4)
+- [x] requirements 정리: llama-cpp-python·timm·bitsandbytes 등 미사용 로컬 모델 의존성 제거, requirements-dev.txt 분리
+- [x] 내장(로컬) 모델 호출 전면 제거 및 외부 API 전용 전환 (IMPROVEMENT_PLAN Phase 0)
+- [x] 저장소 청소: app_original.py·디버그 스크립트 삭제, domain.md → docs/DOMAIN.md (Phase 1)
+- [x] 로더 이중구조 통일: 레거시 생존 + refactored 삭제, 세션 초기화 잠재 버그 해소 (Phase 2)
 - [x] 전처리 모델 콤보박스 제거 및 기본값 고정(사이드바 간소화)
 - [x] 문서와 코드 불일치 정리 및 수정
 - [x] 이미지 분석 경로 OpenRouter 우선 적용 (ImageAnalyzer/Agent PDF Converter)
@@ -27,6 +32,8 @@
 - [ ] `app.py` 모듈 분할 설계 및 리팩토링 계획 수립(<600 LOC 목표)
 - [ ] CI 구성(GitHub Actions)으로 포맷/린트/테스트 강제
  - [ ] OpenRouter 이미지 분석 스로틀/재시도 로직 튜닝(429/타임아웃 대응)
+ - [ ] 레거시 document_loader.py 모듈 분할(600줄 가이드 준수, Phase 2 이연분)
+ - [ ] 저장소 전체 ruff format 일괄 적용(별도 포매팅 커밋) 후 CI에 format --check 추가
  - [ ] 대용량 PDF(>150MB) 처리 시 진행률/에러 UI 개선
  - [ ] 로컬 LLM 장애 시 클라우드 폴백 옵션 도입(사용자 토글)
 
