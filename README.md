@@ -8,7 +8,7 @@
 - 🔍 **고성능 벡터 검색**: FAISS 기반 효율적 문서 검색
 - 💬 **자연스러운 한국어 대화**: 업스테이지 Solar 모델 최적화
 - 🚀 **실시간 스트리밍 답변**: ChatGPT처럼 답변이 실시간으로 타이핑됨 ⚡
-- 🚀 **다중 LLM 지원**: OpenAI, Google Gemini, Anthropic Claude, 로컬 LLM
+- 🚀 **다중 LLM 지원**: OpenRouter(기본), OpenAI, Google Gemini, Anthropic Claude (외부 API 전용)
 - 📊 **체계적인 프로젝트 구조**: 모듈화된 코드 구조
 - 🔧 **통합 관리 도구**: 메뉴 방식의 쉬운 실행 환경
 
@@ -20,7 +20,6 @@ ragTest/
 ├── 📄 config.py                 # 시스템 설정
 ├── 📄 run_rag.py               # 🎯 통합 실행 스크립트 (메인)
 ├── 📄 requirements.txt          # Python 의존성
-├── 📄 domain.md                # 도메인 문서
 │
 ├── 📂 src/                     # 📦 소스 코드
 │   ├── embeddings/             # 임베딩 모델
@@ -223,7 +222,7 @@ python tests/test_upstage_embedding.py  # 임베딩 테스트
 - ✅ **ChatGPT 스타일 UI**: 답변이 실시간으로 타이핑되듯 나타남
 - ✅ **상태 표시**: 검색 중, 생성 중 등 단계별 진행 상황 표시
 - ✅ **토글 옵션**: 사이드바에서 스트리밍 온/오프 선택 가능
-- ✅ **모든 LLM 지원**: OpenAI, Google, Anthropic, 로컬 모델 모두 지원
+- ✅ **모든 LLM 지원**: OpenRouter, OpenAI, Google, Anthropic 외부 API 지원
 - ✅ **에러 처리**: 스트리밍 중 오류 발생 시 안전한 복구
 
 ### 🏗️ 프로젝트 구조 재편
