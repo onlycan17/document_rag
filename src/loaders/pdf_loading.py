@@ -1,6 +1,6 @@
 """PDF 파일 로딩·변환 결과 처리 전용 믹스인"""
 
-from typing import List
+from typing import List, Optional
 from langchain.schema import Document
 from langchain_community.document_loaders import PyPDFLoader
 import os
@@ -353,130 +353,154 @@ class PdfLoadingMixin:
         # 각 파일 처리 시작 시 메타데이터 초기화
         self.image_extraction_metadata = None
 
-        # 지능형 이미지 추출이 활성화된 경우
         if self.use_intelligent_image_extraction:
-            try:
-                if progress_callback:
-                    progress_callback(0.1, "🧠 지능형 이미지 추출 중...")
-                else:
-                    logger.info("🧠 지능형 이미지 추출 시작 (provider=openrouter, 정책상 강제)")
-                from pathlib import Path
+            self._extract_intelligent_images(file_path, progress_callback)
 
-                # PDF 파일명 기반으로 출력 디렉토리 생성
-                pdf_name = Path(file_path).stem
-                output_base_dir = Path("data/extracted_images")
-                output_dir = output_base_dir / pdf_name
-                output_dir.mkdir(parents=True, exist_ok=True)
-
-                # OpenRouter만 사용(정책 강제), 폴백 없음
-                from ..utils.openrouter_image_service import OpenRouterImageService
-
-                extraction_results = None
-                try:
-                    svc = OpenRouterImageService()
-                    logger.info("OpenRouter 기반 지능형 이미지 추출 경로 선택(정책 강제)")
-                    extraction_results = svc.process_pdf(
-                        pdf_path=file_path,
-                        output_dir=str(output_dir),
-                        relevance_threshold=settings.local_image_relevance_threshold,
-                    )
-                    logger.info("OpenRouter를 이용한 지능형 추출 완료")
-                except Exception as e:
-                    # 정책상 폴백 금지: 즉시 중단
-                    raise RuntimeError(f"OpenRouter 이미지 분석 실패(폴백 금지 정책): {e}") from e
-
-                # 추출된 텍스트와 관련 이미지 정보를 Document로 변환
-                if extraction_results and extraction_results.get("images"):
-                    image_extraction_metadata = build_extraction_metadata(extraction_results, file_path, output_dir)
-                    saved_count = len(image_extraction_metadata["extracted_images"])
-
-                    # 추출 보고서 로그
-                    logger.info(f"✅ 지능형 이미지 추출 완료: {file_path}")
-                    logger.info(f"   📁 이미지 저장 위치: {output_dir}")
-                    logger.info(f"   🖼️  관련 이미지: {saved_count}개 저장됨")
-
-                    if progress_callback:
-                        progress_callback(
-                            0.3, f"지능형 이미지 추출 완료! (관련 이미지 {saved_count}개), PDF 텍스트 처리 중..."
-                        )
-
-                    # 이미지 추출 정보를 저장하고 텍스트 처리 계속
-                    self.image_extraction_metadata = image_extraction_metadata
-
-                logger.info("지능형 이미지 추출 완료, 기존 방식으로 텍스트 추출 진행")
-
-            except ImportError as e:
-                logger.warning(f"이미지 추출 서비스를 사용할 수 없습니다: {str(e)}")
-            except Exception as e:
-                logger.warning(f"지능형 이미지 추출 실패, 기존 방식으로 폴백: {str(e)}")
-
-        # 에이전트 모드가 활성화된 경우
         if self.use_agent_preprocessing:
+            documents = self._load_with_agent_converter(file_path, progress_callback)
+            if documents is not None:
+                return documents
+
+        documents = self._load_with_improved_converter(file_path, progress_callback)
+        if documents is not None:
+            return documents
+
+        documents = self._load_with_ocr(file_path, progress_callback)
+        if documents is not None:
+            return documents
+
+        return self._load_with_basic_loader(file_path, progress_callback)
+
+    def _extract_intelligent_images(self, file_path: str, progress_callback) -> None:
+        """지능형 이미지 추출(OpenRouter 전용, 정책 강제) 수행 후 메타데이터 저장"""
+        try:
+            if progress_callback:
+                progress_callback(0.1, "🧠 지능형 이미지 추출 중...")
+            else:
+                logger.info("🧠 지능형 이미지 추출 시작 (provider=openrouter, 정책상 강제)")
+            from pathlib import Path
+
+            # PDF 파일명 기반으로 출력 디렉토리 생성
+            pdf_name = Path(file_path).stem
+            output_base_dir = Path("data/extracted_images")
+            output_dir = output_base_dir / pdf_name
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            # OpenRouter만 사용(정책 강제), 폴백 없음
+            from ..utils.openrouter_image_service import OpenRouterImageService
+
             try:
+                svc = OpenRouterImageService()
+                logger.info("OpenRouter 기반 지능형 이미지 추출 경로 선택(정책 강제)")
+                extraction_results = svc.process_pdf(
+                    pdf_path=file_path,
+                    output_dir=str(output_dir),
+                    relevance_threshold=settings.local_image_relevance_threshold,
+                )
+                logger.info("OpenRouter를 이용한 지능형 추출 완료")
+            except Exception as e:
+                # 정책상 폴백 금지: 즉시 중단
+                raise RuntimeError(f"OpenRouter 이미지 분석 실패(폴백 금지 정책): {e}") from e
+
+            # 추출된 텍스트와 관련 이미지 정보를 Document로 변환
+            if extraction_results and extraction_results.get("images"):
+                image_extraction_metadata = build_extraction_metadata(extraction_results, file_path, output_dir)
+                saved_count = len(image_extraction_metadata["extracted_images"])
+
+                # 추출 보고서 로그
+                logger.info(f"✅ 지능형 이미지 추출 완료: {file_path}")
+                logger.info(f"   📁 이미지 저장 위치: {output_dir}")
+                logger.info(f"   🖼️  관련 이미지: {saved_count}개 저장됨")
+
                 if progress_callback:
-                    progress_callback(0.1, "🤖 에이전트 기반 고품질 변환 중...")
+                    progress_callback(
+                        0.3, f"지능형 이미지 추출 완료! (관련 이미지 {saved_count}개), PDF 텍스트 처리 중..."
+                    )
 
-                # 임시 출력 디렉토리 사용
-                import tempfile
+                # 이미지 추출 정보를 저장하고 텍스트 처리 계속
+                self.image_extraction_metadata = image_extraction_metadata
 
-                temp_output_dir = tempfile.mkdtemp(prefix="agent_pdf_convert_")
-                # 에이전트 LLM 제공자/모델을 UI 선택값 또는 설정으로 강제 동기화
-                provider = None
-                model = None
-                try:
-                    import streamlit as st  # type: ignore
+            logger.info("지능형 이미지 추출 완료, 기존 방식으로 텍스트 추출 진행")
 
-                    # 전처리 섹션의 선택값을 최우선으로 사용
-                    provider = st.session_state.get("preprocessing_model", None) or self.preprocessing_model
-                    if st.session_state.get("enable_multimodal_preprocessing", False):
-                        model = st.session_state.get("preproc_mm_model", None)
-                    else:
-                        model = st.session_state.get("preproc_text_model", None)
-                except Exception:
-                    # 세션을 사용할 수 없으면 인자로 받은 전처리 모델 타입 사용
-                    provider = self.preprocessing_model
+        except ImportError as e:
+            logger.warning(f"이미지 추출 서비스를 사용할 수 없습니다: {str(e)}")
+        except Exception as e:
+            logger.warning(f"지능형 이미지 추출 실패, 기존 방식으로 폴백: {str(e)}")
 
-                provider, model = resolve_provider_model(provider, model)
+    def _resolve_agent_provider_model(self) -> tuple:
+        """에이전트 LLM 제공자/모델을 UI 선택값 또는 설정으로 강제 동기화"""
+        provider = None
+        model = None
+        try:
+            import streamlit as st  # type: ignore
 
-                agent_converter = AgentBasedPDFConverter(
-                    output_dir=temp_output_dir,
-                    enable_quality_validation=True,
-                    llm_provider=provider,
-                    llm_model=model,
+            # 전처리 섹션의 선택값을 최우선으로 사용
+            provider = st.session_state.get("preprocessing_model", None) or self.preprocessing_model
+            if st.session_state.get("enable_multimodal_preprocessing", False):
+                model = st.session_state.get("preproc_mm_model", None)
+            else:
+                model = st.session_state.get("preproc_text_model", None)
+        except Exception:
+            # 세션을 사용할 수 없으면 인자로 받은 전처리 모델 타입 사용
+            provider = self.preprocessing_model
+
+        return resolve_provider_model(provider, model)
+
+    def _load_with_agent_converter(self, file_path: str, progress_callback) -> Optional[List[Document]]:
+        """에이전트 기반 PDF 변환. 실패 시 None 반환(상위 폴백 유도)"""
+        try:
+            if progress_callback:
+                progress_callback(0.1, "🤖 에이전트 기반 고품질 변환 중...")
+
+            # 임시 출력 디렉토리 사용
+            import tempfile
+
+            temp_output_dir = tempfile.mkdtemp(prefix="agent_pdf_convert_")
+            provider, model = self._resolve_agent_provider_model()
+
+            agent_converter = AgentBasedPDFConverter(
+                output_dir=temp_output_dir,
+                enable_quality_validation=True,
+                llm_provider=provider,
+                llm_model=model,
+            )
+
+            # 에이전트 기반 PDF 변환
+            markdown_path = agent_converter.convert_pdf_to_markdown(file_path)
+
+            if markdown_path and os.path.exists(markdown_path):
+                with open(markdown_path, "r", encoding="utf-8") as f:
+                    markdown_content = f.read()
+
+                # 에이전트 변환기에서 추출한 이미지 메타데이터 가져오기
+                if hasattr(agent_converter, "extracted_images_info") and agent_converter.extracted_images_info:
+                    logger.info("🖼️  에이전트 변환기에서 추출된 이미지 정보 발견")
+
+                    self.image_extraction_metadata = convert_agent_images_to_metadata(
+                        agent_converter.extracted_images_info, temp_output_dir
+                    )
+                    logger.info(
+                        f"   ✅ 에이전트 이미지 메타데이터 변환 완료: {self.image_extraction_metadata['total_images']}개"
+                    )
+
+                # 기존 이미지 처리 로직 재사용
+                return self._process_converted_content(
+                    markdown_content,
+                    file_path,
+                    temp_output_dir,
+                    progress_callback,
+                    processing_method="agent_based_converter",
                 )
 
-                # 에이전트 기반 PDF 변환
-                markdown_path = agent_converter.convert_pdf_to_markdown(file_path)
+            return None
+        except Exception as e:
+            logger.warning(f"에이전트 변환 실패, 기존 방식으로 폴백: {str(e)}")
+            # 에이전트 실패 시 기존 방식으로 폴백
+            return None
 
-                if markdown_path and os.path.exists(markdown_path):
-                    with open(markdown_path, "r", encoding="utf-8") as f:
-                        markdown_content = f.read()
-
-                    # 에이전트 변환기에서 추출한 이미지 메타데이터 가져오기
-                    if hasattr(agent_converter, "extracted_images_info") and agent_converter.extracted_images_info:
-                        logger.info("🖼️  에이전트 변환기에서 추출된 이미지 정보 발견")
-
-                        self.image_extraction_metadata = convert_agent_images_to_metadata(
-                            agent_converter.extracted_images_info, temp_output_dir
-                        )
-                        logger.info(
-                            f"   ✅ 에이전트 이미지 메타데이터 변환 완료: {self.image_extraction_metadata['total_images']}개"
-                        )
-
-                    # 기존 이미지 처리 로직 재사용
-                    return self._process_converted_content(
-                        markdown_content,
-                        file_path,
-                        temp_output_dir,
-                        progress_callback,
-                        processing_method="agent_based_converter",
-                    )
-
-            except Exception as e:
-                logger.warning(f"에이전트 변환 실패, 기존 방식으로 폴백: {str(e)}")
-                # 에이전트 실패 시 기존 방식으로 폴백
-
-        # 기존 방식: 개선된 PDF 변환기 (문장 연결성 향상)
+    def _load_with_improved_converter(self, file_path: str, progress_callback) -> Optional[List[Document]]:
+        """개선된 PDF 변환기(문장 연결성 향상) 로딩. 실패 시 None 반환(OCR 폴백 유도)"""
+        temp_output_dir = None
         try:
             if progress_callback:
                 progress_callback(0.1, "개선된 PDF 변환기로 처리 중...")
@@ -504,37 +528,44 @@ class PdfLoadingMixin:
                     processing_method="improved_pdf_converter_with_images",
                     image_count=image_count,
                 )
-            else:
-                logger.warning(f"개선된 PDF 변환기에서 내용 추출 실패: {file_path}")
-                # 임시 디렉토리 정리
-                cleanup_temp_dir(temp_output_dir)
+
+            logger.warning(f"개선된 PDF 변환기에서 내용 추출 실패: {file_path}")
+            # 임시 디렉토리 정리
+            cleanup_temp_dir(temp_output_dir)
+            return None
 
         except Exception as e:
             logger.warning(f"개선된 PDF 변환기 실패, OCR 모드로 전환: {str(e)}")
             # 임시 디렉토리 정리
-            import shutil
+            if temp_output_dir:
+                import shutil
 
-            try:
-                shutil.rmtree(temp_output_dir)
-            except Exception as err:
-                logger.debug(f"임시 출력 디렉터리 정리 실패(무시): {err}")
+                try:
+                    shutil.rmtree(temp_output_dir)
+                except Exception as err:
+                    logger.debug(f"임시 출력 디렉터리 정리 실패(무시): {err}")
             if progress_callback:
                 progress_callback(0.3, "OCR 모드로 전환 중...")
+            return None
 
-        # 2차 시도: OCR을 사용한 고급 PDF 로더
-        if self.use_ocr:
-            try:
-                if progress_callback:
-                    progress_callback(0.4, "PDF 분석 중... (OCR 모드)")
-                documents = self.advanced_pdf_loader.load_pdf(file_path, progress_callback)
-                logger.info(f"고급 PDF 로더로 처리: {file_path}")
-                return documents
-            except Exception as e:
-                logger.warning(f"고급 PDF 로더 실패, 기본 로더 사용: {str(e)}")
-                if progress_callback:
-                    progress_callback(0.6, "기본 PDF 로더로 전환...")
+    def _load_with_ocr(self, file_path: str, progress_callback) -> Optional[List[Document]]:
+        """2차 시도: OCR을 사용한 고급 PDF 로더. 미활성화/실패 시 None 반환"""
+        if not self.use_ocr:
+            return None
+        try:
+            if progress_callback:
+                progress_callback(0.4, "PDF 분석 중... (OCR 모드)")
+            documents = self.advanced_pdf_loader.load_pdf(file_path, progress_callback)
+            logger.info(f"고급 PDF 로더로 처리: {file_path}")
+            return documents
+        except Exception as e:
+            logger.warning(f"고급 PDF 로더 실패, 기본 로더 사용: {str(e)}")
+            if progress_callback:
+                progress_callback(0.6, "기본 PDF 로더로 전환...")
+            return None
 
-        # 3차 시도: 기본 PDF 로더 (최후 수단)
+    def _load_with_basic_loader(self, file_path: str, progress_callback) -> List[Document]:
+        """3차 시도: 기본 PDF 로더(최후 수단)"""
         if progress_callback:
             progress_callback(0.7, "기본 PDF 텍스트 추출 중...")
         loader = PyPDFLoader(file_path)

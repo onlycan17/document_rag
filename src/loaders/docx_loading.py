@@ -27,138 +27,10 @@ class DocxLoadingMixin:
             )
 
         try:
-            file_name = Path(file_path).name
-            file_stem = Path(file_path).stem
-
-            if progress_callback:
-                progress_callback(0.1, "DOCX 파일 열기 중...")
-
-            # DOCX 파일 로드
-            doc = DocxDocument(file_path)
-
-            if progress_callback:
-                progress_callback(0.3, "텍스트 및 이미지 추출 중...")
-
-            # 이미지 저장 디렉토리 생성
-            images_dir = Path("static/images/docx")
-            images_dir.mkdir(parents=True, exist_ok=True)
-
-            # 이미지 추출
-            image_count = 0
-            extracted_images = []
-
-            try:
-                # 이미지 추출 처리
-                image_count, extracted_images = self._extract_docx_images(doc, file_stem, images_dir)
-                if progress_callback:
-                    progress_callback(0.4, f"이미지 추출 완료 ({image_count}개)")
-            except Exception as e:
-                logger.warning(f"DOCX 이미지 추출 중 오류: {str(e)}")
-                image_count = 0
-                extracted_images = []
-
-            if progress_callback:
-                progress_callback(0.5, "텍스트 추출 중...")
-
-            # 텍스트 추출
-            full_text = []
-            paragraph_count = 0
-
-            # 단락별로 텍스트 추출
-            for paragraph in doc.paragraphs:
-                text = paragraph.text.strip()
-                if text:  # 빈 단락 제외
-                    full_text.append(text)
-                    paragraph_count += 1
-
-            if progress_callback:
-                progress_callback(0.7, f"텍스트 정리 중... ({paragraph_count}개 단락)")
-
-            # 표(table) 내용도 추출
-            table_count = 0
-            for table in doc.tables:
-                table_text = []
-                for row in table.rows:
-                    row_text = []
-                    for cell in row.cells:
-                        cell_text = cell.text.strip()
-                        if cell_text:
-                            row_text.append(cell_text)
-                    if row_text:
-                        table_text.append(" | ".join(row_text))
-
-                if table_text:
-                    full_text.append("\n".join(table_text))
-                    table_count += 1
-
-            # 이미지 참조를 텍스트에 추가
-            if extracted_images:
-                full_text.append("\n## 추출된 이미지")
-                for i, image_info in enumerate(extracted_images, 1):
-                    full_text.append(f"![이미지 {i}]({image_info['relative_path']})")
-
-            if progress_callback:
-                progress_callback(
-                    0.9, f"처리 완료 ({paragraph_count}개 단락, {table_count}개 표, {image_count}개 이미지)"
-                )
-
-            # 전체 내용 결합
-            content = "\n\n".join(full_text)
-
-            if not content.strip():
-                raise ValueError("DOCX 파일에서 텍스트를 추출할 수 없습니다.")
-
-            logger.info(f"   📖 DOCX 로딩 완료: {paragraph_count}개 단락, {table_count}개 표, {image_count}개 이미지")
-
-            # Document 객체 생성
-            document = Document(
-                page_content=content,
-                metadata={
-                    "source": str(file_path),
-                    "file_name": file_name,
-                    "file_type": ".docx",
-                    "paragraph_count": paragraph_count,
-                    "table_count": table_count,
-                    "image_count": image_count,
-                    "images": extracted_images,
-                    "original_size": len(content),
-                    "processing_method": "docx_with_images",
-                },
-            )
-
-            # MD 파일 저장 (전처리 확인용)
-            try:
-                md_dir = Path("converted_docs")
-                md_dir.mkdir(parents=True, exist_ok=True)
-
-                docx_name = Path(file_path).stem
-                md_file_path = md_dir / f"{docx_name}.md"
-
-                with open(md_file_path, "w", encoding="utf-8") as f:
-                    f.write(f"# {docx_name}\n\n")
-                    f.write(f"**원본 파일**: {file_name}\n")
-                    f.write(f"**변환 시간**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write(f"**단락 수**: {paragraph_count}개\n")
-                    f.write(f"**표 수**: {table_count}개\n")
-                    f.write(f"**추출된 이미지**: {image_count}개\n\n")
-                    f.write("---\n\n")
-                    f.write(content)
-
-                # 메타데이터에 MD 파일 경로 추가
-                document.metadata["md_file_path"] = str(md_file_path)
-                document.metadata["md_saved"] = True
-
-                logger.info(f"   📝 MD 파일 저장: {md_file_path}")
-
-            except Exception as e:
-                logger.warning(f"MD 파일 저장 실패: {str(e)}")
-                document.metadata["md_saved"] = False
-
+            document = self._load_docx_document(file_path, progress_callback)
             if progress_callback:
                 progress_callback(1.0, "DOCX 처리 완료")
-
             return [document]
-
         except Exception as e:
             logger.error(f"DOCX 파일 로딩 실패: {str(e)}")
             # 폴백으로 텍스트 파일로 처리 시도 (일부 내용이라도 추출)
@@ -167,6 +39,191 @@ class DocxLoadingMixin:
                 return self._load_text_file(file_path, progress_callback)
             except Exception:
                 raise ValueError(f"DOCX 파일 처리 실패: {str(e)}")
+
+    def _load_docx_document(self, file_path: str, progress_callback) -> Document:
+        """DOCX 문서 파싱 → 이미지/텍스트 추출 → Document 생성·MD 저장"""
+        file_name = Path(file_path).name
+        file_stem = Path(file_path).stem
+
+        if progress_callback:
+            progress_callback(0.1, "DOCX 파일 열기 중...")
+
+        doc = DocxDocument(file_path)
+
+        if progress_callback:
+            progress_callback(0.3, "텍스트 및 이미지 추출 중...")
+
+        image_count, extracted_images = self._extract_docx_images_safe(doc, file_stem, progress_callback)
+
+        content, paragraph_count, table_count = self._extract_docx_content(
+            doc, extracted_images, image_count, progress_callback
+        )
+
+        logger.info(f"   📖 DOCX 로딩 완료: {paragraph_count}개 단락, {table_count}개 표, {image_count}개 이미지")
+
+        document = self._build_docx_document(
+            file_path, file_name, content, paragraph_count, table_count, image_count, extracted_images
+        )
+        self._save_docx_markdown(document, file_path, file_name, content, paragraph_count, table_count, image_count)
+
+        return document
+
+    def _extract_docx_content(
+        self, doc, extracted_images: List[Dict], image_count: int, progress_callback
+    ) -> Tuple[str, int, int]:
+        """단락·표·이미지 참조를 결합해 최종 마크다운 콘텐츠 생성"""
+        if progress_callback:
+            progress_callback(0.5, "텍스트 추출 중...")
+
+        full_text, paragraph_count, table_count = self._extract_docx_text(doc)
+
+        if progress_callback:
+            progress_callback(0.7, f"텍스트 정리 중... ({paragraph_count}개 단락)")
+
+        full_text.extend(self._build_docx_image_references(extracted_images))
+
+        if progress_callback:
+            progress_callback(0.9, f"처리 완료 ({paragraph_count}개 단락, {table_count}개 표, {image_count}개 이미지)")
+
+        # 전체 내용 결합
+        content = "\n\n".join(full_text)
+
+        if not content.strip():
+            raise ValueError("DOCX 파일에서 텍스트를 추출할 수 없습니다.")
+
+        return content, paragraph_count, table_count
+
+    def _extract_docx_images_safe(self, doc, file_stem: str, progress_callback) -> Tuple[int, List[Dict]]:
+        """이미지 추출(실패 시 경고 후 빈 결과)"""
+        images_dir = Path("static/images/docx")
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            image_count, extracted_images = self._extract_docx_images(doc, file_stem, images_dir)
+            if progress_callback:
+                progress_callback(0.4, f"이미지 추출 완료 ({image_count}개)")
+            return image_count, extracted_images
+        except Exception as e:
+            logger.warning(f"DOCX 이미지 추출 중 오류: {str(e)}")
+            return 0, []
+
+    def _extract_docx_text(self, doc) -> Tuple[List[str], int, int]:
+        """단락과 표에서 텍스트 블록 추출"""
+        full_text = []
+        paragraph_count = 0
+
+        # 단락별로 텍스트 추출
+        for paragraph in doc.paragraphs:
+            text = paragraph.text.strip()
+            if text:  # 빈 단락 제외
+                full_text.append(text)
+                paragraph_count += 1
+
+        # 표(table) 내용도 추출
+        table_count = 0
+        for table in doc.tables:
+            table_text = self._render_docx_table(table)
+            if table_text:
+                full_text.append(table_text)
+                table_count += 1
+
+        return full_text, paragraph_count, table_count
+
+    @staticmethod
+    def _render_docx_table(table) -> str:
+        """단일 표를 파이프(|) 구분 텍스트로 렌더링"""
+        table_text = []
+        for row in table.rows:
+            row_text = []
+            for cell in row.cells:
+                cell_text = cell.text.strip()
+                if cell_text:
+                    row_text.append(cell_text)
+            if row_text:
+                table_text.append(" | ".join(row_text))
+
+        return "\n".join(table_text)
+
+    @staticmethod
+    def _build_docx_image_references(extracted_images: List[Dict]) -> List[str]:
+        """추출된 이미지의 마크다운 참조 블록 생성"""
+        if not extracted_images:
+            return []
+
+        refs = ["\n## 추출된 이미지"]
+        for i, image_info in enumerate(extracted_images, 1):
+            refs.append(f"![이미지 {i}]({image_info['relative_path']})")
+        return refs
+
+    @staticmethod
+    def _build_docx_document(
+        file_path: str,
+        file_name: str,
+        content: str,
+        paragraph_count: int,
+        table_count: int,
+        image_count: int,
+        extracted_images: List[Dict],
+    ) -> Document:
+        """DOCX 로딩 결과 Document 객체 생성"""
+        return Document(
+            page_content=content,
+            metadata={
+                "source": str(file_path),
+                "file_name": file_name,
+                "file_type": ".docx",
+                "paragraph_count": paragraph_count,
+                "table_count": table_count,
+                "image_count": image_count,
+                "images": extracted_images,
+                "original_size": len(content),
+                "processing_method": "docx_with_images",
+            },
+        )
+
+    def _save_docx_markdown(
+        self,
+        document: Document,
+        file_path: str,
+        file_name: str,
+        content: str,
+        paragraph_count: int,
+        table_count: int,
+        image_count: int,
+    ) -> None:
+        """MD 파일 저장 (전처리 확인용)"""
+        try:
+            docx_name = Path(file_path).stem
+            md_file_path = Path("converted_docs") / f"{docx_name}.md"
+            md_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(md_file_path, "w", encoding="utf-8") as f:
+                f.write(self._docx_md_header(docx_name, file_name, paragraph_count, table_count, image_count))
+                f.write(content)
+
+            # 메타데이터에 MD 파일 경로 추가
+            document.metadata["md_file_path"] = str(md_file_path)
+            document.metadata["md_saved"] = True
+
+            logger.info(f"   📝 MD 파일 저장: {md_file_path}")
+
+        except Exception as e:
+            logger.warning(f"MD 파일 저장 실패: {str(e)}")
+            document.metadata["md_saved"] = False
+
+    @staticmethod
+    def _docx_md_header(
+        docx_name: str, file_name: str, paragraph_count: int, table_count: int, image_count: int
+    ) -> str:
+        """MD 변환 헤더 메타 블록 생성"""
+        return (
+            f"# {docx_name}\n\n"
+            f"**원본 파일**: {file_name}\n"
+            f"**변환 시간**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"**단락 수**: {paragraph_count}개\n"
+            f"**표 수**: {table_count}개\n"
+            f"**추출된 이미지**: {image_count}개\n\n---\n\n"
+        )
 
     def _extract_docx_images(self, doc, file_stem: str, images_dir: Path) -> Tuple[int, List[Dict]]:
         """
