@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from config import settings
-from src.loaders import pdf_loading
+from src.loaders import pdf_loading_helpers
 from src.loaders.pdf_loading import (
     build_extraction_metadata,
     convert_agent_images_to_metadata,
@@ -168,8 +168,8 @@ class _FakePostprocessor:
 
 @pytest.fixture
 def fake_env(monkeypatch):
-    monkeypatch.setattr(pdf_loading, "MDPostProcessor", _FakePostprocessor)
-    monkeypatch.setattr(pdf_loading, "QualityChecker", lambda **kw: object())
+    monkeypatch.setattr(pdf_loading_helpers, "MDPostProcessor", _FakePostprocessor)
+    monkeypatch.setattr(pdf_loading_helpers, "QualityChecker", lambda **kw: object())
     _FakePostprocessor.result = None
     _FakePostprocessor.raises = False
     return SimpleNamespace(page_content="원본", metadata={})
