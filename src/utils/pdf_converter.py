@@ -117,8 +117,8 @@ class ImprovedPDFConverter:
 
                             _prov = st.session_state.get("current_provider", None)
                             _model = st.session_state.get("current_model", None)
-                        except Exception:
-                            pass
+                        except Exception as err:
+                            logger.debug(f"세션 provider/model 조회 실패(무시): {err}")
                         _prov = _prov or getattr(_settings, "llm_provider", "local")
                         if not _model:
                             if _prov == "openai":
@@ -129,8 +129,8 @@ class ImprovedPDFConverter:
                                 _model = getattr(_settings, "anthropic_model", None)
                             else:
                                 _model = None
-                    except Exception:
-                        pass
+                    except Exception as err:
+                        logger.debug(f"세션 전처리 모델 조회 실패(무시): {err}")
                     postprocessor = MDPostProcessor(provider=_prov, model_name=_model)
                     quality_checker = QualityChecker(provider=_prov, model_name=_model)
 
@@ -225,8 +225,8 @@ class ImprovedPDFConverter:
             elif (page_num + 1) % 25 == 0 or page_num == 0:
                 try:
                     logger.info(f"⏳ 페이지 진행: {page_num + 1}/{total_pages} 텍스트 수집 중")
-                except Exception:
-                    pass
+                except Exception as err:
+                    logger.debug(f"페이지 진행 로그 출력 실패(무시): {err}")
 
             # 텍스트 수집
             text = page.get_text()

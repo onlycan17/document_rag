@@ -133,8 +133,8 @@ class EnhancedDocumentLoader:
                     selected_model_name = st.session_state.get("preproc_mm_model", None)
                 else:
                     selected_model_name = st.session_state.get("preproc_text_model", None)
-            except Exception:
-                pass
+            except Exception as err:
+                logger.debug(f"세션 전처리 모델 이름 조회 실패(무시): {err}")
 
             self._preprocessing_model = PreprocessingModelFactory.create_model(
                 self.preprocessing_model, model_name=selected_model_name
@@ -485,8 +485,8 @@ class EnhancedDocumentLoader:
 
                         _prov = st.session_state.get("current_provider", None)
                         _model = st.session_state.get("current_model", None)
-                    except Exception:
-                        pass
+                    except Exception as err:
+                        logger.debug(f"세션 provider/model 조회 실패(무시): {err}")
                     # 후처리 전용 오버라이드 우선 적용(.env): MD_POSTPROCESS_PROVIDER/MODEL
                     _md_override_provider = getattr(settings, "md_postprocess_provider", None)
                     _md_override_model = getattr(settings, "md_postprocess_model", None)
@@ -823,8 +823,8 @@ class EnhancedDocumentLoader:
 
                 try:
                     shutil.rmtree(temp_output_dir)
-                except Exception:
-                    pass
+                except Exception as err:
+                    logger.debug(f"임시 출력 디렉터리 정리 실패(무시): {err}")
 
         except Exception as e:
             logger.warning(f"개선된 PDF 변환기 실패, OCR 모드로 전환: {str(e)}")
@@ -833,8 +833,8 @@ class EnhancedDocumentLoader:
 
             try:
                 shutil.rmtree(temp_output_dir)
-            except Exception:
-                pass
+            except Exception as err:
+                logger.debug(f"임시 출력 디렉터리 정리 실패(무시): {err}")
             if progress_callback:
                 progress_callback(0.3, "OCR 모드로 전환 중...")
 
@@ -883,8 +883,8 @@ class EnhancedDocumentLoader:
                     try:
                         img_path.unlink()
                         removed_pdf_images += 1
-                    except Exception:
-                        pass
+                    except Exception as err:
+                        logger.debug(f"PDF 이미지 파일 삭제 실패(무시): {err}")
             if removed_pdf_images > 0:
                 logger.info(f"🧹 기존 PDF 이미지 정리: {removed_pdf_images}개 삭제 (static/images/pdf)")
 

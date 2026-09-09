@@ -11,6 +11,9 @@ from config import settings
 from src.processing.preprocessing_factory import PreprocessingModelFactory
 from src.rag.rag_chain import RAGChain
 from src.utils.openrouter_models import search_openrouter_models
+from src.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def render_sidebar(safe_get_vector_db, safe_get_rag_chain) -> Dict[str, Any]:
@@ -161,8 +164,8 @@ def _display_preprocessing_status(selected_model: str, model_options: Dict[str, 
             f"텍스트 전처리: {model_options[selected_model]} — "
             f"모델: {_model_name} — 멀티모달: {'ON' if enable_multimodal else 'OFF'}"
         )
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug(f"멀티모달 상태 표시 생성 실패(무시): {err}")
 
 
 def _display_multimodal_models():

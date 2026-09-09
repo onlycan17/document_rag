@@ -33,8 +33,8 @@ class MDPostProcessor(BaseAgent):
 
                 provider = st.session_state.get("current_provider", None)
                 model_name = model_name or st.session_state.get("current_model", None)
-            except Exception:
-                pass
+            except Exception as err:
+                logger.debug(f"세션 provider/model 조회 실패(무시): {err}")
         super().__init__("MDPostProcessor", provider=provider, model_name=model_name)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)

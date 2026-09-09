@@ -12,6 +12,9 @@ from datetime import datetime
 from src.loaders.document_loader import DocumentLoader
 from src.utils.document_processor import DocumentProcessor
 from src.constants import TEMP_DOCUMENT_PATH, LOG_FILE_PATTERN, MAX_LOG_LINES_DISPLAY
+from src.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def render_file_upload_interface(safe_get_vector_db, preprocessing_settings: Dict[str, Any]) -> None:
@@ -195,8 +198,8 @@ def _process_single_file(
 
     try:
         os.remove(temp_path)
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug(f"임시 파일 삭제 실패(무시): {err}")
 
     return processing_result
 

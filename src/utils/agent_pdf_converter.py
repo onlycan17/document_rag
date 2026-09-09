@@ -80,8 +80,8 @@ class AgentBasedPDFConverter:
                 model = st.session_state.get("preproc_mm_model", None)
             else:
                 model = st.session_state.get("preproc_text_model", None)
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug(f"세션 전처리 텍스트 모델 조회 실패(무시): {err}")
         # 2) 인자값 우선
         provider = (llm_provider or provider or _settings.llm_provider or "openrouter").lower()
         if provider == "local":

@@ -26,8 +26,8 @@ class QualityChecker(BaseAgent):
 
                 provider = st.session_state.get("current_provider", None)
                 model_name = model_name or st.session_state.get("current_model", None)
-            except Exception:
-                pass
+            except Exception as err:
+                logger.debug(f"세션 provider/model 조회 실패(무시): {err}")
         super().__init__("QualityChecker", provider=provider, model_name=model_name)
 
         # 품질 평가 기준

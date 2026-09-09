@@ -74,8 +74,8 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
                         openrouter_models.append(name)
             if openrouter_models:
                 base["openrouter"] = openrouter_models
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug(f"OpenRouter 모델 목록 병합 실패(무시): {err}")
 
         def extend_unique(dst: list[str], extra_csv: str | None) -> None:
             if not extra_csv:

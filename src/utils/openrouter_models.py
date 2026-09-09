@@ -13,6 +13,9 @@ import requests
 from typing import List, Dict, Any
 
 from config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 _cache: Dict[str, Any] = {
@@ -38,8 +41,8 @@ def list_openrouter_models(refresh: bool = False) -> List[str]:
     cache_ttl = 600
     try:
         cache_ttl = int(getattr(settings, "openrouter_models_cache_seconds", 600))
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug(f"모델 캐시 TTL 설정 파싱 실패(무시): {err}")
 
     now = _now()
     if (not refresh) and _cache["models"] and (now - float(_cache["ts"])) < cache_ttl:

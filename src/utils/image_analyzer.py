@@ -136,8 +136,8 @@ class ImageAnalyzer:
                 if optimized_path != image_path:
                     try:
                         os.remove(optimized_path)
-                    except Exception:
-                        pass
+                    except Exception as err:
+                        logger.debug(f"임시 최적화 이미지 삭제 실패(무시): {err}")
 
                 return description
             else:
@@ -315,8 +315,8 @@ def create_image_analyzer(model_provider: str = None) -> ImageAnalyzer:
                 and _settings.openrouter_api_key
             ):
                 return ImageAnalyzer(model_provider="openrouter")
-        except Exception:
-            pass
+        except Exception as err:
+            logger.warning(f"세션 기반 ImageAnalyzer 생성 실패, openrouter 기본 사용 실패(무시): {err}")
 
         # 환경 변수에서 사용 가능한 외부 모델 확인
         if os.getenv("OPENAI_API_KEY"):
