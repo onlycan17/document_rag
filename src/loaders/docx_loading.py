@@ -237,7 +237,6 @@ class DocxLoadingMixin:
         Returns:
             Tuple[이미지 개수, 이미지 정보 리스트]
         """
-        from datetime import datetime
 
         extracted_images = []
         image_count = 0
@@ -245,62 +244,15 @@ class DocxLoadingMixin:
         try:
             # DOCX 파일의 모든 관련 parts 확인
             for rel in doc.part.rels.values():
-                if "image" in rel.target_ref:
-                    try:
-                        # 이미지 데이터 추출
-                        image_part = rel.target_part
-                        image_data = image_part.blob
-
-                        # 이미지 확장자 추정
-                        content_type = getattr(image_part, "content_type", "")
-                        if "jpeg" in content_type or "jpg" in content_type:
-                            ext = ".jpg"
-                        elif "png" in content_type:
-                            ext = ".png"
-                        elif "gif" in content_type:
-                            ext = ".gif"
-                        elif "bmp" in content_type:
-                            ext = ".bmp"
-                        else:
-                            # 이미지 시그니처로 확장자 추정
-                            if image_data.startswith(b"\xff\xd8"):
-                                ext = ".jpg"
-                            elif image_data.startswith(b"\x89PNG"):
-                                ext = ".png"
-                            elif image_data.startswith(b"GIF8"):
-                                ext = ".gif"
-                            elif image_data.startswith(b"BM"):
-                                ext = ".bmp"
-                            else:
-                                ext = ".png"  # 기본값
-
-                        # 파일명 생성
-                        image_filename = f"{file_stem}_img{image_count + 1}{ext}"
-                        image_path = images_dir / image_filename
-
-                        # 이미지 저장
-                        with open(image_path, "wb") as f:
-                            f.write(image_data)
-
-                        # 이미지 정보 저장
-                        image_info = {
-                            "filename": image_filename,
-                            "path": str(image_path),
-                            "relative_path": f"static/images/docx/{image_filename}",
-                            "size": len(image_data),
-                            "format": ext[1:].upper(),
-                            "content_type": content_type,
-                            "extracted_at": datetime.now().isoformat(),
-                        }
-
-                        extracted_images.append(image_info)
-                        image_count += 1
-
-                        logger.info(f"   🖼️  DOCX 이미지 추출: {image_filename} ({len(image_data)} bytes)")
-
-                    except Exception as e:
-                        logger.warning(f"개별 이미지 추출 실패: {str(e)}")
-                        continue
+                if "image" not in rel.target_ref:
+                    continue
+                try:
+                    image_info = self._extract_single_docx_image(rel, file_stem, images_dir, image_count)
+                    extracted_images.append(image_info)
+                    image_count += 1
+                except Exception as e:
+                    logger.warning(f"개별 이미지 추출 실패: {str(e)}")
+                    continue
 
             # 인라인 이미지도 확인 (inline shapes)
             try:
@@ -316,3 +268,54 @@ class DocxLoadingMixin:
             return 0, []
 
         return image_count, extracted_images
+
+    def _extract_single_docx_image(self, rel, file_stem: str, images_dir: Path, index: int) -> Dict:
+        """개별 이미지 관계를 파일로 저장하고 메타데이터 반환"""
+        from datetime import datetime
+
+        image_part = rel.target_part
+        image_data = image_part.blob
+        content_type = getattr(image_part, "content_type", "")
+
+        ext = self._guess_docx_image_extension(content_type, image_data)
+        image_filename = f"{file_stem}_img{index + 1}{ext}"
+        image_path = images_dir / image_filename
+
+        # 이미지 저장
+        with open(image_path, "wb") as f:
+            f.write(image_data)
+
+        logger.info(f"   🖼️  DOCX 이미지 추출: {image_filename} ({len(image_data)} bytes)")
+
+        return {
+            "filename": image_filename,
+            "path": str(image_path),
+            "relative_path": f"static/images/docx/{image_filename}",
+            "size": len(image_data),
+            "format": ext[1:].upper(),
+            "content_type": content_type,
+            "extracted_at": datetime.now().isoformat(),
+        }
+
+    @staticmethod
+    def _guess_docx_image_extension(content_type: str, image_data: bytes) -> str:
+        """content_type 우선, 없으면 이미지 시그니처로 확장자 추정"""
+        if "jpeg" in content_type or "jpg" in content_type:
+            return ".jpg"
+        if "png" in content_type:
+            return ".png"
+        if "gif" in content_type:
+            return ".gif"
+        if "bmp" in content_type:
+            return ".bmp"
+
+        # 이미지 시그니처로 확장자 추정
+        if image_data.startswith(b"\xff\xd8"):
+            return ".jpg"
+        if image_data.startswith(b"\x89PNG"):
+            return ".png"
+        if image_data.startswith(b"GIF8"):
+            return ".gif"
+        if image_data.startswith(b"BM"):
+            return ".bmp"
+        return ".png"  # 기본값

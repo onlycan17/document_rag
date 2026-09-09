@@ -27,11 +27,33 @@ class PdfTextExtractionMixin:
         self, doc, pdf_path: Path, progress_callback: Optional[Callable] = None
     ) -> Tuple[str, int]:
         """텍스트와 이미지 추출 (맥락 연결 개선 버전)"""
-        markdown_content = []
-        image_count = 0
-        total_pages = len(doc)
+        markdown_content = self._build_markdown_header(doc, pdf_path)
 
-        # PDF 메타데이터 추가
+        # 1단계: 모든 페이지에서 텍스트와 이미지 정보 수집
+        page_texts, page_images = self._collect_page_data(doc, progress_callback)
+
+        # 2단계: 페이지 경계 텍스트 연결 처리
+        if progress_callback:
+            progress_callback(0.5, "페이지 경계 텍스트 연결 처리 중...")
+
+        connected_text = self._connect_cross_page_text(page_texts)
+
+        # 3단계: 연결된 텍스트를 마크다운으로 변환 (페이지별 이미지 정보와 함께)
+        if progress_callback:
+            progress_callback(0.6, "마크다운 텍스트 변환 중...")
+        else:
+            logger.info("🧩 텍스트 연결 및 마크다운 변환 단계 진입")
+
+        image_count = self._convert_connected_text_to_markdown(
+            doc, pdf_path, page_images, connected_text, markdown_content, progress_callback
+        )
+
+        return "\n".join(markdown_content), image_count
+
+    @staticmethod
+    def _build_markdown_header(doc, pdf_path: Path) -> list:
+        """PDF 메타데이터 기반 마크다운 헤더 블록 생성"""
+        markdown_content = []
         metadata = doc.metadata
         if metadata.get("title"):
             markdown_content.append(f"# {metadata['title']}")
@@ -48,13 +70,16 @@ class PdfTextExtractionMixin:
         markdown_content.append(f"\n**소스 파일:** {pdf_path.name}")
         markdown_content.append(f"**변환 날짜:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         markdown_content.append("\n---\n")
+        return markdown_content
 
-        # 1단계: 모든 페이지에서 텍스트와 이미지 정보 수집
+    def _collect_page_data(self, doc, progress_callback: Optional[Callable]) -> tuple:
+        """모든 페이지의 텍스트와 이미지 정보를 수집"""
         if progress_callback:
             progress_callback(0.2, "모든 페이지 텍스트 수집 중...")
 
         page_texts = []
         page_images = []
+        total_pages = len(doc)
 
         for page_num in range(total_pages):
             page = doc[page_num]
@@ -75,21 +100,20 @@ class PdfTextExtractionMixin:
             page_texts.append((page_num + 1, text.strip() if text else ""))
 
             # 이미지 정보 수집
-            image_list = page.get_images()
-            page_images.append((page_num + 1, image_list))
+            page_images.append((page_num + 1, page.get_images()))
 
-        # 2단계: 페이지 경계 텍스트 연결 처리
-        if progress_callback:
-            progress_callback(0.5, "페이지 경계 텍스트 연결 처리 중...")
+        return page_texts, page_images
 
-        connected_text = self._connect_cross_page_text(page_texts)
-
-        # 3단계: 연결된 텍스트를 마크다운으로 변환 (페이지별 이미지 정보와 함께)
-        if progress_callback:
-            progress_callback(0.6, "마크다운 텍스트 변환 중...")
-        else:
-            logger.info("🧩 텍스트 연결 및 마크다운 변환 단계 진입")
-
+    def _convert_connected_text_to_markdown(
+        self,
+        doc,
+        pdf_path: Path,
+        page_images: list,
+        connected_text: str,
+        markdown_content: list,
+        progress_callback: Optional[Callable],
+    ) -> int:
+        """연결된 텍스트 정제·이미지 매핑 결과를 마크다운에 반영, 이미지 개수 반환"""
         if connected_text.strip():
             # 이미지 처리를 먼저 수행
             if progress_callback:
@@ -98,7 +122,6 @@ class PdfTextExtractionMixin:
                 logger.info("🖼️ 페이지 이미지 매핑 및 추출 시작")
 
             image_references = self._extract_and_process_images(doc, pdf_path, page_images, progress_callback)
-            image_count = len(image_references)
 
             # 텍스트 정리 및 이미지 삽입을 함께 처리
             cleaned_text = self._clean_and_format_text_with_images(connected_text, page_images, image_references)
@@ -110,7 +133,6 @@ class PdfTextExtractionMixin:
                 progress_callback(0.7, "이미지 추출 중...")
 
             image_references = self._extract_and_process_images(doc, pdf_path, page_images, progress_callback)
-            image_count = len(image_references)
 
             # 이미지만 있는 경우
             if image_references:
@@ -118,7 +140,7 @@ class PdfTextExtractionMixin:
                 for img_ref in image_references:
                     markdown_content.append(img_ref)
 
-        return "\n".join(markdown_content), image_count
+        return len(image_references)
 
     def _connect_cross_page_text(self, page_texts: list) -> str:
         """페이지 경계에서 끊어진 텍스트를 자연스럽게 연결 (개선된 버전)"""
@@ -345,7 +367,20 @@ class PdfTextExtractionMixin:
         if not text.strip():
             return ""
 
-        # 1단계: 기본 정리
+        text = self._strip_noise_lines(text)
+
+        processed_lines = self._lines_to_markdown_lines(text.split("\n"))
+
+        result = "\n".join(processed_lines)
+
+        # 연속된 빈 줄 정리
+        result = re.sub(r"\n\s*\n\s*\n+", "\n\n", result)
+
+        return result.strip()
+
+    @staticmethod
+    def _strip_noise_lines(text: str) -> str:
+        """여러 개행 축소, 페이지 번호/숫자만 있는 라인 제거"""
         # 여러 개의 개행을 하나로 줄이기
         text = re.sub(r"\n\s*\n\s*\n", "\n\n", text)
 
@@ -353,9 +388,10 @@ class PdfTextExtractionMixin:
         text = re.sub(r"^[Pp]age\s*\d+.*$", "", text, flags=re.MULTILINE)
         text = re.sub(r"^\s*\d+\s*$", "", text, flags=re.MULTILINE)
         text = re.sub(r"^\s*-\s*\d+\s*-\s*$", "", text, flags=re.MULTILINE)
+        return text
 
-        # 2단계: 줄 단위로 처리
-        lines = text.split("\n")
+    def _lines_to_markdown_lines(self, lines: list) -> list:
+        """줄 단위로 문단 결합·헤딩 판정하여 마크다운 라인 생성"""
         processed_lines = []
         current_paragraph = []
 
@@ -373,7 +409,7 @@ class PdfTextExtractionMixin:
                 processed_lines.append("")
                 continue
 
-            # 3단계: 실제 헤딩인지 판단 (더 엄격한 기준)
+            # 실제 헤딩인지 판단 (더 엄격한 기준)
             if is_real_heading(line, i, lines):
                 # 현재 문단을 먼저 완성
                 if current_paragraph:
@@ -395,10 +431,4 @@ class PdfTextExtractionMixin:
             if paragraph_text:
                 processed_lines.append(paragraph_text)
 
-        # 4단계: 최종 정리
-        result = "\n".join(processed_lines)
-
-        # 연속된 빈 줄 정리
-        result = re.sub(r"\n\s*\n\s*\n+", "\n\n", result)
-
-        return result.strip()
+        return processed_lines

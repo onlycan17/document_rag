@@ -75,8 +75,8 @@ class OpenRouterImageService:
             if low.startswith("relevance:"):
                 try:
                     rel = float(line.split(":", 1)[1].strip())
-                except Exception:
-                    pass
+                except Exception as err:
+                    logger.debug(f"관련도 라인 파싱 실패(무시): {line[:50]} - {err}")
             elif low.startswith("description:"):
                 desc = line.split(":", 1)[1].strip()
             elif low.startswith("text:"):

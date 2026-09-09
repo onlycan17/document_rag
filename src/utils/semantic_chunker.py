@@ -167,6 +167,18 @@ class SemanticChunker:
         chunks = self._create_adaptive_chunks(paragraphs, adjusted_boundaries, paragraph_keywords)
 
         # 6단계: 청크 메타데이터 생성
+        chunk_objects = self._build_chunk_objects(chunks, paragraphs, metadata)
+
+        logger.info(f"의미 기반 청킹 완료: {len(chunk_objects)}개 청크 생성")
+        return chunk_objects
+
+    def _build_chunk_objects(
+        self,
+        chunks: List[Tuple[str, List[Tuple[str, float]]]],
+        paragraphs: List[str],
+        metadata: Optional[Dict],
+    ) -> List[Dict]:
+        """청크 텍스트·키워드에 의미 정보와 메타데이터를 부여"""
         chunk_objects = []
         for i, (chunk_text, chunk_keywords) in enumerate(chunks):
             semantic_info = {
@@ -187,8 +199,6 @@ class SemanticChunker:
             )
 
             chunk_objects.append({"text": chunk_text, "metadata": chunk_metadata, "semantic_info": semantic_info})
-
-        logger.info(f"의미 기반 청킹 완료: {len(chunk_objects)}개 청크 생성")
         return chunk_objects
 
     def _split_into_paragraphs(self, text: str) -> List[str]:
@@ -370,50 +380,15 @@ class SemanticChunker:
         boundaries = boundaries + [len(paragraphs)]
 
         for boundary in boundaries:
-            # 현재 청크 텍스트 구성
-            chunk_paragraphs = paragraphs[start_idx:boundary]
-            chunk_text = "\n\n".join(chunk_paragraphs)
-
-            # 현재 청크의 키워드 통합
-            chunk_keywords = {}
-            for i in range(start_idx, boundary):
-                for word, score in paragraph_keywords[i]:
-                    chunk_keywords[word] = chunk_keywords.get(word, 0) + score
-
-            # 키워드를 점수 순으로 정렬
-            sorted_chunk_keywords = sorted(chunk_keywords.items(), key=lambda x: x[1], reverse=True)
+            chunk_text = "\n\n".join(paragraphs[start_idx:boundary])
+            sorted_chunk_keywords = self._merge_chunk_keywords(paragraph_keywords[start_idx:boundary])
 
             # 청크 크기 확인 및 조정
             if len(chunk_text) < self.min_chunk_size and chunks:
-                # 이전 청크와 병합
-                prev_text, prev_keywords = chunks[-1]
-                merged_text = prev_text + "\n\n" + chunk_text
-
-                # 키워드 병합
-                merged_keywords = {}
-                for word, score in prev_keywords + sorted_chunk_keywords:
-                    merged_keywords[word] = merged_keywords.get(word, 0) + score
-
-                final_merged_keywords = sorted(merged_keywords.items(), key=lambda x: x[1], reverse=True)
-                chunks[-1] = (merged_text, final_merged_keywords)
-
+                self._merge_into_previous_chunk(chunks, chunk_text, sorted_chunk_keywords)
             elif len(chunk_text) > self.max_chunk_size:
                 # 청크가 너무 큰 경우 문장 단위로 재분할
-                sentences = self._split_into_sentences(chunk_text)
-                current_chunk = ""
-
-                for sentence in sentences:
-                    if len(current_chunk + sentence) > self.max_chunk_size and current_chunk:
-                        # 현재 청크의 키워드 추출
-                        sent_keywords = self._extract_keywords(current_chunk)
-                        chunks.append((current_chunk.strip(), sent_keywords))
-                        current_chunk = sentence
-                    else:
-                        current_chunk += (" " if current_chunk else "") + sentence
-
-                if current_chunk:
-                    sent_keywords = self._extract_keywords(current_chunk)
-                    chunks.append((current_chunk.strip(), sent_keywords))
+                chunks.extend(self._resplit_oversized_chunk(chunk_text))
             else:
                 # 적절한 크기의 청크
                 chunks.append((chunk_text, sorted_chunk_keywords))
@@ -421,6 +396,43 @@ class SemanticChunker:
             start_idx = boundary
 
         return chunks
+
+    @staticmethod
+    def _merge_chunk_keywords(keyword_lists: List[List[Tuple[str, float]]]) -> List[Tuple[str, float]]:
+        """여러 문단의 키워드를 점수 합산 후 내림차순 정렬"""
+        merged = {}
+        for keywords in keyword_lists:
+            for word, score in keywords:
+                merged[word] = merged.get(word, 0) + score
+        return sorted(merged.items(), key=lambda x: x[1], reverse=True)
+
+    def _merge_into_previous_chunk(
+        self,
+        chunks: List[Tuple[str, List[Tuple[str, float]]]],
+        chunk_text: str,
+        sorted_keywords: List[Tuple[str, float]],
+    ) -> None:
+        """최소 크기 미달 청크를 직전 청크와 병합"""
+        prev_text, prev_keywords = chunks[-1]
+        merged_text = prev_text + "\n\n" + chunk_text
+        final_keywords = self._merge_chunk_keywords([prev_keywords, sorted_keywords])
+        chunks[-1] = (merged_text, final_keywords)
+
+    def _resplit_oversized_chunk(self, chunk_text: str) -> List[Tuple[str, List[Tuple[str, float]]]]:
+        """최대 크기 초과 청크를 문장 단위로 재분할"""
+        resplit_chunks = []
+        current_chunk = ""
+
+        for sentence in self._split_into_sentences(chunk_text):
+            if len(current_chunk + sentence) > self.max_chunk_size and current_chunk:
+                resplit_chunks.append((current_chunk.strip(), self._extract_keywords(current_chunk)))
+                current_chunk = sentence
+            else:
+                current_chunk += (" " if current_chunk else "") + sentence
+
+        if current_chunk:
+            resplit_chunks.append((current_chunk.strip(), self._extract_keywords(current_chunk)))
+        return resplit_chunks
 
     def _calculate_topic_coherence(self, keywords: List[Tuple[str, float]]) -> float:
         """주제 일관성 점수 계산"""

@@ -157,8 +157,8 @@ CONTENT|0
                     # 레벨 범위 가드(1~6)
                     level = max(1, min(level, 6))
                     return {"is_heading": True, "level": level, "confidence": 0.8}
-                except ValueError:
-                    pass
+                except ValueError as err:
+                    logger.debug(f"헤딩 레벨 파싱 실패(무시): {err}")
 
             # CONTENT|0 또는 기타 응답은 본문으로 처리
             return {"is_heading": False, "level": 0, "confidence": 0.8}

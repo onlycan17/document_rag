@@ -43,7 +43,8 @@ def setup_logging(log_level: int = logging.INFO):
                 else:
                     # 다른 로그 파일 핸들러는 유지
                     pass
-            except Exception:
+            except Exception as err:
+                logging.getLogger(__name__).debug(f"파일 핸들러 점검 실패(무시): {err}")
                 continue
 
     if not file_handler_exists:
@@ -61,8 +62,8 @@ def setup_logging(log_level: int = logging.INFO):
             try:
                 h.setLevel(log_level)
                 h.setFormatter(formatter)
-            except Exception:
-                pass
+            except Exception as err:
+                logging.getLogger(__name__).debug(f"스트림 핸들러 갱신 실패(무시): {err}")
             break
     if not stream_handler_exists:
         stream_handler = logging.StreamHandler(sys.stdout)

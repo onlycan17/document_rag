@@ -252,6 +252,7 @@ class EnhancedDocumentLoader(TextCleaningMixin, ChunkingMixin, DocxLoadingMixin,
                     used_encoding = encoding
                     break
                 except UnicodeDecodeError:
+                    logger.debug(f"   인코딩 {encoding} 디코딩 실패, 다음 후보 시도")
                     continue
                 except Exception as e:
                     logger.debug(f"   인코딩 {encoding} 시도 실패: {str(e)}")
@@ -299,6 +300,7 @@ class EnhancedDocumentLoader(TextCleaningMixin, ChunkingMixin, DocxLoadingMixin,
                     logger.info(f"파일 인코딩 감지: {encoding}")
                     break
                 except UnicodeDecodeError:
+                    logger.debug(f"   인코딩 {encoding} 디코딩 실패, 다음 후보 시도")
                     continue
 
             if content is None:
