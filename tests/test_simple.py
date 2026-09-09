@@ -70,7 +70,7 @@ def main():
         
         # 4. RAG 체인 테스트
         print("\n4️⃣ RAG 체인 초기화...")
-        rag_chain = RAGChain()
+        rag_chain = RAGChain(vector_db=vector_db)
         
         # 5. 질문 테스트
         test_question = "정보시스템 사업이란 무엇인가요?"
