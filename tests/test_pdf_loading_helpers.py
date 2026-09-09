@@ -4,16 +4,21 @@ _large_ 메서드에서 분리된 순수 변환·해석 로직의 동작 고정 
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from config import settings
+from src.loaders import pdf_loading
 from src.loaders.pdf_loading import (
     build_extraction_metadata,
     convert_agent_images_to_metadata,
     copy_images_to_permanent,
+    resolve_postprocess_target,
     resolve_provider_model,
+    run_md_postprocessing,
     scan_images_dir,
+    write_conversion_md,
 )
 
 
@@ -124,3 +129,68 @@ def test_에이전트이미지형식을메타데이터로변환(tmp_path):
     first = meta["extracted_images"][0]
     assert Path(first["path"]) == tmp_path / "images" / "rel.png"
     assert first["page"] == 1 and first["source"] == "agent_converter"
+
+
+def test_변환MD파일저장_헤더본문포함(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    md_path = write_conversion_md("/data/보고서.pdf", "본문 내용", "개선된 PDF 변환기", 3)
+
+    assert md_path == Path("converted_docs") / "보고서.md"
+    text = md_path.read_text(encoding="utf-8")
+    assert "# 보고서" in text and "**처리 방법**: 개선된 PDF 변환기" in text
+    assert "**추출된 이미지**: 3개" in text and text.endswith("본문 내용")
+
+
+def test_후처리는env오버라이드가세션보다우선(monkeypatch):
+    monkeypatch.setattr(settings, "md_postprocess_provider", "google", raising=False)
+    monkeypatch.setattr(settings, "md_postprocess_model", "gemini-x", raising=False)
+
+    assert resolve_postprocess_target() == ("google", "gemini-x")
+
+
+class _FakePostprocessor:
+    result = None
+    raises = False
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.last_quality_score = 92
+
+    def set_quality_checker(self, checker):
+        pass
+
+    def process_file(self, path):
+        if _FakePostprocessor.raises:
+            raise RuntimeError("API 장애")
+        return _FakePostprocessor.result
+
+
+@pytest.fixture
+def fake_env(monkeypatch):
+    monkeypatch.setattr(pdf_loading, "MDPostProcessor", _FakePostprocessor)
+    monkeypatch.setattr(pdf_loading, "QualityChecker", lambda **kw: object())
+    _FakePostprocessor.result = None
+    _FakePostprocessor.raises = False
+    return SimpleNamespace(page_content="원본", metadata={})
+
+
+def test_후처리성공시문서갱신(fake_env, tmp_path):
+    processed = tmp_path / "out.md"
+    processed.write_text("후처리된 내용", encoding="utf-8")
+    _FakePostprocessor.result = str(processed)
+
+    run_md_postprocessing(tmp_path / "in.md", fake_env)
+
+    assert fake_env.page_content == "후처리된 내용"
+    assert fake_env.metadata["postprocessed"] is True
+    assert fake_env.metadata["processing_quality"] == 92
+
+
+def test_후처리실패와예외시원본유지(fake_env):
+    run_md_postprocessing(Path("in.md"), fake_env)
+    assert fake_env.page_content == "원본" and fake_env.metadata["postprocessed"] is False
+
+    _FakePostprocessor.raises = True
+    run_md_postprocessing(Path("in.md"), fake_env)
+    assert fake_env.metadata["postprocessed"] is False

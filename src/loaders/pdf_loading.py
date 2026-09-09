@@ -171,6 +171,76 @@ def cleanup_temp_dir(path: str) -> None:
         logger.debug(f"임시 출력 디렉터리 정리 실패(무시): {err}")
 
 
+def write_conversion_md(file_path: str | Path, markdown_content: str, method_name: str, image_count: int) -> Path:
+    """변환 결과 MD 파일을 전처리 확인용으로 저장한다."""
+    md_dir = Path("converted_docs")
+    md_dir.mkdir(parents=True, exist_ok=True)
+
+    pdf_name = Path(file_path).stem
+    md_file_path = md_dir / f"{pdf_name}.md"
+    with open(md_file_path, "w", encoding="utf-8") as f:
+        f.write(f"# {pdf_name}\n\n")
+        f.write(f"**원본 파일**: {Path(file_path).name}\n")
+        f.write(f"**변환 시간**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"**처리 방법**: {method_name}\n")
+        f.write(f"**추출된 이미지**: {image_count}개\n\n")
+        f.write("---\n\n")
+        f.write(markdown_content)
+    return md_file_path
+
+
+def resolve_postprocess_target() -> tuple[str, str | None]:
+    """MD 후처리 provider/model을 세션→env 오버라이드→설정 순으로 해석한다."""
+    provider = model = None
+    try:
+        import streamlit as st  # type: ignore
+
+        provider = st.session_state.get("current_provider", None)
+        model = st.session_state.get("current_model", None)
+    except Exception as err:
+        logger.debug(f"세션 provider/model 조회 실패(무시): {err}")
+
+    override_provider = getattr(settings, "md_postprocess_provider", None)
+    override_model = getattr(settings, "md_postprocess_model", None)
+    if override_provider:
+        provider = override_provider
+        if override_model:
+            model = override_model
+
+    return resolve_provider_model(provider, model)
+
+
+def run_md_postprocessing(md_file_path: Path, document) -> None:
+    """2단계 MD 후처리를 실행하고 결과로 document를 갱신한다."""
+    try:
+        logger.info("🔧 2단계 MD 후처리 시작...")
+
+        provider, model = resolve_postprocess_target()
+        postprocessor = MDPostProcessor(
+            output_dir="processed_docs",
+            target_quality=settings.md_postprocess_target_quality,
+            provider=provider,
+            model_name=model,
+        )
+        postprocessor.set_quality_checker(QualityChecker(provider=provider, model_name=model))
+
+        processed_path = postprocessor.process_file(str(md_file_path))
+        if not processed_path:
+            logger.warning("2단계 후처리 실패 - 원본 유지")
+            document.metadata["postprocessed"] = False
+            return
+
+        logger.info(f"   ✅ 2단계 후처리 완료: {processed_path}")
+        document.page_content = Path(processed_path).read_text(encoding="utf-8")
+        document.metadata["postprocessed"] = True
+        document.metadata["processed_md_path"] = str(processed_path)
+        document.metadata["processing_quality"] = postprocessor.last_quality_score
+
+    except Exception as e:
+        logger.error(f"2단계 후처리 중 오류: {str(e)}")
+        document.metadata["postprocessed"] = False
+
+
 class PdfLoadingMixin:
     """PDF 파일 로딩·변환 결과 처리 전용 믹스인 — EnhancedDocumentLoader 믹스인"""
 
@@ -186,7 +256,6 @@ class PdfLoadingMixin:
         """변환된 마크다운 콘텐츠와 이미지를 처리하여 Document 객체 생성"""
 
         # PDF에서 추출된 이미지 정보 수집
-        Path(file_path).stem
         extracted_images = []
 
         # 우선순위 1: 지능형 이미지 추출 정보가 있으면 우선 사용
@@ -251,87 +320,17 @@ class PdfLoadingMixin:
         if total_images > 0:
             logger.info("   ✅ 이미지 메타데이터가 Document 객체에 정상적으로 포함됨")
 
-        # MD 파일 저장 (전처리 확인용)
+        # MD 파일 저장 (전처리 확인용) 및 2단계 후처리
         try:
-            md_dir = Path("converted_docs")
-            md_dir.mkdir(parents=True, exist_ok=True)
+            md_file_path = write_conversion_md(file_path, markdown_content, method_name, len(extracted_images))
 
-            pdf_name = Path(file_path).stem
-            md_file_path = md_dir / f"{pdf_name}.md"
-
-            with open(md_file_path, "w", encoding="utf-8") as f:
-                f.write(f"# {pdf_name}\n\n")
-                f.write(f"**원본 파일**: {Path(file_path).name}\n")
-                f.write(f"**변환 시간**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"**처리 방법**: {method_name}\n")
-                f.write(f"**추출된 이미지**: {len(extracted_images)}개\n\n")
-                f.write("---\n\n")
-                f.write(markdown_content)
-
-            # 메타데이터에 MD 파일 경로 추가
             document.metadata["md_file_path"] = str(md_file_path)
             document.metadata["md_saved"] = True
 
             logger.info(f"   📝 MD 파일 저장: {md_file_path}")
 
-            # 2단계 후처리 실행 (설정이 활성화된 경우)
             if settings.enable_md_postprocessing:
-                try:
-                    logger.info("🔧 2단계 MD 후처리 시작...")
-
-                    # MDPostProcessor 초기화
-                    # 에이전트/후처리도 현재 선택된 제공자/모델을 따르도록 동기화
-                    _prov = None
-                    _model = None
-                    try:
-                        import streamlit as st  # type: ignore
-
-                        _prov = st.session_state.get("current_provider", None)
-                        _model = st.session_state.get("current_model", None)
-                    except Exception as err:
-                        logger.debug(f"세션 provider/model 조회 실패(무시): {err}")
-                    # 후처리 전용 오버라이드 우선 적용(.env): MD_POSTPROCESS_PROVIDER/MODEL
-                    _md_override_provider = getattr(settings, "md_postprocess_provider", None)
-                    _md_override_model = getattr(settings, "md_postprocess_model", None)
-                    if _md_override_provider:
-                        _prov = _md_override_provider
-                        if _md_override_model:
-                            _model = _md_override_model
-
-                    _prov, _model = resolve_provider_model(_prov, _model)
-
-                    postprocessor = MDPostProcessor(
-                        output_dir="processed_docs",
-                        target_quality=settings.md_postprocess_target_quality,
-                        provider=_prov,
-                        model_name=_model,
-                    )
-
-                    # 품질 검사기 초기화 및 연결(동일 제공자/모델)
-                    quality_checker = QualityChecker(provider=_prov, model_name=_model)
-                    postprocessor.set_quality_checker(quality_checker)
-
-                    # 2단계 후처리 실행
-                    processed_path = postprocessor.process_file(str(md_file_path))
-
-                    if processed_path:
-                        logger.info(f"   ✅ 2단계 후처리 완료: {processed_path}")
-
-                        # 처리된 내용으로 document 업데이트
-                        with open(processed_path, "r", encoding="utf-8") as f:
-                            processed_content = f.read()
-                            document.page_content = processed_content
-
-                        document.metadata["postprocessed"] = True
-                        document.metadata["processed_md_path"] = str(processed_path)
-                        document.metadata["processing_quality"] = postprocessor.last_quality_score
-                    else:
-                        logger.warning("2단계 후처리 실패 - 원본 유지")
-                        document.metadata["postprocessed"] = False
-
-                except Exception as e:
-                    logger.error(f"2단계 후처리 중 오류: {str(e)}")
-                    document.metadata["postprocessed"] = False
+                run_md_postprocessing(md_file_path, document)
             else:
                 logger.info("2단계 후처리 비활성화됨")
                 document.metadata["postprocessed"] = False
