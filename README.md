@@ -35,8 +35,7 @@ ragTest/
 │   │   ├── install_ocr.sh
 │   │   └── setup.sh
 │   ├── data_management/        # 데이터 관리
-│   │   ├── vector_db_manager.py  # 🎯 통합 벡터 DB 관리
-│   │   └── load_documents.py
+│   │   └── vector_db_manager.py  # 🎯 통합 벡터 DB 관리
 │   └── run.sh                  # 앱 실행 스크립트
 │
 ├── 📂 tests/                   # 🧪 테스트 코드

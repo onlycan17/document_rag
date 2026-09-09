@@ -1,7 +1,7 @@
 # 정리 작업 계획 (2026-09-10)
 
 > **상태: 완료(2026-09-10)** — 1~5단계 전부 수행, 회귀 101 passed, 스모크 전체 경로 실행.
-> 실제 결과는 `docs/CHANGELOG.md` 2026-09-10 항목 참조.
+> **차기 회기 잔여 과제도 완료(2026-09-10 2차)** — 실제 결과는 `docs/CHANGELOG.md` 2026-09-10 항목 참조.
 
 ## 배경
 프로젝트 전반 점검에서 도출된 잔여 정리 항목 중 3·4단계(코드 구조) 작업 계획.
@@ -44,9 +44,15 @@
 5. semantic_chunker.__init__ 분해 → 검증
 
 ## 차기 회기 잔여 과제 (이번 범위 제외)
-- 이동된 로직 중 30줄 초과 잔존 함수 추가 분해: `_extract_text_and_images`(96), `_clean_and_format_text`(62), `create_semantic_chunks`(62), `_create_adaptive_chunks`(62), `docx_loading._extract_docx_images`(91) 등
-- `keyword_expander.py`(726줄), `text_processor.py`(603줄) 600줄 기준 초과 파일 분할 검토
-- `scripts/data_management/load_documents.py` 미참조 확인 후 삭제 여부 결정
-- 삼켜진 예외 6곳에 최소 `logger.debug` 추가
-- `tests/test_simple.py`가 임시 VectorDatabase와 RAGChain 내부 DB를 연결하지 않아 질의가 항상 `no_documents`인 기존 갭
+> ✅ 아래 5건 모두 2026-09-10 2차 회기에서 완료 처리. 잔여 관찰 대상만 남음.
+
+- ~~이동된 로직 중 30줄 초과 잔존 함수 추가 분해: `_extract_text_and_images`(96), `_clean_and_format_text`(62), `create_semantic_chunks`(62), `_create_adaptive_chunks`(62), `docx_loading._extract_docx_images`(91) 등~~ 완료
+- ~~`keyword_expander.py`(726줄), `text_processor.py`(603줄) 600줄 기준 초과 파일 분할~~ 완료(데이터·패턴 모듈 추출, 전 파일 600줄 미만)
+- ~~`scripts/data_management/load_documents.py` 미참조 확인 후 삭제~~ 완료(0 참조 확인 후 삭제, README/.cursor 동기화)
+- ~~삼켜진 예외 6곳에 최소 `logger.debug` 추가~~ 완료
+- ~~`tests/test_simple.py`가 임시 VectorDatabase와 RAGChain 내부 DB를 연결하지 않아 질의가 항상 `no_documents`인 기존 갭~~ 완료(vector_db 주입, E2E success)
+
+## 잔여 관찰 대상 (다음 정리 회기 후보)
+- `vector_db.py`(550줄), `rag_parallel_processor.py`(522줄) — 600줄 미만이지만 대형, 분할 여부 관찰
+- 믹스인 이동분 중 30줄 초과 잔존 함수(`_connect_cross_page_text` 53, `_extract_and_process_images` 54, `_create_basic_chunks` 56 등) — 로직 밀도 낮아 우선순위 하향
 

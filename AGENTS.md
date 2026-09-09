@@ -79,7 +79,8 @@
 - pdf_converter 3모듈 분할: `pdf_heading_utils`(순수 헬퍼) + `pdf_text_extraction`(믹스인) + `pdf_semantic_chunking`(믹스인), 본체 826→195줄, 외부 import 경로 유지
 - 대형 함수 분해: `pdf_loading._load_pdf_file`(206→폴백 체인 5메서드), `docx_loading._load_docx_file`(148→단계별), `semantic_chunker` 사전 데이터 모듈 상수화
 - 회귀망: `tests/test_pdf_heading_utils.py` 신규(gitignore 예외 등록), 스모크 픽스처 `domain.md` 추가
-- 잔여 과제: `docs/improvement/CLEANUP_PLAN_2026-09-10.md` 차기 회기 목록 참조
+- 2차 정리(같은 날): 잔여 대형 함수 분해 완료, `keyword_data.py`·`text_patterns.py`·`pdf_loading_helpers.py` 추출로 전 소스 600줄 미만, 미참조 `load_documents.py` 삭제, 삼켜진 예외 6곳 로깅 보강, `test_simple.py` 벡터DB 주입으로 E2E success 확보
+- 잔여 관찰 대상: `docs/improvement/CLEANUP_PLAN_2026-09-10.md` 하단 참조
 
 우리는 함께 프로덕션 수준의 코드를 개발하고 있습니다. 여러분의 역할은 유지보수 가능하고 효율적인 솔루션을 만들면서 잠재적인 문제를 미리 발견하는 것입니다.
 

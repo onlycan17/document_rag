@@ -1,5 +1,14 @@
 # 변경 이력(Changelog)
 
+## 2026-09-10 (정리 회기 2차 — 잔여 과제)
+- refactor(utils): 잔여 대형 함수 분해 — `pdf_text_extraction`(_extract_text_and_images 96→헤더/수집/변환 3메서드, _clean_and_format_text 62→노이즈 제거+마크다운 변환), `semantic_chunker`(create_semantic_chunks→객체 생성 분리, _create_adaptive_chunks→키워드 병합/재분할 3메서드), `docx_loading._extract_docx_images`(91→단일 이미지 추출+확장자 추정)
+- refactor(utils): `keyword_expander.py`(726줄)의 동의어·도메인·불용어 사전을 `keyword_data.py`로 추출, 본체 451줄
+- refactor(loaders): `text_processor.py`(603줄)의 정규식 패턴 4종을 `text_patterns.py`로 추출, 본체 519줄 / `pdf_loading.py`의 모듈 헬퍼 9종을 `pdf_loading_helpers.py`로 추출, 본체 427줄 — 외부 import 경로 유지
+- chore: 미참조 스크립트 `scripts/data_management/load_documents.py` 삭제, README·.cursor 규칙의 존재하지 않는 실행 파일 나열 정리
+- fix(로깅): 삼켜진 예외 6곳에 `logger.debug` 보강(structure_parser, logging_config, openrouter_image_service, document_loader)
+- fix(test): `test_simple.py`가 RAGChain에 벡터 DB를 주입하지 않아 질의가 항상 `no_documents`이던 갭 수정 — E2E status:success 확인
+- test: `test_pdf_loading_helpers` 픽스처를 헬퍼 모듈 기준으로 패치 대상 갱신, 회귀 101 passed
+
 ## 2026-09-10 (프로젝트 정리 회기)
 - chore(config): `.env.example`에 config.py 참조 누락 환경변수 35개 보완(청킹·검색·스트리밍·LangSmith 등), 중복 키 제거
 - docs: 로컬 모델(LM Studio/GGUF) 삭제 잔여 문서 정리 — `docs/LM_STUDIO_INTEGRATION.md` 삭제, ARCHITECTURE/PRD/FEATURE_SPEC의 레거시 문구를 외부 API 전용 현행화
