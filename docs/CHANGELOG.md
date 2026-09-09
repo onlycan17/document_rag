@@ -1,5 +1,14 @@
 # 변경 이력(Changelog)
 
+## 2026-09-10 (프로젝트 정리 회기)
+- chore(config): `.env.example`에 config.py 참조 누락 환경변수 35개 보완(청킹·검색·스트리밍·LangSmith 등), 중복 키 제거
+- docs: 로컬 모델(LM Studio/GGUF) 삭제 잔여 문서 정리 — `docs/LM_STUDIO_INTEGRATION.md` 삭제, ARCHITECTURE/PRD/FEATURE_SPEC의 레거시 문구를 외부 API 전용 현행화
+- refactor(utils): `pdf_converter.py`(826줄)를 3모듈로 분할 — `pdf_heading_utils`(순수 헬퍼), `pdf_text_extraction`(추출·정제 믹스인), `pdf_semantic_chunking`(청킹 믹스인), 본체 195줄, 외부 import 경로 유지
+- refactor(loaders): `pdf_loading._load_pdf_file`(206줄)을 5단계 폴백 체인 전용 메서드로 분해, `docx_loading._load_docx_file`(148줄)을 추출·생성·저장 단계로 분해
+- refactor(utils): `semantic_chunker`의 사전 데이터를 모듈 상수로 추출(`TOPIC_TRANSITION_KEYWORDS`, `DOMAIN_KEYWORDS`), `__init__` 105→15줄
+- test: `tests/test_pdf_heading_utils.py` 신규(헤딩/문장 판정 회귀), 관련 스위트 101 passed
+- test(simple): 스모크 픽스처 `domain.md` 추가로 로더→벡터DB→RAG 질의 전체 경로 실행 가능
+
 ## 2026-09-09 (대형 함수 리팩터링)
 - refactor(loaders): document_loader.py를 믹스인 4종(TextCleaning·Chunking·DocxLoading·PdfLoading)으로 분할
 - refactor(utils): `_is_incomplete_sentence`를 `src/utils/sentence_completion.py`로 순수 분리, 골든 테스트 61케이스로 동작 고정
