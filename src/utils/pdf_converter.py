@@ -147,7 +147,7 @@ class ImprovedPDFConverter:
                             f.write(processed_content)
 
                         # 품질 검사
-                        quality_result = quality_checker.analyze_quality(processed_content)
+                        quality_result = quality_checker.analyze_quality(str(processed_md_path))
                         quality_result.get("total_score", 0)
                         success = quality_result.get("passed", False)
                         result = quality_result
@@ -332,7 +332,6 @@ class ImprovedPDFConverter:
             i += 1
 
         return "\n".join(connected_lines)
-
 
     def _can_connect_to_next(self, current_line: str, next_line: str) -> bool:
         """현재 줄과 다음 줄이 연결 가능한지 판단"""

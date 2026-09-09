@@ -143,7 +143,7 @@ class MDPostProcessor(BaseAgent):
         # 품질 점수 계산 (옵션)
         if self.quality_checker:
             try:
-                quality_result = self.quality_checker.analyze_quality(final_content)
+                quality_result = self.quality_checker.analyze_quality(str(output_path))
                 self.last_quality_score = quality_result.get("total_score", 0.0)
                 logger.info(f"📊 품질 점수: {self.last_quality_score:.1f}점")
             except Exception as e:
