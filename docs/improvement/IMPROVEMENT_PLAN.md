@@ -134,3 +134,15 @@ TODO.md의 아래 항목들은 현재 규모(단일 사용자/사내 챗봇)에�
 1. 한 기능 완료 → `make ci` + 해당 검증 항목 통과 확인 → 다음 항목
 2. 후크/검사 실패 시 즉시 중단 → 해결 → 재개
 3. 각 Phase 완료 시 본 문서 체크박스 갱신 + TODO.md 동기화
+
+
+## Phase 5 — 죽은 코드 제거 및 관측성 (완료 2026-09-09)
+
+### 5.1 참조 없는 죽은 모듈 삭제 (약 2,500줄)
+- [x] 전수 참조 검사(document_splitter·file_loader_manager·content_processor·tag_processor·md_parallel_processor 모두 프로덕션 참조 0건 확인)
+- [x] 5종 git rm + 이들을 테스트하는 미추적 디버그 스크립트 2종 삭제 (test_md_postprocessing.py는 생존 parallel_processor 사용이라 보존)
+
+### 5.2 에러 삼킴(except→pass) 로그화
+- [x] 17곳에 debug/warning 로그 추가 (세션 조회 폴백·임시파일 정리·모델 병합 등). 핫패스 파싱 탐색 3곳(structure_parser·openrouter_image_service·logging_config 부트스트랩)은 의도적 흐름으로 제외
+
+- 검증: ruff 0건, compileall, 오프라인 스모크 6 passed, AppTest 예외 없음

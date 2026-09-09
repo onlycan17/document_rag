@@ -1,4 +1,5 @@
 ## 현재 작업
+- [x] 죽은 모듈 5종 삭제(약 2,500줄) + except-pass 에러 삼킴 17곳 로그화 (Phase 5)
 - [x] CI/자동화: pyproject.toml(ruff) + GitHub Actions(ci.yml) + 오프라인 스모크 테스트 6종 (Phase 4)
 - [x] requirements 정리: llama-cpp-python·timm·bitsandbytes 등 미사용 로컬 모델 의존성 제거, requirements-dev.txt 분리
 - [x] 내장(로컬) 모델 호출 전면 제거 및 외부 API 전용 전환 (IMPROVEMENT_PLAN Phase 0)
