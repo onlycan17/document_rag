@@ -25,6 +25,7 @@ def test_core_modules_import():
 def test_settings_has_no_local_model_fields():
     """내장(로컬) 모델 설정이 제거되었는지 회귀 검증"""
     from config import Settings
+
     fields = set(Settings.model_fields.keys())
     removed_prefixes = ("local_llm_", "lm_studio_", "gemma_", "ax_")
     leaked = [f for f in fields if f.startswith(removed_prefixes)]
@@ -34,6 +35,7 @@ def test_settings_has_no_local_model_fields():
 def test_openrouter_key_accepts_both_spellings():
     """OpenRouter 키가 두 철자 모두 인식하는지 검증"""
     import config as config_module
+
     os.environ["OPENROUTER_API_KEY"] = "test-correct-spelling"
     try:
         settings = config_module.Settings()
