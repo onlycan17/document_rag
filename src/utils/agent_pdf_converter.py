@@ -14,6 +14,27 @@ from .image_analyzer import create_image_analyzer
 
 logger = logging.getLogger(__name__)
 
+MIN_IMAGE_SIZE = 50
+
+
+def build_text_blocks(page_texts: List[tuple], extracted_images: Dict[int, list]) -> List[str]:
+    """페이지 텍스트와 이미지 정보를 에이전트용 마크다운 블록으로 조립한다."""
+    text_blocks = []
+    for page_num, text in page_texts:
+        block_content = f"[페이지 {page_num}]\n{text}"
+
+        if page_num in extracted_images:
+            block_content += "\n\n### 페이지 내 이미지\n"
+            for img_path, img_description in extracted_images[page_num]:
+                block_content += f"\n![이미지]({img_path})\n"
+                if img_description:
+                    block_content += f"**이미지 설명**: {img_description}\n"
+                else:
+                    block_content += f"**이미지**: 페이지 {page_num}의 이미지 {img_path}\n"
+
+        text_blocks.append(block_content)
+    return text_blocks
+
 
 class AgentBasedPDFConverter:
     """
@@ -154,117 +175,37 @@ class AgentBasedPDFConverter:
         return output_path
 
     def _extract_text_blocks(self, pdf_path: str) -> List[str]:
-        """
-        PDF에서 페이지별 텍스트 블록 추출 및 이미지 추출
-        에이전트 모드용: 문맥 연결된 텍스트 제공
-        """
+        """PDF에서 페이지별 텍스트 블록과 이미지를 추출한다. 에이전트 모드용 문맥 연결 텍스트."""
         try:
             doc = fitz.open(pdf_path)
             pdf_stem = Path(pdf_path).stem
 
-            # 이미지 디렉토리 생성
             images_dir = Path(self.output_dir) / "images"
             images_dir.mkdir(parents=True, exist_ok=True)
 
-            # 이미지 정보 저장을 위한 딕셔너리
-            extracted_images = {}  # {page_num: [(image_path, description), ...]}
-
-            # 1단계: 모든 페이지 텍스트 수집 및 이미지 추출
             page_texts = []
+            extracted_images = {}  # {page_num: [(image_path, description), ...]}
             for page_num in range(doc.page_count):
                 page = doc[page_num]
-                page_text = page.get_text()
+                page_text = page.get_text().strip()
+                if page_text:
+                    page_texts.append((page_num + 1, page_text))
 
-                if page_text.strip():
-                    page_texts.append((page_num + 1, page_text.strip()))
-
-                # 페이지에서 이미지 추출
                 try:
-                    image_list = page.get_images(full=True)
-                    page_images = []
-                    MIN_IMAGE_SIZE = 50  # 최소 이미지 크기 (픽셀)
-
-                    for img_index, img in enumerate(image_list):
-                        xref = img[0]  # xref 번호
-
-                        # 이미지 데이터 추출
-                        base_image = doc.extract_image(xref)
-                        image_bytes = base_image["image"]
-                        image_ext = base_image["ext"]
-
-                        # 이미지 크기 확인을 위해 PIL 사용
-                        from PIL import Image
-                        import io
-
-                        img_pil = Image.open(io.BytesIO(image_bytes))
-                        width, height = img_pil.size
-
-                        # 너무 작은 이미지는 건너뛰기
-                        if width < MIN_IMAGE_SIZE or height < MIN_IMAGE_SIZE:
-                            logger.info(f"   ⚠️  너무 작은 이미지 건너뛰기: {width}x{height} (페이지 {page_num + 1})")
-                            continue
-
-                        # 이미지 파일명 생성
-                        image_filename = f"{pdf_stem}_page{page_num + 1:03d}_img{img_index + 1:03d}.{image_ext}"
-                        image_path = images_dir / image_filename
-
-                        # 이미지 저장
-                        with open(image_path, "wb") as img_file:
-                            img_file.write(image_bytes)
-
-                        logger.info(f"   🖼️  이미지 추출 성공: {image_filename} ({width}x{height})")
-
-                        # 이미지 분석 및 설명 생성(OpenRouter 고정)
-                        image_description = None
-                        if self.enable_image_analysis and self.image_analyzer:
-                            context = page_text.strip()[:500] if page_text.strip() else ""
-                            try:
-                                image_description = self.image_analyzer.analyze_image(str(image_path), context)
-                                if image_description:
-                                    logger.info(f"   ✅ 이미지 설명 생성: {len(image_description)}자")
-                                else:
-                                    logger.warning(f"   ⚠️ 이미지 설명 생성 실패: {image_filename}")
-                            except Exception as e:
-                                logger.warning(f"   ⚠️ 이미지 분석 오류: {str(e)}")
-
-                        # 상대 경로로 저장 (마크다운에서 사용)
-                        relative_image_path = f"./images/{image_filename}"
-                        page_images.append((relative_image_path, image_description))
-
+                    page_images = self._extract_page_images(doc, page, page_num + 1, pdf_stem, images_dir, page_text)
                     if page_images:
                         extracted_images[page_num + 1] = page_images
-
                 except Exception as e:
                     logger.warning(f"페이지 {page_num + 1} 이미지 추출 실패: {str(e)}")
 
             doc.close()
 
-            # 2단계: 추출된 이미지 개수 로깅 및 인스턴스 변수 저장
-            self.extracted_images_info = extracted_images  # 인스턴스 변수로 저장
+            self.extracted_images_info = extracted_images
             total_images = sum(len(imgs) for imgs in extracted_images.values())
             if total_images > 0:
                 logger.info(f"📊 총 {total_images}개 이미지 추출 및 분석 완료")
 
-            # 3단계: page_texts를 text_blocks로 변환 (이미지 정보 포함)
-            text_blocks = []
-            for page_num, text in page_texts:
-                # 페이지 헤더와 텍스트 추가
-                block_content = f"[페이지 {page_num}]\n{text}"
-
-                # 해당 페이지의 이미지가 있으면 추가
-                if page_num in extracted_images:
-                    block_content += "\n\n### 페이지 내 이미지\n"
-
-                    for img_path, img_description in extracted_images[page_num]:
-                        block_content += f"\n![이미지]({img_path})\n"
-
-                        if img_description:
-                            block_content += f"**이미지 설명**: {img_description}\n"
-                        else:
-                            block_content += f"**이미지**: 페이지 {page_num}의 이미지 {img_path}\n"
-
-                text_blocks.append(block_content)
-
+            text_blocks = build_text_blocks(page_texts, extracted_images)
             if not text_blocks:
                 logger.warning("⚠️ PDF에서 텍스트를 추출할 수 없습니다.")
                 text_blocks = [""]  # 빈 리스트 대신 빈 문자열 하나를 포함
@@ -274,6 +215,49 @@ class AgentBasedPDFConverter:
             raise
 
         return text_blocks
+
+    def _extract_page_images(
+        self, doc, page, page_number: int, pdf_stem: str, images_dir: Path, context: str
+    ) -> List[tuple]:
+        """한 페이지에서 최소 크기 이상의 이미지를 추출·저장하고 설명 목록을 반환한다."""
+        import io
+
+        from PIL import Image
+
+        page_images = []
+        for img_index, img in enumerate(page.get_images(full=True)):
+            base_image = doc.extract_image(img[0])  # xref 번호로 이미지 데이터 획득
+            image_bytes = base_image["image"]
+
+            width, height = Image.open(io.BytesIO(image_bytes)).size
+            if width < MIN_IMAGE_SIZE or height < MIN_IMAGE_SIZE:
+                logger.info(f"   ⚠️  너무 작은 이미지 건너뛰기: {width}x{height} (페이지 {page_number})")
+                continue
+
+            image_filename = f"{pdf_stem}_page{page_number:03d}_img{img_index + 1:03d}.{base_image['ext']}"
+            image_path = images_dir / image_filename
+            image_path.write_bytes(image_bytes)
+            logger.info(f"   🖼️  이미지 추출 성공: {image_filename} ({width}x{height})")
+
+            # 상대 경로로 저장 (마크다운에서 사용)
+            page_images.append((f"./images/{image_filename}", self._describe_image(image_path, context[:500])))
+
+        return page_images
+
+    def _describe_image(self, image_path: Path, context: str) -> Optional[str]:
+        """추출 이미지의 설명을 분석기로 생성한다. 실패 시 None."""
+        if not (self.enable_image_analysis and self.image_analyzer):
+            return None
+        try:
+            description = self.image_analyzer.analyze_image(str(image_path), context)
+            if description:
+                logger.info(f"   ✅ 이미지 설명 생성: {len(description)}자")
+            else:
+                logger.warning(f"   ⚠️ 이미지 설명 생성 실패: {image_path.name}")
+            return description
+        except Exception as e:
+            logger.warning(f"   ⚠️ 이미지 분석 오류: {str(e)}")
+            return None
 
     def _save_result(self, pdf_path: str, content: str, quality_report: Optional[Dict] = None) -> str:
         """
