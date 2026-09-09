@@ -30,13 +30,11 @@
 - 임계값: 점수 기반 동적 완화(결과 부족 시 완화)
 
 ## 4. RAG 체인
-- 프롬프트: Qwen(GGUF) ChatML 전용/일반 템플릿 2체계
+- 프롬프트: 제공자 공통 단일 템플릿(`핵심 요약/상세 설명/참고 자료` 구조) — `src/rag/llm_manager.py`의 `create_prompt_template()`
 - 대용량 컨텍스트: 분할→요약→병렬 처리→병합
-- 모델 초기화: provider에 따른 설정/토큰/컨텍스트 제어
-- local 프로바이더: OpenAI 호환 HTTP 엔드포인트(`{BASE}/v1/chat/completions`) 사용
- - 스트리밍: 콜백을 통해 토큰 단위 출력
- - 멀티 서버: `LOCAL_LLM_BASE_URLS`로 다수 서버 모델 목록 통합, 선택된 모델의 `base`에 라우팅
- - 응답 포맷터: 모델 출력이 지침을 어겨도 `핵심 요약/상세 설명/참고 자료` 구조로 재배치하고, 문단 간 공백·불릿·표를 보정.
+- 모델 초기화: provider(openrouter 기본, openai/google/anthropic)에 따른 설정/토큰/컨텍스트 제어
+- 스트리밍: 콜백을 통해 토큰 단위 출력
+- 응답 포맷터: 모델 출력이 지침을 어겨도 `핵심 요약/상세 설명/참고 자료` 구조로 재배치하고, 문단 간 공백·불릿·표를 보정.
 
 ## 7. 멀티모달 전처리 및 모델 목록 확장
 - 멀티모달 전처리 기본 ON(`ENABLE_MULTIMODAL_PREPROCESSING=true`)

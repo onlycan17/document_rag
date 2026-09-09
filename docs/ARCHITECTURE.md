@@ -43,12 +43,6 @@
 ## 4. LLM/컨텍스트 전략
 - 모델별 컨텍스트/토큰 한도 계산(안전 마진) 후 최대 컨텍스트를 문자 수로 환산.
 - 대량 문서: 임계값 초과 시 컨텍스트 분할→부분 요약→병렬 처리로 결합.
-- 로컬 LLM(GGUF)일 때 샘플링 파라미터(Qwen/Midm 특화) 및 n_ctx 보호.
-
-### LM Studio (로컬 모델 호스팅) 통합
-
-- 본 프로젝트는 로컬 LM Studio 인스턴스에서 실행 중인 모델을 자동으로 탐색하여 UI에 노출합니다. 탐색은 HTTP API(`/v1/models`) 호출을 우선 시도하고 실패 시 로컬 모델 디렉토리(`~/Library/Application Support/lm-studio/models`)를 스캔하여 모델 파일을 감지합니다.
-- 발견된 모델들은 `ModelRegistry.get_all_models()`를 통해 'local' 제공자 항목으로 병합되어 사용자가 사이드바에서 선택할 수 있습니다. 구체 구현 파일: `src/models/lm_studio.py`, `src/models/model_registry.py`, `src/rag/llm_manager.py`.
 
 ## 5. 검색 전략
 - 기본: 벡터 유사도 검색(similarity, 거리 낮을수록 유사).
@@ -58,7 +52,7 @@
   - 동적 임계값(검색 품질 낮을 때 완화).
 
 ## 6. 설정/보안
-- `.env`에 API 키(Upstage/OpenAI/Google/Anthropic) 또는 로컬 모델 경로.
+- `.env`에 API 키(Upstage/OpenAI/Google/Anthropic/OpenRouter) 설정. 모든 LLM 호출은 외부 API 전용(로컬 모델 미지원).
 - `config.settings`로 모든 파라미터 제어(검색 k, 임계값, MMR 다양성, 스트리밍 여부 등).
 - 텔레메트리 비활성화: `ANONYMIZED_TELEMETRY=False`, `CHROMA_TELEMETRY=False`.
 
