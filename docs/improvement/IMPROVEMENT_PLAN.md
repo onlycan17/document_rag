@@ -146,3 +146,16 @@ TODO.md의 아래 항목들은 현재 규모(단일 사용자/사내 챗봇)에�
 - [x] 17곳에 debug/warning 로그 추가 (세션 조회 폴백·임시파일 정리·모델 병합 등). 핫패스 파싱 탐색 3곳(structure_parser·openrouter_image_service·logging_config 부트스트랩)은 의도적 흐름으로 제외
 
 - 검증: ruff 0건, compileall, 오프라인 스모크 6 passed, AppTest 예외 없음
+
+
+## Phase 6 — 대용량 파일 분할·포매팅 (완료 2026-09-09)
+
+### 6.1 저장소 전체 ruff format
+- [x] 실행 결과 실제 변경은 테스트 1개 파일뿐(기존 코드 대부분 이미 규격 충족) → style 커밋
+
+### 6.2 document_loader.py 분할 (1,613줄 → 491줄)
+- [x] 믹스인 방식으로 4개 모듈 추출: text_cleaning(텍스트 정리)·chunking(청킹)·docx_loading(DOCX)·pdf_loading(PDF)
+- [x] 이동은 순수 복사: 분할 전후 22개 메서드 AST 항등성 스크립트 검증 통과, dir() 메서드 집합 동일
+- [ ] pdf_loading.py 607줄로 600선 근소 초과 — 응집도 유지를 우선, 다음 수정 시 자연 정리
+
+- 검증: ruff 0건·compileall·스모크 6 passed·AppTest 무예외
