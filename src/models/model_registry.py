@@ -169,6 +169,12 @@ class ModelRegistry:
             "context_window": 200000,
             "description": "Claude 4 Haiku",
         },
+        "qwen/qwen3-vl-235b-a22b-instruct": {
+            "provider": "openrouter",
+            "max_tokens": 32768,
+            "context_window": 262144,
+            "description": "Qwen3 VL 235B (OpenRouter)",
+        },
     }
 
     @classmethod
