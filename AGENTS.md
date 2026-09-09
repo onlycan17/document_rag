@@ -44,6 +44,12 @@
 - Embeddings: `src/embeddings/` 내 Upstage/OpenAI 등.
 - Orchestration: `src/rag/`의 `RAGChain`; `run_rag.py`의 앱 메뉴.
 
+## 최근 변경 요약(대형 함수 리팩터링)
+- document_loader.py → 믹스인 4종(TextCleaning·Chunking·DocxLoading·PdfLoading) 분할
+- `_is_incomplete_sentence` → `src/utils/sentence_completion.py` 순수 분리 + 골든 테스트 61케이스(`tests/test_sentence_completion.py`)
+- PDF 로더·전처리·에이전트 변환기의 대형 함수를 모듈 수준 순수 헬퍼로 추출: `pdf_loading`(311→206/227→96줄), `preprocessing_model.preprocess_text`(108→26줄, provider별 `_call_*` + 요청·응답 순수 함수 7종), `agent_pdf_converter._extract_text_blocks`(121→41줄, `build_text_blocks` 분리)
+- 회귀망: `tests/test_sentence_completion.py`·`test_pdf_loading_helpers.py`·`test_preprocessing_helpers.py`·`test_agent_pdf_converter_helpers.py` (gitignore 예외 등록), 상세: `docs/CHANGELOG.md` 2026-09-09
+
 ## 최근 변경 요약(내장 모델 → 외부 API 전면 전환)
 - 모든 내장(로컬) 모델 호출 경로 제거: LM Studio·GGUF(llama.cpp)·Gemma/A.X 멀티모달·로컬 임베딩·로컬 이미지 서버 코드 삭제
 - LLM/전처리/후처리/이미지분석/임베딩 전부 외부 API만 사용 (openrouter 기본, openai/google/anthropic/upstage)

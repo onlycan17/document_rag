@@ -1,5 +1,13 @@
 # 변경 이력(Changelog)
 
+## 2026-09-09 (대형 함수 리팩터링)
+- refactor(loaders): document_loader.py를 믹스인 4종(TextCleaning·Chunking·DocxLoading·PdfLoading)으로 분할
+- refactor(utils): `_is_incomplete_sentence`를 `src/utils/sentence_completion.py`로 순수 분리, 골든 테스트 61케이스로 동작 고정
+- refactor(loaders): PDF 로더의 provider/model 해석·이미지 스캔·복사·메타데이터 변환·MD 저장·2단계 후처리 실행을 검증 가능한 모듈 헬퍼로 추출 (`_load_pdf_file` 311→206줄, `_process_converted_content` 227→96줄)
+- refactor(processing): `preprocess_text`(108줄)를 제공자별 호출 메서드와 순수 변환 함수 7종으로 분할 (108→26줄)
+- refactor(utils): `agent_pdf_converter._extract_text_blocks`(121줄)를 `build_text_blocks` 순수 함수 + 페이지 이미지 추출/설명 생성 메서드로 분리 (121→41줄)
+- test: 오프라인 단위 테스트 신규 추가(헬퍼 25케이스 포함 스위트 86 passed), 스모크 6·AppTest 무예외, 전 커밋 GitHub Actions CI 녹색
+
 ## 2025-09-10
 - feat(preprocessing): 기본 전처리 모델을 저비용·멀티모달 지향으로 재정렬
   - openai: gpt-4o-mini, google: gemini-1.5-flash-8b, anthropic: claude-3-5-haiku-20241022
