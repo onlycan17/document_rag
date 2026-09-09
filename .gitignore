@@ -36,6 +36,7 @@ test_*.py
 !tests/test_smoke_offline.py
 !tests/test_sentence_completion.py
 !tests/test_pdf_loading_helpers.py
+!tests/test_preprocessing_helpers.py
 tests/outputs/
 
 # Logs
@@ -122,6 +123,7 @@ test_*.py
 !tests/test_smoke_offline.py
 !tests/test_sentence_completion.py
 !tests/test_pdf_loading_helpers.py
+!tests/test_preprocessing_helpers.py
 test_korean*.txt
 test_korean*.html
 test_small.pdf

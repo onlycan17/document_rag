@@ -5,13 +5,77 @@ PDF 문서의 텍스트 추출 및 전처리를 위한 로컬 및 외부 API 모
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any, Dict
 import logging
+
+import requests
+
 from config import settings
 
 from .document_pipeline import build_metadata, concatenate_documents, load_documents
 
 logger = logging.getLogger(__name__)
+
+
+def build_preprocessing_prompt(text: str) -> str:
+    """텍스트 전처리 지시 프롬프트를 만든다."""
+    return f"""
+    다음 텍스트를 전문적으로 전처리해주세요:
+
+    1. 한국어 문장의 연결성을 개선하세요
+    2. 적절한 띄어쓰기를 적용하세요  
+    3. 문맥에 맞는 문장 구조를 만드세요
+    4. 불필요한 공백과 줄바꿈을 정리하세요
+    5. 전문적이고 읽기 쉬운 텍스트로 만드세요
+
+    텍스트:
+    {text}
+
+    전처리된 텍스트만 반환해주세요.
+    """
+
+
+def extract_responses_text(resp: Any) -> str | None:
+    """OpenAI Responses API 응답에서 텍스트를 추출한다 (편의 프로퍼티→구조 폴백)."""
+    processed_text = getattr(resp, "output_text", None)
+    if not processed_text:
+        try:
+            processed_text = resp.output[0].content[0].text  # type: ignore[attr-defined]
+        except Exception:
+            processed_text = None
+    return processed_text
+
+
+def resolve_openrouter_model() -> str:
+    """설정에서 OpenRouter 모델을 해석한다 (텍스트→멀티모달→하드코딩 기본)."""
+    return getattr(settings, "openrouter_model", None) or getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")
+
+
+def build_openrouter_url() -> str:
+    api_base = getattr(settings, "openrouter_api_base", "https://openrouter.ai/api")
+    return f"{api_base.rstrip('/')}/v1/chat/completions"
+
+
+def openrouter_headers(api_key: str) -> Dict[str, str]:
+    return {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+        "X-Title": "RAG-Preprocessor",
+    }
+
+
+def build_openrouter_body(model: str, prompt: str) -> Dict[str, Any]:
+    return {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": float(settings.preprocessing_temperature),
+        "max_tokens": 4000,
+    }
+
+
+def extract_chat_completion_text(data: Dict[str, Any]) -> str:
+    """OpenAI 호환 chat/completions JSON에서 답변 텍스트를 추출한다."""
+    return (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
 
 
 class PreprocessingModel(ABC):
@@ -134,113 +198,82 @@ class APIPreprocessingModel(PreprocessingModel):
             raise
 
     def preprocess_text(self, text: str, **kwargs) -> str:
-        """
-        API 모델을 사용하여 텍스트를 전처리합니다.
-
-        Args:
-            text: 전처리할 텍스트
-            **kwargs: 추가 매개변수
-
-        Returns:
-            전처리된 텍스트
-        """
+        """API 모델을 사용하여 텍스트를 전처리합니다. 실패 시 원본을 반환한다."""
         self._initialize_client()
 
         try:
-            # 전처리 프롬프트
-            preprocessing_prompt = f"""
-            다음 텍스트를 전문적으로 전처리해주세요:
-
-            1. 한국어 문장의 연결성을 개선하세요
-            2. 적절한 띄어쓰기를 적용하세요  
-            3. 문맥에 맞는 문장 구조를 만드세요
-            4. 불필요한 공백과 줄바꿈을 정리하세요
-            5. 전문적이고 읽기 쉬운 텍스트로 만드세요
-
-            텍스트:
-            {text}
-
-            전처리된 텍스트만 반환해주세요.
-            """
-
-            if self.provider == "openai":
-                processed_text = None
-                # 최신 모델(o3/o4/gpt-5/4.1 등) 호환: Responses API 우선 시도, 실패 시 Chat Completions 폴백
-                try:
-                    if hasattr(self._client, "responses"):
-                        resp = self._client.responses.create(
-                            model=self.model_name,
-                            input=preprocessing_prompt,
-                            temperature=settings.preprocessing_temperature,
-                            max_output_tokens=4000,
-                        )
-                        # openai>=1.0.0 에서 제공되는 편의 프로퍼티 시도
-                        processed_text = getattr(resp, "output_text", None)
-                        if not processed_text:
-                            # 구조적 필드 폴백 (버전/형식 차이 대응)
-                            try:
-                                processed_text = resp.output[0].content[0].text  # type: ignore[attr-defined]
-                            except Exception:
-                                processed_text = None
-                except Exception:
-                    processed_text = None
-
-                if not processed_text:
-                    # Chat Completions 폴백 (gpt-4o/4o-mini 등 호환)
-                    response = self._client.chat.completions.create(
-                        model=self.model_name,
-                        messages=[{"role": "user", "content": preprocessing_prompt}],
-                        max_tokens=4000,
-                        temperature=0.3,
-                    )
-                    processed_text = response.choices[0].message.content
-
-            elif self.provider == "google":
-                response = self._client.generate_content(preprocessing_prompt)
-                processed_text = response.text
-
-            elif self.provider == "anthropic":
-                response = self._client.messages.create(
-                    model=self.model_name, max_tokens=4000, messages=[{"role": "user", "content": preprocessing_prompt}]
-                )
-                processed_text = response.content[0].text
-            elif self.provider == "openrouter":
-                # OpenRouter(OpenAI 호환) - Chat Completions
-                import os
-                import requests
-
-                api_key = getattr(settings, "openrouter_api_key", None) or os.getenv("OPNEROUTER_API_KEY")
-                if not api_key:
-                    raise ValueError("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다")
-                api_base = getattr(settings, "openrouter_api_base", "https://openrouter.ai/api")
-                url = f"{api_base.rstrip('/')}/v1/chat/completions"
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    "X-Title": "RAG-Preprocessor",
-                }
-                body = {
-                    "model": self.model_name
-                    or getattr(settings, "openrouter_model", getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")),
-                    "messages": [{"role": "user", "content": preprocessing_prompt}],
-                    "temperature": float(settings.preprocessing_temperature),
-                    "max_tokens": 4000,
-                }
-                resp = requests.post(url, json=body, headers=headers, timeout=120)
-                if resp.status_code != 200:
-                    raise RuntimeError(f"OpenRouter 오류: {resp.status_code} - {resp.text}")
-                data = resp.json()
-                processed_text = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
-
-            else:
+            prompt = build_preprocessing_prompt(text)
+            processors = {
+                "openai": self._call_openai,
+                "google": self._call_google,
+                "anthropic": self._call_anthropic,
+                "openrouter": self._call_openrouter,
+            }
+            processor = processors.get(self.provider)
+            if not processor:
                 raise ValueError(f"지원하지 않는 제공자: {self.provider}")
 
+            processed_text = processor(prompt)
             self.logger.info(f"API 전처리 완료: {self.provider} - {len(text)} -> {len(processed_text)} 문자")
             return processed_text.strip()
 
         except Exception as e:
             self.logger.error(f"API 텍스트 전처리 실패: {e}")
             return text  # 실패 시 원본 반환
+
+    def _call_openai(self, prompt: str) -> str:
+        """Responses API 우선, 미지원 모델이면 Chat Completions로 폴백."""
+        processed_text = None
+        try:
+            if hasattr(self._client, "responses"):
+                resp = self._client.responses.create(
+                    model=self.model_name,
+                    input=prompt,
+                    temperature=settings.preprocessing_temperature,
+                    max_output_tokens=4000,
+                )
+                processed_text = extract_responses_text(resp)
+        except Exception:
+            processed_text = None
+
+        if not processed_text:
+            response = self._client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=4000,
+                temperature=0.3,
+            )
+            processed_text = response.choices[0].message.content
+        return processed_text
+
+    def _call_google(self, prompt: str) -> str:
+        return self._client.generate_content(prompt).text
+
+    def _call_anthropic(self, prompt: str) -> str:
+        response = self._client.messages.create(
+            model=self.model_name, max_tokens=4000, messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
+
+    def _call_openrouter(self, prompt: str) -> str:
+        """OpenRouter(OpenAI 호환) Chat Completions 호출."""
+        import os
+
+        api_key = getattr(settings, "openrouter_api_key", None) or os.getenv("OPNEROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("OpenRouter API 키(OPNEROUTER_API_KEY)가 설정되지 않았습니다")
+
+        model = self.model_name or resolve_openrouter_model()
+        response = requests.post(
+            build_openrouter_url(),
+            json=build_openrouter_body(model, prompt),
+            headers=openrouter_headers(api_key),
+            timeout=120,
+        )
+        if response.status_code != 200:
+            raise RuntimeError(f"OpenRouter 오류: {response.status_code} - {response.text}")
+
+        return extract_chat_completion_text(response.json())
 
     def extract_and_preprocess(self, file_path: str, **kwargs) -> Dict[str, Any]:
         """
