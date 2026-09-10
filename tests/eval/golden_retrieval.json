@@ -1,0 +1,68 @@
+{
+  "description": "검색 품질 평가 골든 셋 — data/documents 실재 문서 기반. expected_sources는 메타데이터 source에 부분 일치로 판정한다.",
+  "cases": [
+    {
+      "question": "몽촌토성 4구역 상부 발굴 조사 결과를 알려줘",
+      "expected_sources": [
+        "몽촌토성4+상"
+      ]
+    },
+    {
+      "question": "몽촌토성 4구역 하부 조사 내용을 알려줘",
+      "expected_sources": [
+        "몽촌토성4+하"
+      ]
+    },
+    {
+      "question": "몽촌토성은 언제 만들어진 토성이고 어떤 역사적 배경이 있나요?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ]
+    },
+    {
+      "question": "몽촌토성 발굴 과정에서 확인된 시설과 구조물을 설명해줘",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ]
+    },
+    {
+      "question": "몽촌토성에서 출토된 유물에는 어떤 것이 있나요?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ]
+    },
+    {
+      "question": "교원 업무부담 경감을 위한 대형 멀티모달 모델(LMM) 적용 방안 연구의 목적은 무엇인가요?",
+      "expected_sources": [
+        "KERIS"
+      ]
+    },
+    {
+      "question": "LMM을 교원 업무에 적용했을 때 기대되는 효과는 무엇인가요?",
+      "expected_sources": [
+        "KERIS"
+      ]
+    },
+    {
+      "question": "연구에서 제안하는 LMM 활용 시나리오를 알려줘",
+      "expected_sources": [
+        "KERIS"
+      ]
+    },
+    {
+      "question": "LMM 도입 시 교원의 업무 시간 절감 효과에 대한 분석 내용은?",
+      "expected_sources": [
+        "KERIS"
+      ]
+    },
+    {
+      "question": "연구 결과로 제안된 정책 과제나 시사점은 무엇인가요?",
+      "expected_sources": [
+        "KERIS"
+      ]
+    }
+  ]
+}

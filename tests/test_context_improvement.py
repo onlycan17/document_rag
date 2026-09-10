@@ -9,6 +9,8 @@ from pathlib import Path
 import tempfile
 import shutil
 
+import pytest
+
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
@@ -198,8 +200,9 @@ def test_cross_page_text_connection():
         return False
 
 
+@pytest.mark.network
 def test_existing_pdf_reprocessing():
-    """기존 PDF 파일 재처리 테스트"""
+    """기존 PDF 파일 재처리 테스트 (실제 PDF 변환 + LLM 전처리 호출)"""
     print("\\n📄 기존 PDF 파일 재처리 테스트")
 
     try:
