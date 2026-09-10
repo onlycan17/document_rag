@@ -129,6 +129,7 @@ test_*.py
 !tests/test_preprocessing_models.py
 !tests/test_semantic_chunking.py
 !tests/test_semantic_chunking_standalone.py
+!tests/debug/test_image_metadata.py
 !tests/test_sentence_completion.py
 !tests/test_pdf_loading_helpers.py
 !tests/test_preprocessing_helpers.py

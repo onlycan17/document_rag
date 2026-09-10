@@ -78,9 +78,17 @@ python -m pytest tests/processing/
 
 ### 전체 테스트 실행
 ```bash
-# 모든 테스트 실행
+# 오프라인 회귀 테스트만 실행 (기본, 외부 API 호출 없음, 수 초 내 완료)
 python -m pytest tests/
+
+# 실제 API를 호출하는 테스트 실행 (느리고 API 비용 발생)
+python -m pytest tests/ -m network
 ```
+
+> ℹ️ `debug/`, `integration/`, `legacy/`, `processing/`, `utils/` 디렉토리와
+> 루트의 일부 API 테스트(`test_simple.py` 등)는 `tests/conftest.py`에 의해
+> 자동으로 `network` 마커가 부여되어 기본 실행에서 제외됩니다.
+> 신규 API 호출 테스트는 해당 디렉토리에 두거나 `NETWORK_ROOT_FILES`에 추가하세요.
 
 ## ✅ 테스트 작성 규칙
 

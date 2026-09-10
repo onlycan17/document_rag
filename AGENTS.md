@@ -15,7 +15,8 @@
 - 앱 실행: `streamlit run app.py` — UI 시작.
 - 벡터 DB: `python scripts/data_management/vector_db_manager.py [--safe-mode|--markdown-only|--files "file1.pdf"]`.
 - 빠른 테스트: `python tests/test_simple.py` — 로더 → DB → RAG 스모크 테스트.
-- 전체 테스트: `python -m pytest tests/` (pytest 설치 시); 또는 개별 스크립트 `python path/to/test_*.py` 실행.
+- 전체 테스트(오프라인 회귀망): `python -m pytest tests/` — API 호출 테스트는 기본 제외.
+- API 호출 테스트: `python -m pytest tests/ -m network` (느리고 API 비용 발생). 개별 스크립트 실행도 가능.
 
 ## 코딩 스타일 및 네이밍
 - Python 3.10+; 4칸 들여쓰기; PEP 8 준수.
