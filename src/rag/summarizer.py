@@ -13,12 +13,17 @@ import logging
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import nltk
+try:
+    import nltk
+except ImportError:
+    nltk = None
 
 
 # NLTK 데이터 초기화
 def _initialize_nltk():
     """NLTK 데이터 초기화"""
+    if nltk is None:
+        return False
     try:
         # 필요한 데이터가 있는지 확인
         nltk.data.find("tokenizers/punkt")
