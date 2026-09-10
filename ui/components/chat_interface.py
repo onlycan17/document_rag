@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 import streamlit as st
 
 from src.rag.rag_chain import RAGChain
+from src.utils.source_highlight import render_source_preview
 from ui.services.app_service import AppService
 from ui.services.streaming_service import process_streaming_response
 
@@ -22,6 +23,7 @@ class AssistantResponse:
     """어시스턴트 응답 결과"""
 
     text: str = ""
+    question: str = ""
     context_documents: List[Any] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     images: List[Dict[str, str]] = field(default_factory=list)
@@ -43,6 +45,7 @@ def _display_chat_history() -> None:
             st.markdown(message.get("content", ""))
             if message.get("role") == "assistant":
                 _render_images(message.get("images", []))
+                _render_source_documents(message.get("context_documents", []), message.get("question", ""))
 
 
 def _handle_chat_input(rag_chain: RAGChain, sidebar_config: Dict[str, Any]) -> None:
@@ -55,7 +58,7 @@ def _handle_chat_input(rag_chain: RAGChain, sidebar_config: Dict[str, Any]) -> N
     with st.chat_message("assistant"):
         response = _generate_assistant_response(prompt, rag_chain, sidebar_config)
         _render_assistant_output(response)
-    _store_assistant_message(response)
+    _store_assistant_message(response, prompt)
 
 
 def _append_user_message(prompt: str) -> None:
@@ -68,7 +71,7 @@ def _generate_assistant_response(
     sidebar_config: Dict[str, Any],
 ) -> AssistantResponse:
     start_time = time.time()
-    response = AssistantResponse()
+    response = AssistantResponse(question=prompt)
     try:
         stream_gen = _get_stream_generator(rag_chain, prompt)
         if stream_gen is not None:
@@ -131,7 +134,27 @@ def _render_assistant_output(response: AssistantResponse) -> None:
     if response.error:
         st.error(response.error)
         return
+    _render_source_documents(response.context_documents, response.question)
     _display_performance_info(response.processing_time, response.metadata, response.context_documents)
+
+
+def _render_source_documents(documents: List[Any], question: str) -> None:
+    """출처 문서를 펼쳐보기 형태로 표시하고, 질문 관련 문단을 하이라이트해 먼저 보여준다."""
+    if not documents:
+        return
+    with st.expander(f"📑 출처 보기 ({len(documents)}개)", expanded=False):
+        for index, doc in enumerate(documents, start=1):
+            metadata = getattr(doc, "metadata", {})
+            file_name = metadata.get("file_name", metadata.get("source", "Unknown"))
+            page = metadata.get("page", "N/A")
+            header = f"[{index}] {file_name}"
+            if page and str(page) != "N/A":
+                header += f" (p.{page})"
+            with st.expander(header, expanded=False):
+                content = getattr(doc, "page_content", "")
+                st.markdown(render_source_preview(content, question))
+                with st.expander("전체 내용 보기"):
+                    st.markdown(content)
 
 
 def _render_images(images: List[Dict[str, str]]) -> None:
@@ -143,11 +166,12 @@ def _render_images(images: List[Dict[str, str]]) -> None:
         st.image(str(path), caption=caption, use_column_width=False)
 
 
-def _store_assistant_message(response: AssistantResponse) -> None:
+def _store_assistant_message(response: AssistantResponse, question: str) -> None:
     st.session_state.messages.append(
         {
             "role": "assistant",
             "content": response.text,
+            "question": question,
             "context_documents": response.context_documents,
             "metadata": response.metadata,
             "processing_time": response.processing_time,
@@ -169,12 +193,6 @@ def _display_performance_info(
             col3.metric("사용 토큰", f"{metadata.get('total_tokens', 0)}")
         else:
             col3.metric("모델", metadata.get("model", "Unknown"))
-        if context_documents:
-            st.write("**참조된 문서:**")
-            for index, doc in enumerate(context_documents[:3], start=1):
-                source = getattr(doc, "metadata", {}).get("source", "Unknown")
-                page = getattr(doc, "metadata", {}).get("page", "N/A")
-                st.write(f"{index}. {source} (페이지: {page})")
 
 
 def render_chat_controls() -> None:
