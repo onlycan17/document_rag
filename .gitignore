@@ -142,3 +142,5 @@ test_small.pdf
 # Test extraction outputs in tests/outputs/
 tests/outputs/*/
 local_models/*
+# opencode 에이전트 내부 상태
+.omo/
