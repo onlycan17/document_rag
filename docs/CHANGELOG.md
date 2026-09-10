@@ -1,5 +1,14 @@
 # 변경 이력(Changelog)
 
+## 2026-09-11 (RAG 검색 품질 개선 — 임베딩 분리·평가 하네스)
+- feat(embeddings): 문서·질의 임베딩 모델 분리 — 문서는 `solar-embedding-1-large-passage`(신규 `UPSTAGE_EMBEDDING_DOC_MODEL`), 질의는 기존 `-query` 모델 사용(업스테이지 권장 구성). OpenAI는 구분 모델이 없어 동일 모델 사용. 벡터 DB 전체 재구축 필요(완료: converted_docs 마크다운 3종, 935 청크)
+- feat(eval): 검색 평가 하네스 신설 — 골든 셋(`tests/eval/golden_retrieval.json` 10질의), 순수 지표 함수 `src/utils/retrieval_metrics.py`(best_relevant_rank·Hit@k·MRR, 오프라인 테스트 6건), 실행 스크립트 `scripts/eval/retrieval_eval.py`. 측정 없던 튜닝에서 숫자 기반 검증으로 전환
+- fix(vector_db): FAISS 로드 시 `documents_cache.pkl`이 비어 있으면 docstore에서 문서 캐시 복구 — 캐시 비었을 때 키워드 검색(BM25/TF-IDF)이 조용히 무력화되던 문제
+- fix(vector_db): 불완전한 기존 인덱스 발견(471/476 청크가 몽촌토성4+상.pdf 단일 문서, 하.pdf·KERIS 미인덱싱) → 마크다운 기반 재구축 + KERIS 임베딩 429로 증분 보강
+- chore(tracing): LangSmith 트레이싱 활성화 경로 정리 — config의 `load_dotenv`로 .env 키가 langchain-core에 자동 반영되어 별도 와이어링 불필요 확인. **`.env.example` 보호 파일로 수동 추가 필요: `UPSTAGE_EMBEDDING_DOC_MODEL=solar-embedding-1-large-passage`, `LANGSMITH_TRACING=true`**
+- 설계 결정: LangGraph 미채택(선형 파이프라인에 과설계), 리랭커·RRF·Parent-Child 청킹은 평가 하네스 기반 후속 회기 과제
+- 결과: 평가 스크립트 Hit@5 100% / MRR 0.875 (10질의, passage 임베딩 인덱스). 재구축 전 동일 셋은 0%(정답 문서 미인덱싱 상태의 올바른 측정)
+
 ## 2026-09-10 (테스트 인프라 개선 — 네트워크 테스트 분리)
 - feat(test): `pytest tests/` 기본 실행을 오프라인 안전화 — `tests/conftest.py` 신설로 API 호출 테스트(debug·integration·legacy·processing·utils 디렉토리 + 루트 5파일)에 `network` 마커 자동 부여, pyproject `[tool.pytest.ini_options]`에 `-m "not network"` 기본 제외. 기존엔 디버그 테스트가 실제 LLM API를 호출해 전체 스위트가 수 분 이상 멈추고 API 비용이 발생. 단, tests/utils 중 순수 오프라인 회귀 테스트(test_log_masking·test_retry_contract)는 OFFLINE_EXCEPTIONS로 기본 실행에 포함
 - fix(test): `tests/debug/test_image_metadata.py`가 구형 `VectorDatabase` API(`embedding_model=` 인자, `is_initialized`, `similarity_search`)를 호출하던 것을 현행 API(`VectorDatabase()`, `get_document_count`, `search` 튜플 반환)에 맞게 수정 — 기존 FAILED 해소

@@ -42,7 +42,8 @@
 
 ## 아키텍처 노트
 - Retrieval: `src/vectorstore/`를 통한 FAISS/Chroma.
-- Embeddings: `src/embeddings/` 내 Upstage/OpenAI 등.
+- Embeddings: `src/embeddings/` 내 Upstage/OpenAI 등. Upstage는 문서 `solar-embedding-1-large-passage` / 질의 `-query` 분리 사용.
+- 검색 평가: `python scripts/eval/retrieval_eval.py` — 골든 셋 기반 Hit@k·MRR 측정(임베딩 API 호출).
 - Orchestration: `src/rag/`의 `RAGChain`; `run_rag.py`의 앱 메뉴.
 
 ## 최근 변경 요약(대형 함수 리팩터링)
