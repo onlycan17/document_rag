@@ -1,7 +1,48 @@
 import logging
+import re
 import sys
 from datetime import datetime
 import os
+
+# 로그에 절대 노출되면 안 되는 환경변수 키 이름
+_SECRET_ENV_KEYS = (
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPNEROUTER_API_KEY",  # 프로젝트 사양상 고정 철자
+    "GOOGLE_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "UPSTAGE_API_KEY",
+)
+
+# 알려진 토큰 형식 패턴 (키 값 자체가 문자열에 하드코딩돼 노출되는 경우 대비)
+_SECRET_PATTERNS = (
+    re.compile(r"sk-[A-Za-z0-9_-]{8,}"),  # OpenAI/OpenRouter 계열
+    re.compile(r"AIza[0-9A-Za-z_-]{20,}"),  # Google API 키
+    re.compile(r"Bearer\s+[A-Za-z0-9._-]{8,}"),  # Authorization 헤더
+)
+
+_MASK = "***"
+
+
+def _known_secret_values() -> set:
+    return {os.environ[key] for key in _SECRET_ENV_KEYS if os.environ.get(key) and len(os.environ[key]) >= 8}
+
+
+def mask_secrets(text: str) -> str:
+    """문자열에서 API 키·토큰을 마스킹한다 (로그 출력 전 호출)."""
+    masked = str(text)
+    for value in _known_secret_values():
+        masked = masked.replace(value, _MASK)
+    for pattern in _SECRET_PATTERNS:
+        masked = pattern.sub(_MASK, masked)
+    return masked
+
+
+class SecretMaskingFormatter(logging.Formatter):
+    """포맷 후 민감정보를 마스킹하는 포맷터."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return mask_secrets(super().format(record))
 
 
 def setup_logging(log_level: int = logging.INFO):
@@ -18,8 +59,8 @@ def setup_logging(log_level: int = logging.INFO):
     # 로그 파일명 (날짜별)
     log_file = os.path.join(log_dir, f"rag_app_{datetime.now().strftime('%Y%m%d')}.log")
 
-    # 포맷터
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    # 포맷터 (민감정보 마스킹)
+    formatter = SecretMaskingFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # 루트 로거 가져오기 및 레벨 설정
     root_logger = logging.getLogger()
@@ -35,9 +76,7 @@ def setup_logging(log_level: int = logging.INFO):
                 if same_file:
                     file_handler_exists = True
                     # 포맷터/레벨 정합성 점검
-                    if getattr(h, "level", None) != log_level or getattr(h, "formatter", None) != logging.Formatter(
-                        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-                    ):
+                    if getattr(h, "level", None) != log_level or not isinstance(h.formatter, SecretMaskingFormatter):
                         root_logger.removeHandler(h)
                         file_handler_exists = False
                 else:
