@@ -175,5 +175,5 @@ class AnswerFormatter:
             if chunk_id:
                 details.append(chunk_id)
             detail_str = f" ({', '.join(details)})" if details else ""
-            lines.append(f"- {index}. {name}{detail_str}")
+            lines.append(f"- [출처 {index}] {name}{detail_str}")
         return "\n".join(lines).strip()

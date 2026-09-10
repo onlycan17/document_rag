@@ -260,7 +260,8 @@ class ImageAnalyzer:
         try:
             with Image.open(image_path) as img:
                 return img.format.lower() if img.format else "unknown"
-        except Exception:
+        except OSError:
+            # 파일 없음/손상 이미지(UnidentifiedImageError 포함)
             return "unknown"
 
     def batch_analyze_images(self, image_paths: List[str], contexts: List[str] = None) -> Dict[str, Optional[str]]:

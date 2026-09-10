@@ -142,7 +142,8 @@ class AdvancedPDFLoader:
             with open(file_path, "rb") as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 return len(pdf_reader.pages)
-        except Exception:
+        except (OSError, PyPDF2.errors.PdfReadError) as e:
+            logger.debug(f"페이지 수 확인 실패({type(e).__name__}), 0으로 처리: {file_path}")
             return 0
 
     @staticmethod
@@ -162,5 +163,6 @@ class AdvancedPDFLoader:
                     logger.warning("Tesseract 한국어 언어팩이 설치되지 않았습니다.")
                     return False
             return False
-        except Exception:
+        except OSError:
+            # tesseract 미설치 시 FileNotFoundError 등
             return False

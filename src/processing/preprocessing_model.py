@@ -41,7 +41,7 @@ def extract_responses_text(resp: Any) -> str | None:
     if not processed_text:
         try:
             processed_text = resp.output[0].content[0].text  # type: ignore[attr-defined]
-        except Exception:
+        except (AttributeError, IndexError, TypeError):
             processed_text = None
     return processed_text
 
@@ -233,7 +233,8 @@ class APIPreprocessingModel(PreprocessingModel):
                     max_output_tokens=4000,
                 )
                 processed_text = extract_responses_text(resp)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Responses API 호출 실패, Chat Completions로 폴백 ({type(e).__name__}): {e}")
             processed_text = None
 
         if not processed_text:

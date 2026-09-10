@@ -45,3 +45,16 @@ def test_format_fills_reference_placeholder_when_missing():
 
     assert "### 참고 자료" in formatted
     assert "관련 문서 정보를 자동으로 수집하지 못했습니다" in formatted
+
+
+def test_reference_block_uses_inline_citation_marker():
+    formatter = AnswerFormatter()
+    sources = [
+        {"file_name": "doc1.md", "page": "3"},
+        {"file_name": "doc2.md"},
+    ]
+
+    formatted = formatter.format("몽촌토성은 백제의 토성입니다.", sources)
+
+    assert "- [출처 1] doc1.md (p.3)" in formatted
+    assert "- [출처 2] doc2.md" in formatted

@@ -21,32 +21,33 @@ logger = logging.getLogger(__name__)
 
 
 def llm_retry_with_backoff():
-    """LLM API 호출 재시도 데코레이터 (지수 백오프)"""
+    """LLM API 호출 재시도 데코레이터 (지수 백오프). 설정 오류(ValueError)는 재시도하지 않는다."""
 
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            try:
-                from config import settings as _s  # 지연 임포트로 최신값 반영
-
-                max_retries = max(0, int(getattr(_s, "api_max_retries", 3)))
-                base_delay = float(getattr(_s, "api_base_delay", 3.0))
-                max_delay = float(getattr(_s, "api_max_delay", 60.0))
-            except Exception:
-                max_retries, base_delay, max_delay = 2, 5.0, 60.0
+            max_retries = max(0, int(getattr(settings, "api_max_retries", 3)))
+            base_delay = float(getattr(settings, "api_base_delay", 3.0))
+            max_delay = float(getattr(settings, "api_max_delay", 60.0))
 
             last_exception: Optional[Exception] = None
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
+                except ValueError:
+                    # 키 미설정 등 설정 문제는 재시도해도 같은 결과이므로 즉시 실패
+                    raise
                 except Exception as e:
                     last_exception = e
                     if attempt < max_retries:
                         delay = min(base_delay * (2**attempt) + random.uniform(0, 0.5), max_delay)
-                        logger.warning(f"🔄 LLM 호출 재시도 {attempt + 1}/{max_retries + 1}: {delay:.1f}초 후")
+                        logger.warning(
+                            f"🔄 LLM 호출 재시도 {attempt + 1}/{max_retries + 1} "
+                            f"({type(e).__name__}): {delay:.1f}초 후"
+                        )
                         time.sleep(delay)
                     else:
-                        logger.error(f"🚨 LLM 호출 최대 재시도 초과: {e}")
+                        logger.error(f"🚨 LLM 호출 최대 재시도 초과 ({type(e).__name__}): {e}")
             raise last_exception  # type: ignore[misc]
 
         return wrapper
@@ -115,7 +116,7 @@ class BaseAgent(ABC):
     def _call_openai(self, prompt: str, temperature: float, max_tokens: int) -> str:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise Exception("OpenAI API 키가 설정되지 않았습니다.")
+            raise ValueError("OpenAI API 키가 설정되지 않았습니다.")
         model = self.model_name or self._default_model_for("openai")
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
         body = {
@@ -134,10 +135,10 @@ class BaseAgent(ABC):
         try:
             genai = __import__("google.generativeai", fromlist=["generativeai"])
         except Exception:
-            raise Exception("google.generativeai 패키지가 설치되어 있지 않습니다.")
+            raise ValueError("google.generativeai 패키지가 설치되어 있지 않습니다.")
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
-            raise Exception("Google API 키가 설정되지 않았습니다.")
+            raise ValueError("Google API 키가 설정되지 않았습니다.")
         genai.configure(api_key=api_key)
         model_name = self.model_name or self._default_model_for("google")
         model = genai.GenerativeModel(model_name)
@@ -150,7 +151,7 @@ class BaseAgent(ABC):
     def _call_anthropic(self, prompt: str, temperature: float, max_tokens: int) -> str:
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
-            raise Exception("Anthropic API 키가 설정되지 않았습니다.")
+            raise ValueError("Anthropic API 키가 설정되지 않았습니다.")
         model = self.model_name or self._default_model_for("anthropic")
         try:
             import anthropic  # type: ignore
@@ -195,7 +196,7 @@ class BaseAgent(ABC):
         """OpenRouter(OpenAI 호환) Chat Completions 호출"""
         api_key = getattr(settings, "openrouter_api_key", None) or os.getenv("OPENROUTER_API_KEY")
         if not api_key:
-            raise Exception("OpenRouter API 키(OPENROUTER_API_KEY)가 설정되지 않았습니다.")
+            raise ValueError("OpenRouter API 키(OPENROUTER_API_KEY)가 설정되지 않았습니다.")
         model = self.model_name or self._default_model_for("openrouter")
         api_base = getattr(settings, "openrouter_api_base", "https://openrouter.ai/api")
         url = f"{api_base.rstrip('/')}/v1/chat/completions"

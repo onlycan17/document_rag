@@ -57,13 +57,9 @@ class DocumentProcessor:
         if not documents:
             return ""
 
-        # 1. 중복 문서 제거 (유사한 내용 필터링)
-        unique_documents = self.remove_duplicate_documents(documents)
+        reranked_documents = self.prepare_documents(documents)
 
-        # 2. 재랭킹 (관련성과 다양성 모두 고려)
-        reranked_documents = self.rerank_documents(unique_documents)
-
-        # 3. 컨텍스트 최적화
+        # 컨텍스트 최적화
         context_parts = []
         total_length = 0
         max_context_length = self.get_max_context_length()  # 모델별 동적 컨텍스트 길이
@@ -98,6 +94,15 @@ class DocumentProcessor:
 
         logger.info(f"컨텍스트 구성 완료: {len(context_parts)}개 문서, {total_length}자")
         return final_context
+
+    def prepare_documents(self, documents: List[tuple]) -> List[tuple]:
+        """컨텍스트에 실제로 들어갈 문서 목록을 만든다 (중복 제거 + 재랭킹).
+
+        컨텍스트의 [문서 n] 번호와 출처 목록의 n번 인덱스가 같은 문서를
+        가리키도록 하려면 이 결과를 format_documents와 generate_enhanced_sources에
+        함께 전달해야 한다.
+        """
+        return self.rerank_documents(self.remove_duplicate_documents(documents))
 
     def remove_duplicate_documents(self, documents: List[tuple]) -> List[tuple]:
         """중복 및 유사한 문서 제거"""

@@ -37,7 +37,8 @@ class DocxLoadingMixin:
             try:
                 logger.info("기본 텍스트 추출 방법으로 재시도...")
                 return self._load_text_file(file_path, progress_callback)
-            except Exception:
+            except Exception as fallback_error:
+                logger.debug(f"텍스트 폴백도 실패 ({type(fallback_error).__name__}): {fallback_error}")
                 raise ValueError(f"DOCX 파일 처리 실패: {str(e)}")
 
     def _load_docx_document(self, file_path: str, progress_callback) -> Document:

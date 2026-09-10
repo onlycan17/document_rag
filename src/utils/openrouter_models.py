@@ -25,10 +25,7 @@ _cache: Dict[str, Any] = {
 
 
 def _now() -> float:
-    try:
-        return time.perf_counter()
-    except Exception:
-        return time.time()
+    return time.time()
 
 
 def list_openrouter_models(refresh: bool = False) -> List[str]:
@@ -70,7 +67,8 @@ def list_openrouter_models(refresh: bool = False) -> List[str]:
         ids.sort()
         _cache["models"], _cache["ts"] = ids, now
         return list(ids)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"OpenRouter 모델 목록 조회 실패, 캐시 사용 ({type(e).__name__}): {e}")
         return list(_cache["models"]) or []
 
 

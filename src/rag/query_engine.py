@@ -12,16 +12,6 @@ from config import settings
 from src.utils import TextProcessor
 from src.utils.answer_formatter import AnswerFormatter
 
-# 성능 유틸
-try:
-    from src.utils.perf import now
-except Exception:
-    import time
-
-    def now() -> float:
-        return time.perf_counter()
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -69,7 +59,6 @@ class QueryEngine:
         - 컨텍스트 최적화
         """
         try:
-            now()
             # 0. 쿼리 전처리 및 확장
             processed_question = self.preprocess_query(question)
 
@@ -120,9 +109,9 @@ class QueryEngine:
                 return self.process_standard_context(question, relevant_docs)
 
         except Exception as e:
-            logger.error(f"쿼리 처리 중 오류 발생: {str(e)}")
+            logger.error(f"쿼리 처리 중 오류 발생 ({type(e).__name__}): {e}", exc_info=True)
             return {
-                "answer": f"죄송합니다. 답변 생성 중 오류가 발생했습니다. 다시 시도해주세요.\n\n오류 정보: {str(e)}",
+                "answer": "죄송합니다. 답변 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
                 "sources": [],
                 "status": "error",
                 "search_info": {},
@@ -181,8 +170,9 @@ class QueryEngine:
                 "status": "generating",
             }
 
-            # 2. 컨텍스트 생성
-            context = self.document_processor.format_documents(relevant_docs, question)
+            # 2. 컨텍스트 생성 (출처와 같은 문서 순서를 공유하도록 먼저 정렬)
+            prepared_docs = self.document_processor.prepare_documents(relevant_docs)
+            context = self.document_processor.format_documents(prepared_docs, question)
             self._last_context_tokens = len(context) // 4
 
             # 3. 스트리밍 방식 답변 생성
@@ -198,8 +188,8 @@ class QueryEngine:
                 formatted_preview = self.answer_formatter.format(full_response)
                 yield {"type": "content", "content": cleaned, "full_content": formatted_preview, "status": "streaming"}
 
-            # 4. 스트리밍 완료 후 최종 정보 전송
-            sources = self.document_processor.generate_enhanced_sources(relevant_docs)
+            # 4. 스트리밍 완료 후 최종 정보 전송 (컨텍스트 [문서 n]과 출처 번호 일치)
+            sources = self.document_processor.generate_enhanced_sources(prepared_docs)
             search_info = self.get_search_info(question, relevant_docs)
             formatted_full = self.answer_formatter.format(full_response, sources)
 
@@ -215,10 +205,13 @@ class QueryEngine:
             }
 
         except Exception as e:
-            logger.error(f"스트리밍 쿼리 처리 중 오류 발생: {str(e)}")
+            logger.error(
+                f"스트리밍 쿼리 처리 중 오류 발생 ({type(e).__name__}): {e}",
+                exc_info=True,
+            )
             yield {
                 "type": "error",
-                "content": f"죄송합니다. 답변 생성 중 오류가 발생했습니다. 다시 시도해주세요.\n\n오류 정보: {str(e)}",
+                "content": "죄송합니다. 답변 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
                 "sources": [],
                 "status": "error",
             }
@@ -261,7 +254,7 @@ class QueryEngine:
                         return expanded_query
 
                 except Exception as e:
-                    logger.warning(f"동적 키워드 확장 실패: {str(e)}")
+                    logger.warning(f"동적 키워드 확장 실패 ({type(e).__name__}): {e}")
 
             # 2차: 문서 기반 관련 용어 추가 (기존 로직)
             try:
@@ -285,7 +278,7 @@ class QueryEngine:
                     return processed_query
 
             except Exception as e:
-                logger.warning(f"문서 기반 확장 실패: {str(e)}")
+                logger.warning(f"문서 기반 확장 실패 ({type(e).__name__}): {e}")
 
             # 3차: 기존 정적 확장 사용 (폴백)
             try:
@@ -295,7 +288,7 @@ class QueryEngine:
                 logger.info(f"정적 확장 사용: '{query}' -> '{processed_query[:100]}...'")
 
             except Exception as e:
-                logger.warning(f"정적 확장 실패: {str(e)}")
+                logger.warning(f"정적 확장 실패 ({type(e).__name__}): {e}")
 
         logger.info(f"쿼리 전처리 완료: '{query}' -> '{processed_query[:100]}...'")
         return processed_query
@@ -310,7 +303,7 @@ class QueryEngine:
                 logger.info(f"대안 검색 시도: '{fallback_query}'")
                 return self.vector_db.search(fallback_query, k=5)
         except Exception as e:
-            logger.error(f"대안 검색 실패: {str(e)}")
+            logger.error(f"대안 검색 실패 ({type(e).__name__}): {e}", exc_info=True)
 
         return []
 
@@ -378,8 +371,9 @@ class QueryEngine:
     def process_standard_context(self, question: str, relevant_docs: List[tuple]) -> Dict[str, Any]:
         """기존 방식의 표준 컨텍스트 처리"""
         try:
-            # 컨텍스트 생성
-            context = self.document_processor.format_documents(relevant_docs, question)
+            # 컨텍스트와 출처가 같은 문서 순서를 공유하도록 먼저 정렬한다
+            prepared_docs = self.document_processor.prepare_documents(relevant_docs)
+            context = self.document_processor.format_documents(prepared_docs, question)
             self._last_context_tokens = len(context) // 4
 
             # LLM 체인 실행
@@ -395,8 +389,8 @@ class QueryEngine:
             else:
                 answer = str(response)
 
-            # 출처 정보 생성
-            sources = self.document_processor.generate_enhanced_sources(relevant_docs)
+            # 출처 정보 생성 ([문서 n] 라벨과 [출처 n] 번호를 일치시키기 위해 정렬된 문서 사용)
+            sources = self.document_processor.generate_enhanced_sources(prepared_docs)
             search_info = self.get_search_info(question, relevant_docs)
             formatted_answer = self.answer_formatter.format(answer, sources)
 
@@ -474,5 +468,5 @@ class QueryEngine:
             return documents
 
         except Exception as e:
-            logger.error(f"문서 검색 중 오류: {str(e)}")
+            logger.error(f"문서 검색 중 오류 ({type(e).__name__}): {e}", exc_info=True)
             return []

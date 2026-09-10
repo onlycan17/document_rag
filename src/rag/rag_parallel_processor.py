@@ -156,7 +156,7 @@ class ParallelRAGProcessor:
                     break
 
             except Exception as e:
-                logger.error(f"청크 {chunk.chunk_id} 처리 중 오류: {e}")
+                logger.error(f"청크 {chunk.chunk_id} 처리 중 오류 ({type(e).__name__}): {e}", exc_info=True)
                 results.append(
                     ProcessingResult(
                         chunk_id=chunk.chunk_id,
@@ -277,7 +277,9 @@ class ParallelRAGProcessor:
 
             except Exception as e:
                 last_error = e
-                logger.warning(f"청크 {chunk.chunk_id} 처리 실패 (시도 {attempt+1}/{max_retries}): {str(e)}")
+                logger.warning(
+                    f"청크 {chunk.chunk_id} 처리 실패 (시도 {attempt+1}/{max_retries}) ({type(e).__name__}): {e}"
+                )
 
                 # 마지막 시도가 아니면 계속 시도
                 if attempt < max_retries - 1:
@@ -375,7 +377,7 @@ class ParallelRAGProcessor:
                 }
 
             except Exception as e:
-                logger.warning(f"계층적 요약 실패, 단순 병합 사용: {e}")
+                logger.warning(f"계층적 요약 실패, 단순 병합 사용 ({type(e).__name__}): {e}")
 
         # 단순 병합 전략
         merged_content = self._simple_merge_strategy(top_results, query)
