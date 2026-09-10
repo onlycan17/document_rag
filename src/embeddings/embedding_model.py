@@ -105,6 +105,8 @@ class EmbeddingModel:
     def __init__(self):
         if settings.embedding_provider == "openai" and settings.openai_api_key:
             self.embeddings = OpenAIEmbeddings(openai_api_key=settings.openai_api_key, model="text-embedding-ada-002")
+            # OpenAI는 passage/query 모델 구분이 없어 동일 모델 사용
+            self.doc_embeddings = self.embeddings
             self.model_type = "openai"
             logger.info("OpenAI 임베딩 모델 초기화 완료")
         elif settings.embedding_provider == "upstage" and settings.upstage_api_key:
@@ -112,8 +114,13 @@ class EmbeddingModel:
             self.embeddings = UpstageEmbeddings(
                 api_key=settings.upstage_api_key, model=settings.upstage_embedding_model
             )
+            # 문서 임베딩은 passage 특화 모델 사용 (업스테이지 권장 구성)
+            self.doc_embeddings = UpstageEmbeddings(
+                api_key=settings.upstage_api_key, model=settings.upstage_embedding_doc_model
+            )
             self.model_type = "upstage"
             logger.info(f"업스테이지 임베딩 모델 초기화 완료: {settings.upstage_embedding_model}")
+            logger.info(f"업스테이지 문서 임베딩 모델 초기화 완료: {settings.upstage_embedding_doc_model}")
         else:
             raise ValueError(
                 "사용 가능한 임베딩 API 키가 없습니다. "
@@ -141,7 +148,7 @@ class EmbeddingModel:
         if not filtered_texts:
             return [[0.0] * self.get_embedding_dimension()] * len(texts)
 
-        embeddings = self.embeddings.embed_documents(filtered_texts)
+        embeddings = self.doc_embeddings.embed_documents(filtered_texts)
 
         # 원본 순서에 맞게 결과 정렬
         result = []

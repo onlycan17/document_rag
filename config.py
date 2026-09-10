@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     # 업스테이지 임베딩 설정
     upstage_api_key: Optional[str] = os.getenv("UPSTAGE_API_KEY")
     upstage_embedding_model: str = "solar-embedding-1-large-query"
+    # 문서 임베딩용 모델 (업스테이지 권장: 문서는 passage, 질의는 query 모델 분리)
+    upstage_embedding_doc_model: str = os.getenv("UPSTAGE_EMBEDDING_DOC_MODEL", "solar-embedding-1-large-passage")
 
     # 한국어 최적화 임베딩 모델 설정 (우선 사용)
     korean_embedding_model: Optional[str] = os.getenv("KOREAN_EMBEDDING_MODEL", "jhgan/ko-sbert-multitask")
