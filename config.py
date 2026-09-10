@@ -100,6 +100,10 @@ class Settings(BaseSettings):
     keyword_search_weight: float = float(os.getenv("KEYWORD_SEARCH_WEIGHT", "0.3"))  # 키워드 검색 가중치
     vector_search_weight: float = float(os.getenv("VECTOR_SEARCH_WEIGHT", "0.7"))  # 벡터 검색 가중치
 
+    # 유사 질의 캐시 (전처리 완료 쿼리의 정확 일치 결과 재사용)
+    query_cache_ttl_seconds: int = int(os.getenv("QUERY_CACHE_TTL_SECONDS", "300"))
+    query_cache_max_entries: int = int(os.getenv("QUERY_CACHE_MAX_ENTRIES", "64"))
+
     # 쿼리 최적화 설정
     enable_query_expansion: bool = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
     enable_query_preprocessing: bool = os.getenv("ENABLE_QUERY_PREPROCESSING", "true").lower() == "true"

@@ -8,6 +8,7 @@ from src.utils import TextProcessor
 import os
 import pickle
 import logging
+import time
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -40,6 +41,7 @@ class EnhancedVectorDatabase:
         self.bm25_retriever = None  # BM25 키워드 검색기
         self.tfidf_vectorizer = None  # TF-IDF 벡터라이저
         self.tfidf_matrix = None  # TF-IDF 매트릭스
+        self._query_cache = {}  # 유사 질의 캐시: {f"{query}|{k}": (저장 시각, 결과)}
 
         self._initialize_vector_store()
         logger.info(f"벡터 데이터베이스 초기화 완료 (타입: {settings.vector_db_type})")
@@ -87,6 +89,8 @@ class EnhancedVectorDatabase:
 
         # 키워드 검색용 문서 캐시 업데이트
         self.documents_cache.extend(documents)
+        # 문서 구성이 바뀌었으므로 질의 캐시 무효화
+        self._query_cache.clear()
         self._update_keyword_search_index()
 
         logger.info(f"{len(documents)}개의 문서가 벡터 DB에 추가되었습니다.")
@@ -139,16 +143,32 @@ class EnhancedVectorDatabase:
         if k is None:
             k = settings.k_documents
 
+        cache_key = f"{query}|{k}"
+        cached = self._query_cache.get(cache_key)
+        if cached is not None and time.time() - cached[0] < settings.query_cache_ttl_seconds:
+            logger.debug(f"질의 캐시 히트: '{query[:50]}...'")
+            return list(cached[1])
+
         try:
             # 하이브리드 검색 사용 여부 확인
             if settings.enable_hybrid_search and self.bm25_retriever:
-                return self._hybrid_search(query, k)
+                results = self._hybrid_search(query, k)
             else:
-                return self._vector_search(query, k)
-
+                results = self._vector_search(query, k)
         except Exception as e:
-            logger.error(f"검색 중 오류 발생: {str(e)}")
+            logger.error(f"검색 중 오류 발생 ({type(e).__name__}): {e}", exc_info=True)
             return []
+
+        self._store_query_cache(cache_key, results)
+        return results
+
+    def _store_query_cache(self, cache_key: str, results: List[Tuple[Document, float]]) -> None:
+        """검색 결과를 질의 캐시에 저장 (최대 항목 수 초과 시 가장 오래된 항목 제거)"""
+        if not results:
+            return
+        self._query_cache[cache_key] = (time.time(), list(results))
+        while len(self._query_cache) > max(1, settings.query_cache_max_entries):
+            del self._query_cache[next(iter(self._query_cache))]
 
     def _vector_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
         """순수 벡터 검색"""
@@ -393,6 +413,7 @@ class EnhancedVectorDatabase:
 
         # 캐시 및 인덱스 초기화
         self.documents_cache = []
+        self._query_cache.clear()
         self.bm25_retriever = None
         self.tfidf_vectorizer = None
         self.tfidf_matrix = None
