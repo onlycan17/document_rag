@@ -463,6 +463,11 @@ class EnhancedVectorDatabase:
                     else:
                         self.documents_cache = []
 
+                    # 캐시가 비어 있으면 FAISS docstore에서 복구 — 캐시가 비면 키워드 검색이 무력화됨
+                    if not self.documents_cache and self.vector_store is not None:
+                        self.documents_cache = list(self.vector_store.docstore._dict.values())
+                        logger.info(f"documents_cache가 비어 있어 docstore에서 {len(self.documents_cache)}개 복구")
+
                     # 키워드 검색 인덱스 재구축
                     if self.documents_cache:
                         self._update_keyword_search_index()
