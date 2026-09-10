@@ -56,6 +56,18 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def resolve_summary_length(max_output_tokens: int, default_length: int = 500, min_length: int = 150) -> int:
+    """모델 출력 토큰 한도에 맞춰 요약 목표 길이(문자)를 정한다.
+
+    한글은 토큰 1개당 약 1문자로 잡아 안전하게 계산한다(ponytail: 보수적 가정,
+    토크나이저별 정밀 계산이 필요해지면 token_counter로 교체).
+    출력 한도가 기본값보다 크면 기본값을 유지하고, 작은 모델은 한도 내로 줄인다.
+    """
+    if max_output_tokens <= 0:
+        return default_length
+    return max(min_length, min(default_length, max_output_tokens))
+
+
 class DocumentSummary:
     """문서 요약 결과를 담는 클래스"""
 

@@ -8,7 +8,6 @@ LLMManager, DocumentProcessor, QueryEngine 모듈들을 조합하여 전체 RAG 
 from typing import List, Dict, Any, Optional, Generator, Tuple
 from langchain.schema import Document
 import logging
-import time
 
 from config import settings
 from src.vectorstore import VectorDatabase
@@ -17,27 +16,11 @@ from src.vectorstore import VectorDatabase
 from .llm_manager import LLMManager
 from .document_processor import DocumentProcessor
 from .query_engine import QueryEngine
-
-# 기존 컨텍스트 분할 모듈들 (유지)
-try:
-    from .context_chunker import ContextChunker
-    from .summarizer import HierarchicalSummarizer
-    from .rag_parallel_processor import ParallelRAGProcessor
-except ImportError:
-    # 모듈이 없는 경우 None으로 설정
-    ContextChunker = None
-    HierarchicalSummarizer = None
-    ParallelRAGProcessor = None
+from .context_chunker import ContextChunker
+from .summarizer import HierarchicalSummarizer, resolve_summary_length
+from .rag_parallel_processor import ParallelRAGProcessor
 
 logger = logging.getLogger(__name__)
-
-# 성능 유틸
-try:
-    from src.utils.perf import now
-except Exception:
-
-    def now() -> float:
-        return time.perf_counter()
 
 
 class RAGChain:
@@ -101,26 +84,19 @@ class RAGChain:
         self.query_engine.set_chains(self.chain, self.streaming_chain)
 
     def _initialize_advanced_features(self):
-        """고급 기능들 초기화 (기존 기능 유지)"""
-        # 새로운 컨텍스트 분할 시스템 초기화 (모듈이 있는 경우에만)
-        if ContextChunker and HierarchicalSummarizer and ParallelRAGProcessor:
-            self.context_chunker = ContextChunker(max_chunk_size=30000)  # 30KB 청크
-            self.summarizer = HierarchicalSummarizer(llm=self.llm, max_summary_length=500)
-            self.parallel_processor = ParallelRAGProcessor(
-                max_workers=3, chunk_timeout=30.0, enable_result_merging=True
-            )
-            self.parallel_processor.set_summarizer(self.summarizer)
+        """고급 기능들 초기화"""
+        self.context_chunker = ContextChunker(max_chunk_size=30000)  # 30KB 청크
+        summary_length = resolve_summary_length(
+            self.llm_manager.get_max_tokens_for_model(self.current_provider, self.current_model)
+        )
+        self.summarizer = HierarchicalSummarizer(llm=self.llm, max_summary_length=summary_length)
+        logger.info(f"요약 목표 길이 자동 튜닝: {summary_length}자 (모델: {self.current_model})")
+        self.parallel_processor = ParallelRAGProcessor(max_workers=3, chunk_timeout=30.0, enable_result_merging=True)
+        self.parallel_processor.set_summarizer(self.summarizer)
 
-            # 대량 문서 처리 활성화 여부
-            self.enable_large_context_processing = getattr(settings, "enable_large_context_processing", True)
-            self.large_context_threshold = getattr(settings, "large_context_threshold", 50000)  # 50KB 임계값
-        else:
-            # 고급 기능들 비활성화
-            self.context_chunker = None
-            self.summarizer = None
-            self.parallel_processor = None
-            self.enable_large_context_processing = False
-            logger.info("고급 컨텍스트 처리 기능이 비활성화되었습니다 (모듈 없음)")
+        # 대량 문서 처리 활성화 여부
+        self.enable_large_context_processing = getattr(settings, "enable_large_context_processing", True)
+        self.large_context_threshold = getattr(settings, "large_context_threshold", 50000)  # 50KB 임계값
 
     def _get_max_context_length_for_model(self) -> int:
         """현재 모델의 최대 컨텍스트 길이 반환"""
@@ -190,6 +166,9 @@ class RAGChain:
         # 고급 기능들도 새 LLM으로 업데이트
         if self.summarizer and self.llm:
             self.summarizer.llm = self.llm
+            self.summarizer.max_summary_length = resolve_summary_length(
+                self.llm_manager.get_max_tokens_for_model(provider, model)
+            )
 
     def get_available_models(self) -> Dict[str, List[Dict[str, Any]]]:
         """사용 가능한 모델 목록 반환"""
@@ -318,7 +297,7 @@ class RAGChain:
                 return self.query(question, k_documents)
 
         except Exception as e:
-            logger.error(f"대량 컨텍스트 처리 오류: {e}")
+            logger.error(f"대량 컨텍스트 처리 오류 ({type(e).__name__}): {e}", exc_info=True)
             logger.info("일반 처리로 폴백")
             return self.query(question, k_documents)
 
@@ -346,5 +325,5 @@ class RAGChain:
             yield from self.stream_query(question, k_documents)
 
         except Exception as e:
-            logger.error(f"대량 컨텍스트 스트리밍 오류: {e}")
+            logger.error(f"대량 컨텍스트 스트리밍 오류 ({type(e).__name__}): {e}", exc_info=True)
             yield from self.stream_query(question, k_documents)
