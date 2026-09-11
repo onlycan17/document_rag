@@ -1,0 +1,158 @@
+# Langfuse v3 셀프호스팅 스택 (내부망용)
+# 기동: docker compose -f infra/langfuse/docker-compose.yml up -d
+# 중지: docker compose -f infra/langfuse/docker-compose.yml down
+# 접속: http://localhost:3000 (첫 접속 시 관리자 계정 가입)
+#
+# ⚠️ 아래 시크릿은 로컬 개발용 랜덤값입니다. 운영(내부망) 배포 시 반드시 재생성하세요:
+#   SALT, NEXTAUTH_SECRET, CLICKHOUSE_PASSWORD, POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD
+#   (openssl rand -hex 16)
+
+name: langfuse
+
+x-langfuse-common: &langfuse-common-env
+  NODE_ENV: production
+  NEXTAUTH_URL: http://localhost:3000
+  NEXTAUTH_SECRET: REPLACE_ME_NEXTAUTH_SECRET
+  SALT: REPLACE_ME_SALT
+  DATABASE_URL: postgresql://postgres:REPLACE_ME_POSTGRES_PASSWORD@postgres:5432/langfuse
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: REPLACE_ME_CLICKHOUSE_PASSWORD
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio_admin
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: REPLACE_ME_MINIO_SECRET
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio_admin
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: REPLACE_ME_MINIO_SECRET
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  # 최초 기동 시 조직·프로젝트·관리자 계정·API 키 자동 생성 (부트스트랩)
+  LANGFUSE_INIT_ORG_ID: ragtest-org
+  LANGFUSE_INIT_ORG_NAME: ragtest
+  LANGFUSE_INIT_PROJECT_ID: ragtest
+  LANGFUSE_INIT_PROJECT_NAME: ragTest
+  LANGFUSE_INIT_USER_EMAIL: admin@ragtest.local
+  LANGFUSE_INIT_USER_NAME: admin
+  LANGFUSE_INIT_USER_PASSWORD: REPLACE_ME_ADMIN_PASSWORD
+  LANGFUSE_INIT_PROJECT_PUBLIC_KEY: REPLACE_ME_LANGFUSE_PUBLIC_KEY
+  LANGFUSE_INIT_PROJECT_SECRET_KEY: REPLACE_ME_LANGFUSE_SECRET_KEY
+  INGESTION_QUEUE_FLUSH_INTERVAL_MS: "1000"
+
+services:
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    restart: unless-stopped
+    depends_on: &langfuse-depends-on
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment: *langfuse-common-env
+
+  langfuse-web:
+    image: langfuse/langfuse:3
+    restart: unless-stopped
+    depends_on:
+      <<: *langfuse-depends-on
+    ports:
+      - "3000:3000"
+    environment: *langfuse-common-env
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.12
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: REPLACE_ME_CLICKHOUSE_PASSWORD
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: REPLACE_ME_POSTGRES_PASSWORD
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio_admin
+      MINIO_ROOT_PASSWORD: REPLACE_ME_MINIO_SECRET
+    ports:
+      - "9090:9090"
+    volumes:
+      - langfuse_minio_data:/minio_data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 minio_admin REPLACE_ME_MINIO_SECRET;
+        mc mb local/langfuse --ignore-existing;
+        mc anonymous set download local/langfuse;
+        exit 0;
+      "
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  langfuse_postgres_data:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_minio_data:
+  langfuse_redis_data:

@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from config import settings
+from src.utils.tracing import observe_if_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ class BaseAgent(ABC):
         # openrouter: 텍스트용 모델 우선, 없으면 멀티모달 기본값
         return getattr(settings, "openrouter_model", None) or getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")
 
+    @observe_if_enabled(name="llm_generation")
     @llm_retry_with_backoff()
     def _call_llm(self, prompt: str, temperature: float = 0.1, max_tokens: Optional[int] = None) -> str:
         """현재 provider에 맞는 외부 LLM 호출"""
