@@ -5,6 +5,7 @@ from langchain_community.retrievers import BM25Retriever
 from config import settings
 from src.embeddings import EmbeddingModel
 from src.utils import TextProcessor
+from src.utils.tracing import observe_if_enabled, record_input, record_retriever_output
 import os
 import pickle
 import logging
@@ -23,6 +24,14 @@ try:
     from langchain_chroma import Chroma
 except ImportError:
     from langchain_community.vectorstores import Chroma
+
+
+def _retriever_sources(results: List[Tuple[Document, float]]) -> List[dict]:
+    """검색 결과를 Langfuse retriever 관측용 요약(출처·점수)으로 변환한다."""
+    return [
+        {"source": getattr(doc, "metadata", {}).get("source", "?"), "score": round(float(score), 4)}
+        for doc, score in results
+    ]
 
 
 class EnhancedVectorDatabase:
@@ -130,6 +139,7 @@ class EnhancedVectorDatabase:
         # TextProcessor를 사용하여 텍스트 정제 및 불용어 제거
         return TextProcessor.clean_text(text, remove_stopwords=True)
 
+    @observe_if_enabled(name="vector-search", as_type="retriever", capture_input=False, capture_output=False)
     def search(self, query: str, k: int = None) -> List[Tuple[Document, float]]:
         """
         향상된 검색 메서드
@@ -142,12 +152,15 @@ class EnhancedVectorDatabase:
 
         if k is None:
             k = settings.k_documents
+        record_input({"query": query, "k": k})
 
         cache_key = f"{query}|{k}"
         cached = self._query_cache.get(cache_key)
         if cached is not None and time.time() - cached[0] < settings.query_cache_ttl_seconds:
             logger.debug(f"질의 캐시 히트: '{query[:50]}...'")
-            return list(cached[1])
+            results = list(cached[1])
+            record_retriever_output(_retriever_sources(results))
+            return results
 
         try:
             # 하이브리드 검색 사용 여부 확인
@@ -160,6 +173,7 @@ class EnhancedVectorDatabase:
             return []
 
         self._store_query_cache(cache_key, results)
+        record_retriever_output(_retriever_sources(results))
         return results
 
     def _store_query_cache(self, cache_key: str, results: List[Tuple[Document, float]]) -> None:

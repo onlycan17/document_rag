@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from uuid import uuid4
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -35,6 +36,9 @@ class AssistantResponse:
 def render_chat_interface(rag_chain: RAGChain, sidebar_config: Dict[str, Any]) -> None:
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "langfuse_session_id" not in st.session_state:
+        # 브라우저 세션당 하나의 대화 ID — Langfuse에서 대화 단위 그룹핑에 사용
+        st.session_state.langfuse_session_id = str(uuid4())
     _display_chat_history()
     _handle_chat_input(rag_chain, sidebar_config)
 
@@ -91,7 +95,7 @@ def _generate_assistant_response(
                 response.error = stream_result.error
         else:
             with st.spinner("답변을 생성하는 중..."):
-                sync_result = rag_chain.invoke(prompt)
+                sync_result = rag_chain.invoke(prompt, session_id=st.session_state.langfuse_session_id)
             response.text, response.context_documents, response.metadata = _normalize_sync_result(sync_result)
         response.processing_time = time.time() - start_time
         if response.text and sidebar_config.get("extract_images", True):
@@ -113,7 +117,7 @@ def _get_stream_generator(rag_chain: RAGChain, prompt: str):
     if not hasattr(rag_chain, "stream_query"):
         return None
     try:
-        return rag_chain.stream_query(prompt)
+        return rag_chain.stream_query(prompt, session_id=st.session_state.langfuse_session_id)
     except Exception:
         return None
 

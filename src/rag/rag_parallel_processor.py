@@ -7,6 +7,7 @@
 
 import asyncio
 import concurrent.futures
+import contextvars
 from typing import List, Dict, Any, Optional, Callable
 from langchain.schema import Document
 from dataclasses import dataclass
@@ -196,9 +197,14 @@ class ParallelRAGProcessor:
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # 모든 청크에 대한 태스크 생성
+            # why: run_in_executor는 contextvars를 복사하지 않아 Langfuse 관측이 트레이스에서 분리된다
             tasks = []
             for chunk in chunks:
-                task = loop.run_in_executor(executor, self._process_single_chunk, chunk, query, rag_chain_func)
+                ctx = contextvars.copy_context()
+                task = loop.run_in_executor(
+                    executor,
+                    lambda c=chunk, ctx=ctx: ctx.run(self._process_single_chunk, c, query, rag_chain_func),
+                )
                 tasks.append(task)
 
             # 모든 태스크 완료 대기 (타임아웃 적용)

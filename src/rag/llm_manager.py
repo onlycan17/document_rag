@@ -13,6 +13,7 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 from config import settings
 from src.models import ModelRegistry
+from src.utils.tracing import langfuse_callbacks
 from src.constants import (
     MODEL_PROMPT_TOKENS,
     MODEL_MIN_CONTEXT,
@@ -79,7 +80,7 @@ class LLMManager:
         )
 
         # 스트리밍 콜백 설정
-        callbacks = [StreamingStdOutCallbackHandler()] if streaming else []
+        callbacks = ([StreamingStdOutCallbackHandler()] if streaming else []) + langfuse_callbacks()
 
         # 현재 모델 정보 저장
         self.current_provider = provider

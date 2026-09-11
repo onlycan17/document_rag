@@ -1,5 +1,13 @@
 # 변경 이력(Changelog)
 
+## 2026-09-11 (관측성 고도화 — langfuse/skills 계측 규약 적용)
+- feat(tracing): 트레이스 계층 구조 완성 — `query_engine.query/stream_query`를 rag-query 트레이스 루트로 만들고(본문 `_query_impl` 분리), `vector_db.search`에 retriever 관측(출처·점수 기록), LangChain 메인 답변 체인에 `langfuse.langchain.CallbackHandler` 부착(`llm_manager.create_llm`). 메인 RAG 흐름은 `prompt_template | ChatOpenAI` 경로라 `BaseAgent._call_llm` 데코레이션만으로는 generation이 기록되지 않던 문제 해결
+- fix(tracing): langfuse 4.15.2에는 `update_current_observation`/`update_current_trace` 메서드가 없어 모든 관측 갱신이 무음 실패(model=null·usage=0·trace input 누락) — `_patch_current_observation` 헬퍼로 `update_current_generation`/`update_current_span`을 올바르게 호출하도록 수정. 트레이스 루트 input 기록 API는 해당 버전에 존재하지 않아 제거(YAGNI)
+- feat(tracing): 세션 추적 — UI에서 `langfuse_session_id`(uuid4) 생성, `query/stream_query/invoke`에 session_id 전달 경로 추가(`rag_chain`·`query_engine`), `propagate_trace_attributes`로 trace에 session 연결. 대화 단위 트레이스 그룹핑 가능
+- fix(rag): `rag_parallel_processor`의 `run_in_executor` 워커에 `contextvars.copy_context().run` 래핑 — 스레드 경계에서 Langfuse 관측이 트레이스에서 분리(고아 generation)되는 문제 예방
+- 설치: `github.com/langfuse/skills` 공식 AI 스킬(`~/.agents/skills/langfuse/`) — 베이스라인 감사(모델명·토큰·계층·session) 기반 반복 개선 워크플로우 적용
+- 검증: E2E 질의 1회 → Langfuse API 감사에서 rag-query span 하위에 generation(qwen3-vl-235b, input 8,760/output 772/total 9,532 토큰) + retriever(출처·점수 12건) 중첩, sessionId 연결 확인. 오프라인 회귀 190 passed, ruff 통과
+
 ## 2026-09-11 (관측성 — Langfuse 셀프호스팅 도입)
 - feat(observability): Langfuse v3 셀프호스팅 스택 신설 — LangSmith(SaaS)는 내부망 미대응이므로 자체 호스팅 가능한 오픈소스 대안 채택. `infra/langfuse/docker-compose.yml` (web·worker·postgres·clickhouse·minio·redis, 로컬 개발용 시크릿 내장 — 운영 시 재생성 안내 포함)
 - feat(tracing): `src/utils/tracing.py` 헬퍼 — `observe_if_enabled` 데코레이터, 비활성화·SDK 미설치 시 no-op 폴백. `BaseAgent._call_llm`에 `llm_generation` span 연결로 전 LLM 호출 경로(OpenRouter/OpenAI/Google/Anthropic) 트레이싱

@@ -102,26 +102,28 @@ class RAGChain:
         """현재 모델의 최대 컨텍스트 길이 반환"""
         return self.llm_manager.get_max_context_length_for_model(self.current_provider, self.current_model)
 
-    def query(self, question: str, k_documents: int = 8) -> Dict[str, Any]:
+    def query(self, question: str, k_documents: int = 8, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         질문에 대한 답변 생성 (비스트리밍)
 
         Args:
             question: 사용자 질문
             k_documents: 검색할 문서 수 (현재는 설정값 사용)
+            session_id: Langfuse 트레이싱용 대화 세션 ID (선택)
 
         Returns:
             답변 정보가 포함된 딕셔너리
         """
         # k_documents 파라미터는 현재 설정값을 사용하므로 무시됨
-        return self.query_engine.query(question)
+        return self.query_engine.query(question, session_id=session_id)
 
-    def invoke(self, question: str) -> Dict[str, Any]:
+    def invoke(self, question: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         LangChain Runnable 인터페이스 호환성을 위한 invoke 메서드
 
         Args:
             question: 사용자 질문 (문자열 또는 딕셔너리)
+            session_id: Langfuse 트레이싱용 대화 세션 ID (선택)
 
         Returns:
             답변 정보가 포함된 딕셔너리
@@ -130,21 +132,24 @@ class RAGChain:
         if isinstance(question, dict):
             question = question.get("question", question.get("input", str(question)))
 
-        return self.query(question)
+        return self.query(question, session_id=session_id)
 
-    def stream_query(self, question: str, k_documents: int = 8) -> Generator[Dict[str, Any], None, None]:
+    def stream_query(
+        self, question: str, k_documents: int = 8, session_id: Optional[str] = None
+    ) -> Generator[Dict[str, Any], None, None]:
         """
         질문에 대한 답변을 스트리밍으로 생성
 
         Args:
             question: 사용자 질문
             k_documents: 검색할 문서 수 (현재는 설정값 사용)
+            session_id: Langfuse 트레이싱용 대화 세션 ID (선택)
 
         Yields:
             스트리밍 응답 청크
         """
         # k_documents 파라미터는 현재 설정값을 사용하므로 무시됨
-        yield from self.query_engine.stream_query(question)
+        yield from self.query_engine.stream_query(question, session_id=session_id)
 
     def update_llm(self, provider: str, model: Optional[str] = None):
         """

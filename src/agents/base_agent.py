@@ -16,9 +16,19 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from config import settings
-from src.utils.tracing import observe_if_enabled
+from src.utils.tracing import observe_if_enabled, record_generation
 
 logger = logging.getLogger(__name__)
+
+
+def _usage_details(data: dict) -> Optional[dict]:
+    """OpenAI 호환 응답의 usage 필드를 Langfuse usage_details로 변환 (없으면 None)."""
+    usage = data.get("usage") or {}
+    input_tokens = usage.get("prompt_tokens")
+    output_tokens = usage.get("completion_tokens")
+    if input_tokens is None and output_tokens is None:
+        return None
+    return {"input": input_tokens, "output": output_tokens}
 
 
 def llm_retry_with_backoff():
@@ -98,12 +108,17 @@ class BaseAgent(ABC):
         # openrouter: 텍스트용 모델 우선, 없으면 멀티모달 기본값
         return getattr(settings, "openrouter_model", None) or getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")
 
-    @observe_if_enabled(name="llm_generation")
+    @observe_if_enabled(name="llm-generation", as_type="generation", capture_input=False)
     @llm_retry_with_backoff()
     def _call_llm(self, prompt: str, temperature: float = 0.1, max_tokens: Optional[int] = None) -> str:
         """현재 provider에 맞는 외부 LLM 호출"""
         if not max_tokens:
             max_tokens = self.max_tokens
+        record_generation(
+            model=self.model_name or self._default_model_for(self.provider),
+            input={"prompt": prompt},
+            metadata={"provider": self.provider, "temperature": temperature, "max_tokens": int(max_tokens)},
+        )
         if self.provider == "openai":
             return self._call_openai(prompt, temperature=temperature, max_tokens=max_tokens)
         if self.provider == "google":
@@ -131,6 +146,7 @@ class BaseAgent(ABC):
         if resp.status_code != 200:
             raise Exception(f"OpenAI 오류: {resp.status_code} - {resp.text}")
         data = resp.json()
+        record_generation(model=model, usage_details=_usage_details(data))
         return (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
 
     def _call_google(self, prompt: str, temperature: float, max_tokens: int) -> str:
@@ -217,6 +233,7 @@ class BaseAgent(ABC):
         if resp.status_code != 200:
             raise Exception(f"OpenRouter 오류: {resp.status_code} - {resp.text}")
         data = resp.json()
+        record_generation(model=model, usage_details=_usage_details(data))
         return (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
 
     def _create_korean_prompt(self, task_description: str, content: str, examples: Optional[List[str]] = None) -> str:

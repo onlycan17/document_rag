@@ -5,12 +5,13 @@
 쿼리 전처리, 검색, 컨텍스트 처리, 응답 생성을 포함합니다.
 """
 
-from typing import List, Dict, Any, Generator
+from typing import List, Dict, Any, Generator, Optional
 import logging
 
 from config import settings
 from src.utils import TextProcessor
 from src.utils.answer_formatter import AnswerFormatter
+from src.utils.tracing import observe_if_enabled, propagate_trace_attributes, record_input
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,14 @@ class QueryEngine:
         self.chain = chain
         self.streaming_chain = streaming_chain
 
-    def query(self, question: str) -> Dict[str, Any]:
+    @observe_if_enabled(name="rag-query", capture_input=False)
+    def query(self, question: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """향상된 질문 처리 트레이스 루트 (검색→컨텍스트 처리→생성을 하위 관측으로 계층화)"""
+        record_input({"question": question})
+        with propagate_trace_attributes(session_id=session_id):
+            return self._query_impl(question)
+
+    def _query_impl(self, question: str) -> Dict[str, Any]:
         """
         향상된 질문 처리 (대량 문서 지원)
         - 쿼리 전처리 및 확장
@@ -117,7 +125,14 @@ class QueryEngine:
                 "search_info": {},
             }
 
-    def stream_query(self, question: str) -> Generator[Dict[str, Any], None, None]:
+    @observe_if_enabled(name="rag-query", capture_input=False)
+    def stream_query(self, question: str, session_id: Optional[str] = None) -> Generator[Dict[str, Any], None, None]:
+        """스트리밍 질문 처리 트레이스 루트 (query와 동일한 계층 구조)"""
+        record_input({"question": question})
+        with propagate_trace_attributes(session_id=session_id):
+            yield from self._stream_query_impl(question)
+
+    def _stream_query_impl(self, question: str) -> Generator[Dict[str, Any], None, None]:
         """
         스트리밍 방식으로 질문 처리
         실시간으로 답변을 생성하여 yield 합니다.

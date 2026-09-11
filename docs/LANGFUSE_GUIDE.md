@@ -7,12 +7,22 @@ LLM 관측 도구 **Langfuse v3**를 채택했다. 검색→생성 전 과정의
 ## 아키텍처
 
 ```
-[앱: BaseAgent._call_llm]
-        │  @observe (src/utils/tracing.py)
+[RAG 질의 흐름 (트레이스 계층)]
+rag-query (span, trace 루트 — query_engine)
+ ├─ vector-search (retriever — vector_db.search, 출처·점수 기록)
+ └─ ChatOpenAI (generation — LangChain CallbackHandler, 모델명·토큰 자동 기록)
+
+[문서 전처리 흐름]
+llm-generation (generation — BaseAgent._call_llm, 모델명·토큰 기록)
+
+        │  src/utils/tracing.py 헬퍼
         ▼
 [Langfuse SDK] ──OTLP──▶ [langfuse-web :3000] ──▶ [ClickHouse/Postgres/MinIO/Redis]
         (docker compose: infra/langfuse/)
 ```
+
+대화별 묶음은 Streamlit 세션 ID(`st.session_state.langfuse_session_id`)를
+trace의 `sessionId`로 전파한다(`propagate_trace_attributes`).
 
 ## 기동/중지/상태
 
@@ -46,8 +56,19 @@ docker compose -f infra/langfuse/docker-compose.yml down -v
   무거워 제외 — 미설치 시 트레이싱만 꺼지고 앱은 정상 동작)
 - `.env`의 키로 활성화: `LANGFUSE_ENABLED=true` + `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`
   + `LANGFUSE_HOST=http://localhost:3000`
-- 코드 연결은 한 곳: `src/agents/base_agent.py`의 `_call_llm`에
-  `@observe_if_enabled(name="llm_generation")` 적용 (`src/utils/tracing.py`)
+- 계측 진입점은 `src/utils/tracing.py` 한 곳 (관측 규약: langfuse/skills instrumentation 참조
+  — 함수 인자 자동 수집 금지, `record_*`로 필요한 값만 명시 기록):
+  - `observe_if_enabled(name, as_type, capture_input, capture_output)`: 조건부 @observe 데코레이터
+  - `record_generation(model, input, usage_details, metadata)`: generation에 모델명·토큰 기록
+  - `record_input` / `record_retriever_output`: span/retriever에 입력·출처 요약 기록
+  - `propagate_trace_attributes(session_id, user_id)`: 트레이스에 세션·사용자 전파
+  - `langfuse_callbacks()`: LangChain 체인용 CallbackHandler 목록 (`llm_manager.create_llm`에서 부착)
+- 계측 위치: `query_engine.query/stream_query`(rag-query 루트), `vector_db.search`(vector-search
+  retriever), `llm_manager.create_llm`(LangChain generation), `base_agent._call_llm`(전처리 에이전트
+  generation), `chat_interface.py`(세션 ID 생성·전달)
+- 주의: langfuse 4.x 클라이언트에는 `update_current_observation`/`update_current_trace` 메서드가
+  없다 — generation은 `update_current_generation`, span/retriever는 `update_current_span`으로 갱신
+  (tracing.py의 `_patch_current_observation`이 처리)
 - Langfuse 미기동/키 미설정/SDK 미설치여도 앱은 정상 동작(no-op 폴백)
 - LangSmith(`LANGSMITH_TRACING`)와 독립적 — 외부망 개발 시에만 켜면 됨
 
@@ -69,6 +90,6 @@ docker compose -f infra/langfuse/docker-compose.yml down -v
 
 ## 후속 확장 (필요 시)
 
-- 검색(retrieval) 단계 트레이싱: `query_engine`에 `@observe_if_enabled` 추가
-- LangChain 컴포넌트(임베딩 등): `langfuse.langchain.CallbackHandler`를 콜백으로 전달
 - 평가 하네스(`scripts/eval/retrieval_eval.py`) 결과를 Langfuse Dataset으로 업로드
+- 병렬 처리 경로(`rag_parallel_processor`) 활성화 시 이미 컨텍스트 전파 수정이
+  반영되어 있음 — `run_in_executor`는 contextvars를 복사하지 않아 `copy_context().run`으로 감쌈
