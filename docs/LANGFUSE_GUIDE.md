@@ -42,6 +42,8 @@ docker compose -f infra/langfuse/docker-compose.yml down -v
 
 ## 앱 연결 방식
 
+- **SDK 선택 설치**: `pip install langfuse==4.15.2` (requirements.txt에서 의존성 해석이
+  무거워 제외 — 미설치 시 트레이싱만 꺼지고 앱은 정상 동작)
 - `.env`의 키로 활성화: `LANGFUSE_ENABLED=true` + `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`
   + `LANGFUSE_HOST=http://localhost:3000`
 - 코드 연결은 한 곳: `src/agents/base_agent.py`의 `_call_llm`에
