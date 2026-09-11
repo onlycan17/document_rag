@@ -1,5 +1,13 @@
 # 변경 이력(Changelog)
 
+## 2026-09-11 (관측성 — Langfuse 셀프호스팅 도입)
+- feat(observability): Langfuse v3 셀프호스팅 스택 신설 — LangSmith(SaaS)는 내부망 미대응이므로 자체 호스팅 가능한 오픈소스 대안 채택. `infra/langfuse/docker-compose.yml` (web·worker·postgres·clickhouse·minio·redis, 로컬 개발용 시크릿 내장 — 운영 시 재생성 안내 포함)
+- feat(tracing): `src/utils/tracing.py` 헬퍼 — `observe_if_enabled` 데코레이터, 비활성화·SDK 미설치 시 no-op 폴백. `BaseAgent._call_llm`에 `llm_generation` span 연결로 전 LLM 호출 경로(OpenRouter/OpenAI/Google/Anthropic) 트레이싱
+- 부트스트랩: `LANGFUSE_INIT_*` 환경변수로 조직·프로젝트·관리자 계정·API 키 자동 프로비저닝 (UI 가입 불필요). 키는 프로젝트 `.env`(커밋 제외)에만 저장
+- 가이드: `docs/LANGFUSE_GUIDE.md` 신설 (기동·UI·내부망 배포 체크리스트·문제 해결)
+- 검증: 실제 LLM 호출 1회 → Langfuse API에서 `llm_generation` 트레이스 1건 확인, 오프라인 회귀 190 passed, ruff 통과
+- 참고: v3 스택은 `LANGFUSE_S3_*`·`REDIS_HOST/PORT` 등 최신 env 명명 필요, 단일 노드는 `CLICKHOUSE_CLUSTER_ENABLED=false` — 삽질 기록은 compose 주석과 가이드 참조
+
 ## 2026-09-11 (RAG 검색 품질 개선 — 임베딩 분리·평가 하네스)
 - feat(embeddings): 문서·질의 임베딩 모델 분리 — 문서는 `solar-embedding-1-large-passage`(신규 `UPSTAGE_EMBEDDING_DOC_MODEL`), 질의는 기존 `-query` 모델 사용(업스테이지 권장 구성). OpenAI는 구분 모델이 없어 동일 모델 사용. 벡터 DB 전체 재구축 필요(완료: converted_docs 마크다운 3종, 935 청크)
 - feat(eval): 검색 평가 하네스 신설 — 골든 셋(`tests/eval/golden_retrieval.json` 10질의), 순수 지표 함수 `src/utils/retrieval_metrics.py`(best_relevant_rank·Hit@k·MRR, 오프라인 테스트 6건), 실행 스크립트 `scripts/eval/retrieval_eval.py`. 측정 없던 튜닝에서 숫자 기반 검증으로 전환
