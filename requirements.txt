@@ -60,4 +60,4 @@ protobuf==4.25.8
 # - poppler-utils (for PDF to image conversion)
 # These need to be installed separately using install_ocr.sh
 # LLM 관측(Langfuse) — 미설치 시 트레이싱만 비활성화(no-op), 앱 동작에는 영향 없음
-langfuse>=3.0.0
+langfuse==4.15.2
