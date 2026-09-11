@@ -1,4 +1,4 @@
-# 🤖 RAG 기반 공공기관 정보시스템 챗봇
+# 🤖 문서 전처리 자동화 및 RAG 기반 챗봇
 
 행정기관 및 공공기관 정보시스템 구축·운영 지침 문서를 활용한 RAG(Retrieval-Augmented Generation) 챗봇 시스템입니다.
 
