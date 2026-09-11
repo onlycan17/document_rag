@@ -25,8 +25,9 @@ def test_masks_bearer_token_pattern(monkeypatch):
 
 def test_masks_google_key_pattern(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    masked = mask_secrets("구글 키 REDACTED_GOOGLE_KEY 노출")
-    assert "REDACTED_GOOGLE_KEY" not in masked
+    google_key = "AIza" + "SyA1234567890abcdefghijklmnopqrstuv"
+    masked = mask_secrets(f"구글 키 {google_key} 노출")
+    assert google_key not in masked
 
 
 def test_normal_text_untouched(monkeypatch):
