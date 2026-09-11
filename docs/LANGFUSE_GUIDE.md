@@ -88,8 +88,18 @@ docker compose -f infra/langfuse/docker-compose.yml down -v
 | 트레이스가 안 보임 | `.env`의 `LANGFUSE_ENABLED=true`와 키 확인, 앱 프로세스 재시작 |
 | 키 분실 | UI에서 재발급하거나 compose의 `LANGFUSE_INIT_PROJECT_*` 변경 후 `down -v` 재기동 |
 
+## 평가 결과 업로드
+
+```bash
+python scripts/eval/retrieval_eval.py --upload --k 5
+```
+
+- 골든 셋이 `retrieval-golden` Dataset으로 등록된다(질의 기준 중복 생성 방지)
+- 실행마다 사례별 트레이스에 `hit@k`·`best_rank`(미검색=0) 점수, 요약 트레이스에
+  `hit@k`·`mrr` 점수가 기록되어 시계열로 누적된다
+- 실행 단위는 `retrieval-eval-<타임스탬프>` 세션으로 묶여 UI에서 회기 간 비교 가능
+
 ## 후속 확장 (필요 시)
 
-- 평가 하네스(`scripts/eval/retrieval_eval.py`) 결과를 Langfuse Dataset으로 업로드
 - 병렬 처리 경로(`rag_parallel_processor`) 활성화 시 이미 컨텍스트 전파 수정이
   반영되어 있음 — `run_in_executor`는 contextvars를 복사하지 않아 `copy_context().run`으로 감쌈

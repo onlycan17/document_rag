@@ -1,5 +1,10 @@
 # 변경 이력(Changelog)
 
+## 2026-09-11 (관측성 — 검색 평가 결과 Langfuse Dataset 업로드)
+- feat(eval): `retrieval_eval.py`에 `--upload` 플래그 신설 — 골든 셋을 `retrieval-golden` Dataset으로 등록(질의 기준 중복 생성 방지), 실행마다 사례별 트레이스(`hit@k`·`best_rank`, 미검색=0)와 요약 트레이스(`hit@k`·`mrr`) 점수를 NUMERIC으로 기록
+- feat(tracing): `record_output` 헬퍼 추가(record_input과 대칭), 평가 실행은 `retrieval-eval-<타임스탬프>` 세션으로 묶어 UI 회기 비교 지원
+- 검증: 실제 실행(Hit@5 100% / MRR 0.875) 후 API 감사 — Dataset 아이템 10건, 세션 내 트레이스 11건(사례 10+요약 1), 점수 22건(hit@5×11·best_rank×10·mrr×1) 연결 확인. 오프라인 회귀 190 passed, ruff 통과
+
 ## 2026-09-11 (관측성 고도화 — langfuse/skills 계측 규약 적용)
 - feat(tracing): 트레이스 계층 구조 완성 — `query_engine.query/stream_query`를 rag-query 트레이스 루트로 만들고(본문 `_query_impl` 분리), `vector_db.search`에 retriever 관측(출처·점수 기록), LangChain 메인 답변 체인에 `langfuse.langchain.CallbackHandler` 부착(`llm_manager.create_llm`). 메인 RAG 흐름은 `prompt_template | ChatOpenAI` 경로라 `BaseAgent._call_llm` 데코레이션만으로는 generation이 기록되지 않던 문제 해결
 - fix(tracing): langfuse 4.15.2에는 `update_current_observation`/`update_current_trace` 메서드가 없어 모든 관측 갱신이 무음 실패(model=null·usage=0·trace input 누락) — `_patch_current_observation` 헬퍼로 `update_current_generation`/`update_current_span`을 올바르게 호출하도록 수정. 트레이스 루트 input 기록 API는 해당 버전에 존재하지 않아 제거(YAGNI)

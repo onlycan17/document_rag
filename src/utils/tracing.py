@@ -97,6 +97,11 @@ def record_input(input: dict) -> None:
     _patch_current_observation("span", input=input)
 
 
+def record_output(output: dict) -> None:
+    """현재 observation의 출력을 명시 설정한다 (record_input과 대칭)."""
+    _patch_current_observation("span", output=output)
+
+
 def langfuse_callbacks() -> list:
     """LangChain 체인용 Langfuse CallbackHandler 목록을 반환한다. 비활성 시 빈 목록.
 
