@@ -25,10 +25,11 @@
   - 대용량 컨텍스트 처리(ContextChunker, Summarizer, 병렬 처리)
   - 프롬프트 템플릿(Qwen ChatML/일반 템플릿)
   - 스트리밍/비스트리밍 체인
-- `src/utils/answer_formatter`(신규 예정): RAG 응답을 구조화(`핵심 요약/상세 설명/참고 자료`)하고 글머리표/표/문단 간 간격을 자동으로 정리하는 계층. 스트리밍 및 동기 응답 모두에서 재사용할 예정.
+- `src/utils/answer_formatter`: RAG 응답을 `핵심 요약/상세 설명/참고 자료` 구조로 정리하고 글머리표/표/문단 간격을 보정하는 계층. 스트리밍·동기 응답에서 공통 사용.
+- `src/utils/answer_render`: 포맷된 응답을 화면용으로 정규화(붙은 헤딩·불릿 분리)하고 `[출처 N]` 뱃지·강조를 안전하게 HTML로 변환하며 섹션으로 분해하는 순수 헬퍼.
 - `config.py`: 전역 설정(모델/토큰/DB 경로/검색 옵션 등).
 - `run_rag.py`: 실행 허브(앱 실행/벡터DB 관리/테스트/설정).
-- `app.py`: Streamlit UI(사이드바 옵션/스트리밍 토글 등).
+- `app.py`: Streamlit UI(사이드바 옵션/스트리밍 토글 등). 커스텀 CSS는 `ui/styles.py`의 `inject_custom_css()`로 주입.
 
 ## 3. 데이터 흐름(간단 다이어그램)
 

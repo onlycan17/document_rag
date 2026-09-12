@@ -52,17 +52,10 @@ class MainController:
         """
         try:
             rag_chain = self.safe_get_rag_chain()
-
-            # 모델 변경
-            success = rag_chain.update_llm(provider, model)
-
-            if success:
-                # 세션 상태 업데이트
-                st.session_state.current_provider = provider
-                st.session_state.current_model = model
-                return True
-
-            return False
+            rag_chain.update_llm(provider, model)
+            st.session_state.current_provider = provider
+            st.session_state.current_model = model
+            return True
 
         except Exception as e:
             st.error(f"모델 부트스트랩 실패: {str(e)}")
@@ -82,7 +75,7 @@ class MainController:
             "use_ocr": sidebar_config.get("use_ocr", True),
             "use_agent_mode": sidebar_config.get("use_agent_mode", False),
             "enable_postprocessing": sidebar_config.get("enable_postprocessing", False),
-            "use_intelligent_extraction": sidebar_config.get("use_intelligent_extraction", True),  # 기본값: True
+            "use_intelligent_extraction": sidebar_config.get("intelligent_extraction", True),  # 기본값: True
             "selected_preprocessing_model": sidebar_config.get("selected_preprocessing_model", "local"),
         }
 

@@ -25,6 +25,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+UNKNOWN_OPENROUTER_MODEL_MAX_TOKENS = 16384
+
 
 class LLMManager:
     """
@@ -74,6 +76,13 @@ class LLMManager:
 
         # 모델별 최대 토큰 수 가져오기
         max_tokens = self.get_max_tokens_for_model(provider, actual_model) if actual_model else settings.max_tokens
+
+        if provider == "openrouter" and actual_model and ModelRegistry.get_model_config(actual_model) is None:
+            max_tokens = UNKNOWN_OPENROUTER_MODEL_MAX_TOKENS
+            logger.info(
+                f"미등록 OpenRouter 모델 '{actual_model}': 출력 토큰 {max_tokens} 사용 "
+                f"(기본 4096은 reasoning 토큰 소진으로 빈 답변 위험)"
+            )
 
         logger.info(
             f"LLM 초기화: provider={provider}, model={actual_model}, max_tokens={max_tokens}, streaming={streaming}"

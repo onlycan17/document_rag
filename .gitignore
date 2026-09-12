@@ -136,6 +136,7 @@ test_*.py
 !tests/test_preprocessing_helpers.py
 !tests/test_agent_pdf_converter_helpers.py
 !tests/test_pdf_heading_utils.py
+!tests/test_answer_render.py
 test_korean*.txt
 test_korean*.html
 test_small.pdf

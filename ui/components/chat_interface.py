@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 import streamlit as st
 
 from src.rag.rag_chain import RAGChain
+from src.utils.answer_render import format_inline_markup, split_answer_sections
 from src.utils.source_highlight import render_source_preview
 from ui.services.app_service import AppService
 from ui.services.streaming_service import process_streaming_response
@@ -30,7 +31,6 @@ class AssistantResponse:
     images: List[Dict[str, str]] = field(default_factory=list)
     processing_time: float = 0.0
     error: Optional[str] = None
-    text_rendered: bool = False
 
 
 def render_chat_interface(rag_chain: RAGChain, sidebar_config: Dict[str, Any]) -> None:
@@ -44,16 +44,22 @@ def render_chat_interface(rag_chain: RAGChain, sidebar_config: Dict[str, Any]) -
 
 
 def _display_chat_history() -> None:
+    if not st.session_state.messages:
+        st.subheader("문서에서 무엇을 찾아볼까요?")
+        st.write("왼쪽에서 문서를 추가한 뒤 궁금한 내용을 물어보세요. 답변의 출처도 함께 확인할 수 있습니다.")
+        st.caption("예: 이 문서의 핵심 내용을 요약해 주세요.")
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message.get("content", ""))
             if message.get("role") == "assistant":
+                render_assistant_content(message.get("content", ""))
                 _render_images(message.get("images", []))
                 _render_source_documents(message.get("context_documents", []), message.get("question", ""))
+            else:
+                st.markdown(message.get("content", ""))
 
 
 def _handle_chat_input(rag_chain: RAGChain, sidebar_config: Dict[str, Any]) -> None:
-    prompt = st.chat_input("질문을 입력하세요...")
+    prompt = st.chat_input("문서에 대해 질문하세요", key="chat_prompt")
     if not prompt:
         return
     _append_user_message(prompt)
@@ -90,9 +96,10 @@ def _generate_assistant_response(
             response.text = stream_result.answer
             response.context_documents = stream_result.context_documents
             response.metadata = {"search_info": stream_result.search_info}
-            response.text_rendered = stream_result.status != "error"
             if stream_result.status == "error":
                 response.error = stream_result.error
+            else:
+                response_placeholder.empty()
         else:
             with st.spinner("답변을 생성하는 중..."):
                 sync_result = rag_chain.invoke(prompt, session_id=st.session_state.langfuse_session_id)
@@ -131,9 +138,31 @@ def _normalize_sync_result(result: Any) -> tuple[str, List[Any], Dict[str, Any]]
     return str(result), [], {}
 
 
+def render_assistant_content(text: str) -> None:
+    summary_shown = False
+    references = []
+    for section in split_answer_sections(text):
+        if not section.body.strip():
+            continue
+        body = format_inline_markup(section.body)
+        if section.kind == "summary":
+            if not summary_shown:
+                st.markdown("#### 핵심 요약")
+                summary_shown = True
+            st.markdown(body, unsafe_allow_html=True)
+        elif section.kind == "details":
+            st.markdown(body, unsafe_allow_html=True)
+        elif section.kind == "references":
+            references.append(body)
+        else:
+            st.markdown(body, unsafe_allow_html=True)
+    if references:
+        with st.expander("참고 자료", expanded=False):
+            st.markdown("\n\n".join(references), unsafe_allow_html=True)
+
+
 def _render_assistant_output(response: AssistantResponse) -> None:
-    if not response.text_rendered:
-        st.markdown(response.text)
+    render_assistant_content(response.text)
     _render_images(response.images)
     if response.error:
         st.error(response.error)
@@ -200,28 +229,28 @@ def _display_performance_info(
 
 
 def render_chat_controls() -> None:
-    col1, col2, col3 = st.columns([1, 1, 2])
+    if not st.session_state.get("messages"):
+        return
+    col1, col2 = st.columns(2)
     with col1:
-        if st.button("🗑️ 채팅 기록 삭제", key="clear_chat"):
+        if st.button("새 대화", key="clear_chat"):
             st.session_state.messages = []
             st.rerun()
     with col2:
         export_data = AppService.generate_chat_export_data()
         st.download_button(
-            label="💾 채팅 내보내기",
+            label="대화 저장",
             data=(export_data.encode("utf-8") if export_data else b""),
             file_name=f"chat_history_{int(time.time())}.md",
             mime="text/markdown",
             key="download_chat",
             disabled=not export_data,
         )
-        if not export_data:
-            st.caption("내보낼 채팅 기록이 없습니다.")
-    with col3:
-        st.caption(f"총 {len(st.session_state.get('messages', []))}개의 메시지")
 
 
 def render_feedback_interface() -> None:
+    if not st.session_state.get("messages"):
+        return
     with st.expander("💬 피드백 보내기"):
         st.write("답변의 품질을 평가해주세요:")
         col1, col2 = st.columns(2)

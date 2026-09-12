@@ -204,6 +204,19 @@ class QueryEngine:
                 yield {"type": "content", "content": cleaned, "full_content": formatted_preview, "status": "streaming"}
 
             # 4. 스트리밍 완료 후 최종 정보 전송 (컨텍스트 [문서 n]과 출처 번호 일치)
+            if not full_response.strip():
+                logger.error("스트리밍 응답이 비어 있음 — 출력 토큰 한도를 reasoning에 소진했을 가능성")
+                yield {
+                    "type": "error",
+                    "content": (
+                        "모델이 빈 답변을 반환했습니다. 출력 토큰 한도를 추론에 모두 소진했을 가능성이 있습니다. "
+                        "다른 모델을 선택하거나 질문을 더 구체적으로 입력해 주세요."
+                    ),
+                    "sources": [],
+                    "status": "error",
+                }
+                return
+
             sources = self.document_processor.generate_enhanced_sources(prepared_docs)
             search_info = self.get_search_info(question, relevant_docs)
             formatted_full = self.answer_formatter.format(full_response, sources)

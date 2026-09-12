@@ -1,17 +1,21 @@
 """
 사이드바 컴포넌트 - 설정 및 모델 관리
+
+레이아웃 원칙: 자주 쓰는 것(문서 업로드, LLM 모델)만 펼치고,
+나머지 옵션은 접히는 expander로 정리한다.
 """
 
-import streamlit as st
 import os
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+import streamlit as st
 
 from config import settings
 from src.processing.preprocessing_factory import PreprocessingModelFactory
 from src.rag.rag_chain import RAGChain
-from src.utils.openrouter_models import search_openrouter_models
 from src.utils.logging_config import get_logger
+from src.utils.openrouter_models import search_openrouter_models
 
 logger = get_logger(__name__)
 
@@ -28,35 +32,33 @@ def render_sidebar(safe_get_vector_db, safe_get_rag_chain) -> Dict[str, Any]:
         Dict[str, Any]: 사이드바에서 설정된 모든 값들
     """
 
-    sidebar_config = {}
+    sidebar_config: Dict[str, Any] = {}
 
     with st.sidebar:
-        st.header("⚙️ 설정")
+        st.markdown("### 🤖 RAG 설정")
 
-        # 문서 관리 섹션
-        sidebar_config.update(_render_document_management())
+        # 1) 문서 업로드 — 핵심 작업이므로 항상 펼침
+        sidebar_config.update(_render_document_upload(safe_get_vector_db))
 
-        # 문서 전처리 섹션
-        sidebar_config.update(_render_text_preprocessing())
-
-        # 이미지 추출·OCR 섹션
-        sidebar_config.update(_render_image_extraction())
-
-        # 도메인 파일 업로드 섹션
-        sidebar_config.update(_render_document_upload(safe_get_vector_db, sidebar_config))
-
-        # 벡터 DB 상태 및 관리
-        sidebar_config.update(_render_vector_db_management(safe_get_vector_db, safe_get_rag_chain))
-
-        # LLM 모델 설정
+        # 2) LLM 모델 설정 — 핵심 작업이므로 항상 펼침
         sidebar_config.update(_render_llm_settings(safe_get_rag_chain))
+
+        # 3) 문서 처리 옵션 — 기본값이면 접어둠
+        with st.expander("⚙️ 문서 처리 옵션", expanded=False):
+            sidebar_config.update(_render_document_management())
+            sidebar_config.update(_render_text_preprocessing())
+            sidebar_config.update(_render_image_extraction())
+
+        # 4) 벡터 DB 관리 — 상태만 항상 표시, 관리 기능은 접음
+        with st.expander("🗄️ 벡터 DB 관리", expanded=False):
+            sidebar_config.update(_render_vector_db_management(safe_get_vector_db, safe_get_rag_chain))
 
     return sidebar_config
 
 
 def _render_document_management() -> Dict[str, Any]:
     """문서 관리 섹션 렌더링"""
-    st.subheader("📄 문서 관리")
+    st.markdown("**📄 문서 처리**")
 
     # OCR 옵션
     use_ocr = st.checkbox(
@@ -68,7 +70,7 @@ def _render_document_management() -> Dict[str, Any]:
 
     # 에이전트 모드 옵션
     use_agent_mode = st.checkbox(
-        "🤖 에이전트 모드 (고품질 처리)",
+        "에이전트 모드 (고품질 처리)",
         value=False,
         key="use_agent_mode_checkbox",
         help="LLM 에이전트를 활용한 지능형 문서 전처리를 사용합니다.\n• 한국어 텍스트 분절 문제 해결\n• 고유명사 완성도 향상\n• 문맥 연결성 개선\n⚠️ 처리 시간이 더 오래 걸립니다.",
@@ -76,11 +78,10 @@ def _render_document_management() -> Dict[str, Any]:
 
     # 2단계 품질 개선 옵션 (기본값: True)
     enable_postprocessing = st.checkbox(
-        "✨ PDF 변환 시 텍스트 품질 자동 개선 (권장)",
+        "PDF 변환 시 텍스트 품질 자동 개선 (권장)",
         value=True,
         key="enable_postprocessing_checkbox",
         help="PDF에서 추출한 텍스트의 품질을 자동으로 개선합니다.\n• 한국어 문장 연결 및 띄어쓰기 교정\n• 문맥 일관성 향상\n• 품질 점수 90점 이상 달성\n• 처리된 파일은 processed_docs 폴더에 저장됩니다.",
-        disabled=False,
     )
 
     return {"use_ocr": use_ocr, "use_agent_mode": use_agent_mode, "enable_postprocessing": enable_postprocessing}
@@ -88,11 +89,11 @@ def _render_document_management() -> Dict[str, Any]:
 
 def _render_text_preprocessing() -> Dict[str, Any]:
     """문서 전처리(텍스트) 섹션 렌더링 — 단순화: 기본값 고정, 콤보박스 제거"""
-    st.subheader("🤖 문서 전처리(텍스트)")
+    st.markdown("**🤖 전처리 모델**")
 
     # 1) 멀티모달 전처리 on/off만 노출 (모델 선택 제거)
     enable_multimodal = st.checkbox(
-        "🖼️ 멀티모달 전처리 활성화",
+        "멀티모달 전처리 활성화",
         value=st.session_state.get("enable_multimodal_preprocessing", settings.enable_multimodal_preprocessing),
         key="enable_multimodal_preprocessing_checkbox",
         help="이미지와 텍스트를 함께 분석하는 멀티모달 AI 모델을 사용합니다",
@@ -102,7 +103,6 @@ def _render_text_preprocessing() -> Dict[str, Any]:
     # 2) 전처리 모델은 설정 파일 기본값으로 고정
     fixed_provider = settings.preprocessing_model  # 예: 'openrouter'
 
-    # 상태 안내(어려운 용어: 멀티모달(설명: 이미지와 텍스트를 함께 처리하는 방식))
     provider_names = {
         "openai": "OpenAI GPT",
         "google": "Google Gemini",
@@ -131,8 +131,8 @@ def _render_text_preprocessing() -> Dict[str, Any]:
         text_model = "default"
         mm_model = "default"
 
-    st.info(f"전처리 모델은 기본 설정으로 고정됩니다 · 제공자: {provider_names.get(fixed_provider, fixed_provider)}")
-    st.caption(f"텍스트: {text_model} · 멀티모달: {mm_model} · 멀티모달: {'ON' if enable_multimodal else 'OFF'}")
+    st.caption(f"제공자: {provider_names.get(fixed_provider, fixed_provider)} · 텍스트: {text_model}")
+    st.caption(f"멀티모달: {mm_model} ({'ON' if enable_multimodal else 'OFF'})")
 
     # 참고 정보(지원 모델 리스트만 안내용으로 표시)
     _display_multimodal_models()
@@ -144,78 +144,29 @@ def _render_text_preprocessing() -> Dict[str, Any]:
     }
 
 
-def _display_preprocessing_status(selected_model: str, model_options: Dict[str, str], enable_multimodal: bool):
-    """텍스트 전처리 상태 표시"""
-    try:
-        if selected_model == "openai":
-            _model_name = settings.openai_model
-        elif selected_model == "google":
-            _model_name = settings.google_model
-        elif selected_model == "anthropic":
-            _model_name = settings.anthropic_model
-        elif selected_model == "openrouter":
-            try:
-                _model_name = settings.openrouter_model or settings.openrouter_mm_model
-            except Exception:
-                _model_name = "openrouter_default"
-        else:
-            _model_name = "default"
-        st.caption(
-            f"텍스트 전처리: {model_options[selected_model]} — "
-            f"모델: {_model_name} — 멀티모달: {'ON' if enable_multimodal else 'OFF'}"
-        )
-    except Exception as err:
-        logger.debug(f"멀티모달 상태 표시 생성 실패(무시): {err}")
-
-
 def _display_multimodal_models():
     """멀티모달 모델 정보 표시"""
     multimodal_models = PreprocessingModelFactory.get_multimodal_models()
-    with st.expander("📋 지원되는 멀티모달 모델"):
-        available_models = PreprocessingModelFactory.get_available_models()
-        for provider, models in multimodal_models.items():
-            is_available = available_models.get(provider, {}).get("available", False)
-            # OpenRouter는 별도 경로이므로 별도 가용성 판정
-            if provider == "openrouter":
-                try:
-                    is_available = (
-                        bool(settings.openrouter_api_key) and settings.image_analysis_provider.lower() == "openrouter"
-                    )
-                except Exception:
-                    is_available = False
-            if is_available and models:
-                st.write(f"**{provider}**: {', '.join(models)}")
-
-
-def _display_preprocessing_model_status(selected_model: str, enable_multimodal: bool):
-    """전처리 모델 상태 표시"""
-    api_key_exists = _check_api_key_exists(selected_model)
-    if api_key_exists:
-        st.success(f"✅ **{selected_model.upper()} 연결**: API 키 설정됨")
-    else:
-        st.error(f"❌ **{selected_model.upper()} 미연결**: API 키가 필요합니다")
-
-
-def _check_api_key_exists(provider: str) -> bool:
-    """API 키 존재 여부 확인"""
-    if provider == "openai":
-        return bool(settings.openai_api_key)
-    elif provider == "google":
-        return bool(settings.google_api_key)
-    elif provider == "anthropic":
-        return bool(settings.anthropic_api_key)
-    elif provider == "openrouter":
-        try:
-            return bool(settings.openrouter_api_key)
-        except Exception:
-            return False
-    return False
+    available_models = PreprocessingModelFactory.get_available_models()
+    shown = []
+    for provider, models in multimodal_models.items():
+        is_available = available_models.get(provider, {}).get("available", False)
+        if provider == "openrouter":
+            try:
+                is_available = (
+                    bool(settings.openrouter_api_key) and settings.image_analysis_provider.lower() == "openrouter"
+                )
+            except Exception:
+                is_available = False
+        if is_available and models:
+            shown.append(f"{provider}: {', '.join(models)}")
+    if shown:
+        st.caption("지원 모델 — " + " · ".join(shown))
 
 
 def _render_image_extraction() -> Dict[str, Any]:
     """이미지 추출·OCR 섹션 렌더링"""
-    st.divider()
-    st.subheader("🖼️ 이미지 추출·OCR")
+    st.markdown("**🖼️ 이미지 추출·OCR**")
 
     # 기본 이미지 추출 옵션
     extract_images = st.checkbox(
@@ -235,7 +186,7 @@ def _render_image_extraction() -> Dict[str, Any]:
 
     # 지능형 이미지 분석 옵션 (기본값: True)
     intelligent_extraction = st.checkbox(
-        "🧠 지능형 이미지 분석 (OpenRouter 경로)",
+        "지능형 이미지 분석 (OpenRouter 경로)",
         value=st.session_state.get("intelligent_extraction", True),
         key="intelligent_extraction_checkbox",
         help="AI 모델을 사용하여 이미지의 내용을 분석하고 설명을 생성합니다 (권장)",
@@ -257,21 +208,13 @@ def _render_image_extraction() -> Dict[str, Any]:
     }
 
 
-def _render_document_upload(safe_get_vector_db, preprocessing_settings) -> Dict[str, Any]:
+def _render_document_upload(safe_get_vector_db) -> Dict[str, Any]:
     """문서 업로드 섹션 렌더링"""
-    st.divider()
-    st.subheader("📁 문서 업로드")
-
-    # 전처리 설정 표시
-    if preprocessing_settings.get("use_agent_mode", False):
-        st.info("🤖 **에이전트 모드 활성화**: 고품질 전처리 사용 중")
-
-    if preprocessing_settings.get("enable_postprocessing", False):
-        st.info("✨ **2단계 품질 개선 활성화**: PDF 변환 후 자동으로 텍스트 품질을 개선합니다.")
+    st.markdown("**📁 문서 업로드**")
 
     # 파일 업로드 위젯
     uploaded_files = st.file_uploader(
-        "문서 업로드 (TXT, MD, PDF, DOCX) 🆕 이미지 추출 지원",
+        "TXT, MD, PDF, DOCX (이미지 추출 지원)",
         type=["txt", "md", "pdf", "docx"],
         accept_multiple_files=True,
         help="PDF/DOCX 파일의 이미지도 자동 추출됩니다",
@@ -279,18 +222,18 @@ def _render_document_upload(safe_get_vector_db, preprocessing_settings) -> Dict[
 
     # 파일 처리 버튼 및 로직
     if uploaded_files:
-        if st.button("문서 처리 및 저장"):
+        if st.button("문서 처리 및 저장", type="primary", use_container_width=True):
             from ui.components.file_uploader import _process_uploaded_files
             from src.utils.document_processor import DocumentProcessor
 
             # 디렉토리 준비
             DocumentProcessor.prepare_directories()
 
-            # 파일 처리 실행
-            _process_uploaded_files(uploaded_files, safe_get_vector_db, preprocessing_settings)
+            # 파일 처리 실행 (전처리 설정은 세션 상태의 사이드바 설정 사용)
+            _process_uploaded_files(uploaded_files, safe_get_vector_db, st.session_state.get("sidebar_config", {}))
 
     # 기존 domain.md 파일 로드 버튼
-    if st.button("domain.md 파일 로드"):
+    if st.button("domain.md 파일 로드", use_container_width=True):
         domain_path = "./domain.md"
         if os.path.exists(domain_path):
             # 진행 상황 표시
@@ -325,10 +268,9 @@ def _render_document_upload(safe_get_vector_db, preprocessing_settings) -> Dict[
 
 def _render_vector_db_management(safe_get_vector_db, safe_get_rag_chain) -> Dict[str, Any]:
     """벡터 DB 상태 및 관리 섹션 렌더링"""
-    st.divider()
     vector_db = safe_get_vector_db()
     doc_count = vector_db.get_document_count()
-    st.info(f"💾 저장된 문서 청크: {doc_count}개")
+    st.caption(f"💾 저장된 문서 청크: **{doc_count}개**")
 
     # 로그 뷰어 (확장 가능)
     _render_log_viewer()
@@ -340,48 +282,45 @@ def _render_vector_db_management(safe_get_vector_db, safe_get_rag_chain) -> Dict
 
 
 def _render_log_viewer():
-    """로그 뷰어 렌더링"""
-    with st.expander("📋 처리 로그 보기"):
-        LOG_FILE_PATTERN = "logs/rag_app_{date}.log"
-        MAX_LOG_LINES_DISPLAY = 50
+    """로그 뷰어 렌더링 (expander 중첩 불가 → 체크박스 토글)"""
+    if not st.checkbox("📋 처리 로그 보기", key="sidebar_log_viewer_toggle"):
+        return
 
-        log_file = LOG_FILE_PATTERN.format(date=datetime.now().strftime("%Y%m%d"))
-        if os.path.exists(log_file):
-            with open(log_file, "r", encoding="utf-8") as f:
-                # 최근 N줄만 표시
-                lines = f.readlines()
-                recent_lines = lines[-MAX_LOG_LINES_DISPLAY:] if len(lines) > MAX_LOG_LINES_DISPLAY else lines
-                st.text("".join(recent_lines))
-        else:
-            st.text("로그 파일이 없습니다.")
+    LOG_FILE_PATTERN = "logs/rag_app_{date}.log"
+    MAX_LOG_LINES_DISPLAY = 50
+
+    log_file = LOG_FILE_PATTERN.format(date=datetime.now().strftime("%Y%m%d"))
+    if os.path.exists(log_file):
+        with open(log_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            recent_lines = lines[-MAX_LOG_LINES_DISPLAY:] if len(lines) > MAX_LOG_LINES_DISPLAY else lines
+            st.text("".join(recent_lines))
+    else:
+        st.text("로그 파일이 없습니다.")
 
 
 def _render_db_reset_buttons(safe_get_vector_db, safe_get_rag_chain):
     """벡터 DB 초기화 버튼들 렌더링"""
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("벡터 DB 초기화", type="secondary", key="sidebar_clear_db_btn"):
-            st.session_state.show_clear_confirm = True
+    if st.button("벡터 DB 초기화", type="secondary", use_container_width=True, key="sidebar_clear_db_btn"):
+        st.session_state.show_clear_confirm = True
 
     if "show_clear_confirm" in st.session_state and st.session_state.show_clear_confirm:
-        with col2:
-            if st.button("⚠️ 확인", type="primary", key="sidebar_confirm_clear"):
-                safe_get_vector_db().clear_database()
-                # RAG 체인도 재초기화 (벡터 DB 인스턴스 공유)
-                st.session_state.rag_chain = RAGChain(
-                    provider=st.session_state.current_provider,
-                    model=st.session_state.current_model,
-                    vector_db=safe_get_vector_db(),
-                )
-                st.success("벡터 데이터베이스가 초기화되었습니다.")
-                st.session_state.show_clear_confirm = False
-                st.rerun()
+        if st.button("⚠️ 정말 초기화합니다", type="primary", use_container_width=True, key="sidebar_confirm_clear"):
+            safe_get_vector_db().clear_database()
+            # RAG 체인도 재초기화 (벡터 DB 인스턴스 공유)
+            st.session_state.rag_chain = RAGChain(
+                provider=st.session_state.current_provider,
+                model=st.session_state.current_model,
+                vector_db=safe_get_vector_db(),
+            )
+            st.success("벡터 데이터베이스가 초기화되었습니다.")
+            st.session_state.show_clear_confirm = False
+            st.rerun()
 
 
 def _render_llm_settings(safe_get_rag_chain) -> Dict[str, Any]:
     """LLM 모델 설정 섹션 렌더링"""
-    st.divider()
-    st.subheader("🤖 LLM 모델 설정")
+    st.markdown("**🤖 LLM 모델 설정**")
 
     # 공통 반환값 초기화
     selected_provider: Optional[str] = None

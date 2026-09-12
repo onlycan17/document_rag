@@ -65,6 +65,7 @@ from src.utils.logging_config import setup_logging, get_logger
 # UI 컴포넌트 임포트
 from ui.components.sidebar import render_sidebar
 from ui.components.chat_interface import render_chat_interface, render_chat_controls, render_feedback_interface
+from ui.styles import inject_custom_css
 
 # 파일 업로드 인터페이스는 사이드바로 이동됨
 from ui.controllers.main_controller import MainController
@@ -99,52 +100,34 @@ def initialize_application():
 def render_header():
     """헤더 렌더링"""
 
-    st.title("📚 RAG 챗봇")
-    st.markdown("---")
+    st.title("문서와 대화")
 
-    # 간단한 상태 정보 표시
     controller = st.session_state.main_controller
     vector_db_status = controller.get_vector_db_status()
     model_info = controller.get_model_info()
+    validation = controller.validate_configuration()
 
-    # 상태 컬럼
-    col1, col2, col3 = st.columns([2, 2, 2])
+    db_text = f"{vector_db_status['document_count']}개 문서" if vector_db_status["is_initialized"] else "미초기화"
+    model_text = (
+        f"{model_info['provider']}: {model_info['model']}"
+        if (model_info["provider"] and model_info["model"])
+        else "미설정"
+    )
+    status_text = "시스템 정상" if validation["is_valid"] else f"문제 {len(validation['issues'])}개"
 
-    with col1:
-        if vector_db_status["is_initialized"]:
-            st.success(f"🗃️ DB: {vector_db_status['document_count']}개 문서")
-        else:
-            st.warning("🗃️ DB: 미초기화")
-
-    with col2:
-        if model_info["provider"] and model_info["model"]:
-            st.info(f"☁️ {model_info['provider']}: {model_info['model']}")
-        else:
-            st.warning("🤖 모델: 미설정")
-
-    with col3:
-        # 설정 검증 결과
-        validation = controller.validate_configuration()
-        if validation["is_valid"]:
-            st.success("✅ 시스템 정상")
-        else:
-            st.error(f"❌ 문제 {len(validation['issues'])}개")
+    st.caption(f"검색 가능: {db_text} · {status_text}")
+    with st.expander("사용 중인 모델"):
+        st.caption(model_text)
 
 
 def render_main_tabs():
     """메인 탭 인터페이스 렌더링"""
 
-    # 탭 생성
-    tab1, tab2 = st.tabs(["💬 채팅", "📁 문서 관리"])
-
+    page = st.radio("화면 선택", ["채팅", "문서 관리"], horizontal=True, label_visibility="collapsed")
     controller = st.session_state.main_controller
-
-    with tab1:
-        # 채팅 인터페이스
+    if page == "채팅":
         render_chat_tab(controller)
-
-    with tab2:
-        # 파일 업로드 인터페이스
+    else:
         render_document_tab(controller)
 
 
@@ -292,106 +275,7 @@ def main():
         # 디버그 정보 (필요시)
         render_debug_info()
 
-        # CSS 스타일 주입 (이미지 라이트박스용)
-        st.markdown(
-            """
-        <style>
-        .image-container {
-            position: relative;
-            display: inline-block;
-            margin: 5px;
-            cursor: pointer;
-        }
-        
-        .image-thumbnail {
-            width: 200px;
-            height: 150px;
-            object-fit: cover;
-            border-radius: 8px;
-            transition: transform 0.2s;
-        }
-        
-        .image-thumbnail:hover {
-            transform: scale(1.05);
-        }
-        
-        .lightbox {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.9);
-        }
-        
-        .lightbox-content {
-            margin: auto;
-            display: block;
-            width: 80%;
-            max-width: 700px;
-            max-height: 80%;
-            object-fit: contain;
-        }
-        
-        .close {
-            position: absolute;
-            top: 15px;
-            right: 35px;
-            color: #f1f1f1;
-            font-size: 40px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        
-        .close:hover {
-            color: #bbb;
-        }
-        </style>
-        
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // 이미지 클릭 이벤트 처리
-            document.querySelectorAll('.image-container').forEach(function(container) {
-                container.addEventListener('click', function() {
-                    const imgSrc = this.getAttribute('data-img-src');
-                    const filename = this.getAttribute('data-filename');
-                    const source = this.getAttribute('data-source');
-                    
-                    // 라이트박스 생성
-                    const lightbox = document.createElement('div');
-                    lightbox.className = 'lightbox';
-                    lightbox.style.display = 'block';
-                    
-                    lightbox.innerHTML = `
-                        <span class="close">&times;</span>
-                        <img class="lightbox-content" src="${imgSrc}" alt="${filename}">
-                        <div style="text-align: center; color: white; margin-top: 10px;">
-                            <p><strong>${filename}</strong></p>
-                            <p>출처: ${source}</p>
-                        </div>
-                    `;
-                    
-                    document.body.appendChild(lightbox);
-                    
-                    // 닫기 이벤트
-                    lightbox.querySelector('.close').addEventListener('click', function() {
-                        document.body.removeChild(lightbox);
-                    });
-                    
-                    lightbox.addEventListener('click', function(e) {
-                        if (e.target === lightbox) {
-                            document.body.removeChild(lightbox);
-                        }
-                    });
-                });
-            });
-        });
-        </script>
-        """,
-            unsafe_allow_html=True,
-        )
+        inject_custom_css()
 
     except Exception as e:
         logger.error(f"애플리케이션 오류: {str(e)}")

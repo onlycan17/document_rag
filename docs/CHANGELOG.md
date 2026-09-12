@@ -1,5 +1,18 @@
 # 변경 이력(Changelog)
 
+## 2026-09-12 (UI — 하단 입력과 읽기 중심 레이아웃)
+- 탭 컨테이너를 최상위 화면 선택으로 변경하여 채팅 입력을 화면 하단에 고정. 문서 관리에서는 입력 숨김.
+- 답변 최대 폭과 모바일 여백 조정, 청회색 테마 적용. 반복 요약 제목과 상세 설명 상자를 정리하고 본문은 보존.
+- 빈 대화 안내 추가, 메시지 수·빈 내보내기 안내 제거, 대화가 있을 때만 관리 버튼 표시.
+- 붙은 별표 목록과 표 행 복구, 참고 자료 섹션 통합. 오프라인 202건·ruff 검사 통과, 데스크톱 브라우저 확인. 모바일 실화면은 도구 제약으로 미검증.
+
+## 2026-09-12 (UI — 채팅 답변 렌더링·구조 개선)
+- feat(ui): 응답 렌더링 정규화 — `src/utils/answer_render.py` 신설. 앞 텍스트에 붙어 나온 `###` 헤딩과 한 줄에 뭉친 불릿을 줄 단위로 분리하고, `[출처 N]`→`출처 N` 뱃지, `**강조**`→`<strong>` 변환(HTML 이스케이프 선행으로 주입 차단)
+- feat(ui): 답변 구조화 — `chat_interface.render_assistant_content`로 요약=강조 박스, 상세 설명=expander(기본 펼침), 참고 자료=카드(기본 접힘). 이력·방금 생성 응답이 동일 렌더 경로를 쓰고, 스트리밍 완료 시 placeholder를 비워 중복 출력 제거
+- style(ui): `ui/styles.py` 신설(뱃지·헤딩 스케일·행간·메시지 간격·요약 박스 CSS). `app.py`의 미사용 이미지 라이트박스 style/script 제거(Streamlit은 `st.markdown`의 `<script>`를 실행하지 않아 사문 코드였음)
+- docs: `UI_UX_SPEC.md`(답변 렌더 구조·접기), `ARCHITECTURE.md`(신규 모듈) 현행화
+- 검증: `tests/test_answer_render.py` 9건 신규(깨진 헤딩/불릿·뱃지·강조·HTML 이스케이프·섹션 분해), 오프라인 회귀 199 passed, ruff check/format 통과
+
 ## 2026-09-11 (관측성 — 검색 평가 결과 Langfuse Dataset 업로드)
 - feat(eval): `retrieval_eval.py`에 `--upload` 플래그 신설 — 골든 셋을 `retrieval-golden` Dataset으로 등록(질의 기준 중복 생성 방지), 실행마다 사례별 트레이스(`hit@k`·`best_rank`, 미검색=0)와 요약 트레이스(`hit@k`·`mrr`) 점수를 NUMERIC으로 기록
 - feat(tracing): `record_output` 헬퍼 추가(record_input과 대칭), 평가 실행은 `retrieval-eval-<타임스탬프>` 세션으로 묶어 UI 회기 비교 지원
