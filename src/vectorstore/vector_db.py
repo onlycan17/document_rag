@@ -5,7 +5,7 @@ from langchain_community.retrievers import BM25Retriever
 from config import settings
 from src.embeddings import EmbeddingModel
 from src.utils import TextProcessor
-from src.utils.tracing import observe_if_enabled, record_input, record_retriever_output
+from src.utils.tracing import observe_if_enabled, record_input, record_retriever_output, record_metadata
 import os
 import pickle
 import logging
@@ -27,7 +27,7 @@ except ImportError:
 
 
 def _retriever_sources(results: List[Tuple[Document, float]]) -> List[dict]:
-    """검색 결과를 Langfuse retriever 관측용 요약(출처·점수)으로 변환한다."""
+    """검색 결과를 LangSmith retriever run용 요약(출처·점수)으로 변환한다."""
     return [
         {"source": getattr(doc, "metadata", {}).get("source", "?"), "score": round(float(score), 4)}
         for doc, score in results
@@ -139,7 +139,7 @@ class EnhancedVectorDatabase:
         # TextProcessor를 사용하여 텍스트 정제 및 불용어 제거
         return TextProcessor.clean_text(text, remove_stopwords=True)
 
-    @observe_if_enabled(name="vector-search", as_type="retriever", capture_input=False, capture_output=False)
+    @observe_if_enabled(name="vector-retrieval", as_type="retriever", capture_input=False, capture_output=False)
     def search(self, query: str, k: int = None) -> List[Tuple[Document, float]]:
         """
         향상된 검색 메서드
@@ -147,18 +147,20 @@ class EnhancedVectorDatabase:
         - MMR 검색 지원
         - 동적 임계값 조정
         """
+        start_time = time.perf_counter()
         if self.vector_store is None:
             return []
 
         if k is None:
             k = settings.k_documents
-        record_input({"query": query, "k": k})
+        record_input({"query": query, "top_k": k})
 
         cache_key = f"{query}|{k}"
         cached = self._query_cache.get(cache_key)
         if cached is not None and time.time() - cached[0] < settings.query_cache_ttl_seconds:
             logger.debug(f"질의 캐시 히트: '{query[:50]}...'")
             results = list(cached[1])
+            record_metadata({"cache_hit": True, "duration_ms": round((time.perf_counter() - start_time) * 1000, 2)})
             record_retriever_output(_retriever_sources(results))
             return results
 
@@ -173,6 +175,13 @@ class EnhancedVectorDatabase:
             return []
 
         self._store_query_cache(cache_key, results)
+        record_metadata(
+            {
+                "cache_hit": False,
+                "search_method": settings.search_method if hasattr(settings, "search_method") else "hybrid",
+                "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
+            }
+        )
         record_retriever_output(_retriever_sources(results))
         return results
 

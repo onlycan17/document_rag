@@ -197,7 +197,7 @@ class ParallelRAGProcessor:
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # 모든 청크에 대한 태스크 생성
-            # why: run_in_executor는 contextvars를 복사하지 않아 Langfuse 관측이 트레이스에서 분리된다
+            # why: run_in_executor는 contextvars를 복사하지 않아 LangSmith 관측이 트레이스에서 분리된다
             tasks = []
             for chunk in chunks:
                 ctx = contextvars.copy_context()

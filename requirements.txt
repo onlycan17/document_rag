@@ -59,6 +59,5 @@ protobuf==4.25.8
 # - tesseract-ocr (for OCR functionality)
 # - poppler-utils (for PDF to image conversion)
 # These need to be installed separately using install_ocr.sh
-# LLM 관측(Langfuse): 선택 설치 — pip install langfuse==4.15.2
-#   (오픈텔레메트리 의존성 해석이 무거워 기본 requirements에서 제외.
-#    미설치 시 트레이싱만 비활성화되고 앱 동작에는 영향 없음. docs/LANGFUSE_GUIDE.md 참조)
+# LLM 관측(LangSmith): 선택 설치 — pip install langsmith
+#   (미설치 시 트레이싱만 비활성화되고 앱 동작에는 영향 없음. docs/LANGSMITH_GUIDE.md 참조)

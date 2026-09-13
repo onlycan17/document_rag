@@ -9,9 +9,11 @@ from typing import List, Dict, Any
 from langchain.schema import Document
 import re
 import logging
+import time
 
 from config import settings
 from src.constants import OPTIMAL_DOC_LENGTH_RANGE, MAX_DOC_LENGTH_SCORE
+from src.utils.tracing import observe_if_enabled, record_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +42,12 @@ class DocumentProcessor:
         """기본 최대 컨텍스트 길이"""
         return 100000  # 100KB
 
+    @observe_if_enabled(name="context-compression", as_type="span")
     def format_documents(self, documents: List[tuple], query: str = "") -> str:
         """
         검색된 문서를 컨텍스트로 포맷
-        - 중복 제거 및 재랭킹
         - 컨텍스트 최적화
+        - 문서 품질/길이 고려한 압축
         - 관련성 점수 기반 정렬
 
         Args:
@@ -54,10 +57,10 @@ class DocumentProcessor:
         Returns:
             포맷된 컨텍스트 문자열
         """
+        start_time = time.perf_counter()
+
         if not documents:
             return ""
-
-        reranked_documents = self.prepare_documents(documents)
 
         # 컨텍스트 최적화
         context_parts = []
@@ -66,7 +69,7 @@ class DocumentProcessor:
 
         logger.info(f"현재 모델의 최대 컨텍스트 길이: {max_context_length:,}자")
 
-        for i, (doc, score) in enumerate(reranked_documents):
+        for i, (doc, score) in enumerate(documents):
             # 관련성 점수 표시 형태 개선
             if settings.vector_db_type == "faiss":
                 # FAISS는 거리 기반 (낮을수록 좋음)
@@ -75,7 +78,6 @@ class DocumentProcessor:
                 # ChromaDB는 유사도 기반 (높을수록 좋음)
                 relevance_percent = min(100, float(score) * 100)
 
-            doc.metadata.get("source", "알 수 없음")
             file_name = doc.metadata.get("file_name", "알 수 없음")
             chunk_info = doc.metadata.get("chunk_id", f"chunk_{i}")
             content = self.optimize_content(doc.page_content.strip(), query)
@@ -92,9 +94,20 @@ class DocumentProcessor:
 
         final_context = "\n" + "=" * 50 + "\n".join(context_parts) + "=" * 50 + "\n"
 
+        record_metadata(
+            {
+                "documents_in": len(documents),
+                "documents_used": len(context_parts),
+                "context_chars": total_length,
+                "max_context_chars": max_context_length,
+                "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
+            }
+        )
+
         logger.info(f"컨텍스트 구성 완료: {len(context_parts)}개 문서, {total_length}자")
         return final_context
 
+    @observe_if_enabled(name="reranking", as_type="span")
     def prepare_documents(self, documents: List[tuple]) -> List[tuple]:
         """컨텍스트에 실제로 들어갈 문서 목록을 만든다 (중복 제거 + 재랭킹).
 
@@ -102,7 +115,16 @@ class DocumentProcessor:
         가리키도록 하려면 이 결과를 format_documents와 generate_enhanced_sources에
         함께 전달해야 한다.
         """
-        return self.rerank_documents(self.remove_duplicate_documents(documents))
+        start_time = time.perf_counter()
+        reranked = self.rerank_documents(self.remove_duplicate_documents(documents))
+        record_metadata(
+            {
+                "documents_in": len(documents),
+                "documents_out": len(reranked),
+                "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
+            }
+        )
+        return reranked
 
     def remove_duplicate_documents(self, documents: List[tuple]) -> List[tuple]:
         """중복 및 유사한 문서 제거"""

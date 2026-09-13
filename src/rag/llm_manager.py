@@ -13,7 +13,6 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 from config import settings
 from src.models import ModelRegistry
-from src.utils.tracing import langfuse_callbacks
 from src.constants import (
     MODEL_PROMPT_TOKENS,
     MODEL_MIN_CONTEXT,
@@ -89,7 +88,9 @@ class LLMManager:
         )
 
         # 스트리밍 콜백 설정
-        callbacks = ([StreamingStdOutCallbackHandler()] if streaming else []) + langfuse_callbacks()
+        # LangSmith는 랭체인 체인(prompt | llm)을 LANGSMITH_TRACING 환경변수로
+        # 자동 관측하므로 별도 관측 CallbackHandler는 붙이지 않는다.
+        callbacks = [StreamingStdOutCallbackHandler()] if streaming else []
 
         # 현재 모델 정보 저장
         self.current_provider = provider

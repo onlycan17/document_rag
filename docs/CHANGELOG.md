@@ -1,5 +1,12 @@
 # 변경 이력(Changelog)
 
+## 2026-09-12 (관측성 — Langfuse → LangSmith 전환)
+- feat(observability): 관측 백엔드를 Langfuse(셀프호스팅)에서 **LangSmith(SaaS)**로 전환. `infra/langfuse/docker-compose.yml` 삭제, `docs/LANGFUSE_GUIDE.md` → `docs/LANGSMITH_GUIDE.md` 교체
+- feat(tracing): `src/utils/tracing.py`을 LangSmith 기반으로 재작성 — `ensure_langsmith_env()`로 config(`LANGSMITH_*`)를 실제 환경변수에 반영(랭체인 자동 관측 활성), `observe_if_enabled`를 `@traceable`로 매핑(run_type: chain/llm/retriever), `record_*`는 `get_current_run_tree()`로 현재 run 갱신, `propagate_trace_attributes`는 `tracing_context`로 세션·사용자 전파
+- refactor(llm_manager): Langfuse CallbackHandler(`langfuse_callbacks`) 제거 — `prompt | llm` 체인은 `LANGSMITH_TRACING=true`로 자동 관측되므로 별도 콜백 불필요
+- docs: `ARCHITECTURE.md`·`AGENTS.md`·`requirements.txt`·`app.py`(시작 시 `ensure_langsmith_env()`) 현행화
+- 계측 위치는 유지: `query_engine.query/stream_query`(rag-query 루트), `vector_db.search`(vector-search retriever), `base_agent._call_llm`(llm run)
+
 ## 2026-09-12 (UI — 하단 입력과 읽기 중심 레이아웃)
 - 탭 컨테이너를 최상위 화면 선택으로 변경하여 채팅 입력을 화면 하단에 고정. 문서 관리에서는 입력 숨김.
 - 답변 최대 폭과 모바일 여백 조정, 청회색 테마 적용. 반복 요약 제목과 상세 설명 상자를 정리하고 본문은 보존.

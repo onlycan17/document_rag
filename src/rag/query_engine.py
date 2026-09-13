@@ -53,7 +53,7 @@ class QueryEngine:
 
     @observe_if_enabled(name="rag-query", capture_input=False)
     def query(self, question: str, session_id: Optional[str] = None) -> Dict[str, Any]:
-        """향상된 질문 처리 트레이스 루트 (검색→컨텍스트 처리→생성을 하위 관측으로 계층화)"""
+        """향상된 질문 처리 래닝 루트 (검색→컨텍스트 처리→생성을 하위 run으로 계층화)"""
         record_input({"question": question})
         with propagate_trace_attributes(session_id=session_id):
             return self._query_impl(question)
@@ -194,7 +194,7 @@ class QueryEngine:
             full_response = ""
 
             # 스트리밍 체인 실행
-            for chunk in self.streaming_chain.stream({"context": context, "question": question}):
+            for chunk in self._stream_chain_stream(context, question):
                 chunk_text = self._extract_chunk_text(chunk)
                 if not chunk_text:
                     continue
@@ -244,6 +244,7 @@ class QueryEngine:
                 "status": "error",
             }
 
+    @observe_if_enabled(name="query-preprocessing", as_type="span")
     def preprocess_query(self, query: str) -> str:
         """향상된 쿼리 전처리 및 확장"""
         if not settings.enable_query_preprocessing:
@@ -405,7 +406,7 @@ class QueryEngine:
             self._last_context_tokens = len(context) // 4
 
             # LLM 체인 실행
-            response = self.chain.invoke({"context": context, "question": question})
+            response = self._invoke_chain(context, question)
 
             # 응답 텍스트 추출
             if hasattr(response, "content"):
@@ -435,6 +436,16 @@ class QueryEngine:
         except Exception as e:
             logger.error(f"표준 컨텍스트 처리 중 오류: {str(e)}")
             raise
+
+    @observe_if_enabled(name="answer-generation", as_type="span")
+    def _invoke_chain(self, context: str, question: str):
+        """답변 생성 — 표준 체인 실행 (answer-generation 관측 단계)."""
+        return self.chain.invoke({"context": context, "question": question})
+
+    @observe_if_enabled(name="answer-generation", as_type="span")
+    def _stream_chain_stream(self, context: str, question: str):
+        """답변 생성 — 스트리밍 체인 실행 (answer-generation 관측 단계)."""
+        return self.streaming_chain.stream({"context": context, "question": question})
 
     def _extract_chunk_text(self, chunk: Any) -> str:
         """스트리밍 청크에서 텍스트를 추출한다."""

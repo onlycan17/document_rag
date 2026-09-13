@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _usage_details(data: dict) -> Optional[dict]:
-    """OpenAI 호환 응답의 usage 필드를 Langfuse usage_details로 변환 (없으면 None)."""
+    """OpenAI 호환 응답의 usage 필드로 사용량 딕셔너리를 만든다 (없으면 None)."""
     usage = data.get("usage") or {}
     input_tokens = usage.get("prompt_tokens")
     output_tokens = usage.get("completion_tokens")

@@ -61,6 +61,7 @@ sys.path.append(str(Path(__file__).parent))
 # 프로젝트 임포트
 from config import settings
 from src.utils.logging_config import setup_logging, get_logger
+from src.utils.tracing import ensure_langsmith_env
 
 # UI 컴포넌트 임포트
 from ui.components.sidebar import render_sidebar
@@ -73,6 +74,9 @@ from ui.controllers.main_controller import MainController
 # 로깅 설정
 setup_logging(logging.DEBUG)  # DEBUG 레벨로 변경하여 상세 로그 출력
 logger = get_logger(__name__)
+
+# LangSmith 트레이싱 환경변수 반영 (config 설정을 실제 env로)
+ensure_langsmith_env()
 
 # 페이지 설정
 st.set_page_config(

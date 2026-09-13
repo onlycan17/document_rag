@@ -109,7 +109,7 @@ class RAGChain:
         Args:
             question: 사용자 질문
             k_documents: 검색할 문서 수 (현재는 설정값 사용)
-            session_id: Langfuse 트레이싱용 대화 세션 ID (선택)
+            session_id: LangSmith 트레이싱용 대화 세션 ID (선택)
 
         Returns:
             답변 정보가 포함된 딕셔너리
@@ -123,7 +123,7 @@ class RAGChain:
 
         Args:
             question: 사용자 질문 (문자열 또는 딕셔너리)
-            session_id: Langfuse 트레이싱용 대화 세션 ID (선택)
+            session_id: LangSmith 트레이싱용 대화 세션 ID (선택)
 
         Returns:
             답변 정보가 포함된 딕셔너리
@@ -143,7 +143,7 @@ class RAGChain:
         Args:
             question: 사용자 질문
             k_documents: 검색할 문서 수 (현재는 설정값 사용)
-            session_id: Langfuse 트레이싱용 대화 세션 ID (선택)
+            session_id: LangSmith 트레이싱용 대화 세션 ID (선택)
 
         Yields:
             스트리밍 응답 청크
@@ -270,7 +270,8 @@ class RAGChain:
         try:
             # 문서 검색
             documents = self.search_documents(question, k_documents)
-            context = self.format_documents(documents, question)
+            prepared = self.document_processor.prepare_documents(documents)
+            context = self.format_documents(prepared, question)
 
             # 대량 컨텍스트인지 확인
             if len(context) < self.large_context_threshold:
@@ -288,7 +289,7 @@ class RAGChain:
             # 결과 병합
             if results:
                 final_answer = self.parallel_processor.merge_results(results, question)
-                sources = self.generate_enhanced_sources(documents)
+                sources = self.generate_enhanced_sources(prepared)
 
                 return {
                     "answer": final_answer,
@@ -316,7 +317,8 @@ class RAGChain:
         try:
             # 문서 검색
             documents = self.search_documents(question, k_documents)
-            context = self.format_documents(documents, question)
+            prepared = self.document_processor.prepare_documents(documents)
+            context = self.format_documents(prepared, question)
 
             # 대량 컨텍스트인지 확인
             if len(context) < self.large_context_threshold:
