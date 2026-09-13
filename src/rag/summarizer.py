@@ -5,12 +5,13 @@
 LLM이 효율적으로 처리할 수 있도록 돕는 요약 엔진.
 """
 
-from typing import List, Dict, Any, Tuple
-from langchain.schema import Document
-from langchain.prompts import PromptTemplate
-import re
 import logging
+import re
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
+from langchain.prompts import PromptTemplate
+from langchain.schema import Document
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 

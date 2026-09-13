@@ -14,28 +14,29 @@
 - API 재시도 로직
 """
 
-import sys
-import os
 import argparse
-import time
-import shutil
 import logging
+import os
+import shutil
+import sys
+import time
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import Dict, List, Tuple
 
 # 프로젝트 루트 경로 설정
 script_dir = Path(__file__).parent
 project_root = script_dir.parent.parent
 sys.path.append(str(project_root))
 
-from src.vectorstore import VectorDatabase
+from langchain.schema import Document
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
+
+from config import settings
 from src.embeddings import EmbeddingModel
 from src.loaders import DocumentLoader
 from src.utils.document_processor import DocumentProcessor
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document
-from config import settings
+from src.vectorstore import VectorDatabase
 
 # 로깅 설정
 logging.basicConfig(

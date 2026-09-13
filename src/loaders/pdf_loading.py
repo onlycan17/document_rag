@@ -1,12 +1,18 @@
 """PDF 파일 로딩·변환 결과 처리 전용 믹스인"""
 
-from typing import Dict, List, Optional
-from langchain.schema import Document
-from langchain_community.document_loaders import PyPDFLoader
+import logging
 import os
 from pathlib import Path
+from typing import Dict, List, Optional
+
+from langchain.schema import Document
+from langchain_community.document_loaders import PyPDFLoader
+
 from config import settings
+
+from ..utils.agent_pdf_converter import AgentBasedPDFConverter
 from ..utils.pdf_converter import ImprovedPDFConverter
+from ..utils.text_processing import TextProcessor
 from .pdf_loading_helpers import (  # noqa: F401 - 외부 import 경로 유지
     build_extraction_metadata,
     cleanup_temp_dir,
@@ -18,9 +24,6 @@ from .pdf_loading_helpers import (  # noqa: F401 - 외부 import 경로 유지
     scan_images_dir,
     write_conversion_md,
 )
-from ..utils.agent_pdf_converter import AgentBasedPDFConverter
-from ..utils.text_processing import TextProcessor
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +210,7 @@ class PdfLoadingMixin:
                     pdf_path=file_path,
                     output_dir=str(output_dir),
                     relevance_threshold=settings.local_image_relevance_threshold,
+                    progress_callback=progress_callback,
                 )
                 logger.info("OpenRouter를 이용한 지능형 추출 완료")
             except Exception as e:
@@ -393,8 +397,8 @@ class PdfLoadingMixin:
     def _cleanup_existing_images_for_pdf(self, file_path: str) -> None:
         """동일 PDF 문서 재업로드 시 기존 이미지를 정리"""
         try:
-            from pathlib import Path
             import shutil
+            from pathlib import Path
 
             pdf_name = Path(file_path).stem
             # 파일명 정규화 규칙에 맞춘 프리픽스 생성

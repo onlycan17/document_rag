@@ -1,5 +1,15 @@
 # 변경 이력(Changelog)
 
+## 2026-09-13 (정리 — 관측·문서·설정·린트 일치화)
+- fix(eval): `scripts/eval/retrieval_eval.py`가 삭제된 `langfuse_enabled`를 import해 실행 즉시 깨지던 문제 해결 → LangSmith 기반 `upload_to_langsmith`로 이행 (Langfuse Dataset·create_score 대신 사례별·요약 run에 Hit@k·best_rank·MRR을 metadata로 기록). `--help` 정상 동작 확인
+- ci: `pytest tests/test_smoke_offline.py`(단일 스모크) → `pytest tests/ -q`(전체 오프라인 회귀망 202개)로 변경, `ruff format --check .` 스텝 추가. `Makefile test` 타겟도 전체 회귀망으로 동기화
+- docs: 삭제된 로컬 모델(LM Studio·GGUF·Gemma·1620 포트·`LOCAL_LLM_*`)·`local_image_service.py`·레거시 Langfuse 참조를 제거하고 외부 API/LangSmith 기준으로 현행화 (API_SPEC/ARCHITECTURE/INSTALL/SECURITY/TECH_STACK/PRD/README_KOREAN/CLAUDE). `AGENT_SYSTEM_REPORT.md`에 구형 시스템 고지 배너, `TODO.md` 현실 동기화
+- lint: ruff `select`에 `I`(isort) 추가, 64건 import 정렬·포맷 자동 적용. 전체 `ruff check`·`ruff format --check`·`pytest tests/` 202 passed
+- refactor(vectorstore): `EnhancedVectorDatabase`+빈 호환 서브클래스 `VectorDatabase`를 **단일 `VectorDatabase`**로 통합(호환 레이어 제거). 테스트·문서 import 갱신
+- config(lint): E501·W 등 확장 규칙은 의도적 제외 사유(`프로젝트 라인 길이 120`·정당한 긴 문자열)를 `pyproject.toml`에 명시
+- perf(image): `OpenRouterImageService.analyze_image` POST에 기존 `api_retry_with_backoff` 재사용 — 429·타임아웃·일부 5xx를 지수 백오프로 재시도(`_post_chat_completions` 분리), docstring 모델 기본값 현행화(`z-ai/glm-4.5v`)
+- feat(ui): `process_pdf`에 `progress_callback` 연결 — 대용량 PDF 이미지 분석 단계 진행률이 Streamlit 바에 실시간 반영(에러 시 중단하는 폴백 금지 정책은 유지)
+
 ## 2026-09-12 (관측성 — Langfuse → LangSmith 전환)
 - feat(observability): 관측 백엔드를 Langfuse(셀프호스팅)에서 **LangSmith(SaaS)**로 전환. `infra/langfuse/docker-compose.yml` 삭제, `docs/LANGFUSE_GUIDE.md` → `docs/LANGSMITH_GUIDE.md` 교체
 - feat(tracing): `src/utils/tracing.py`을 LangSmith 기반으로 재작성 — `ensure_langsmith_env()`로 config(`LANGSMITH_*`)를 실제 환경변수에 반영(랭체인 자동 관측 활성), `observe_if_enabled`를 `@traceable`로 매핑(run_type: chain/llm/retriever), `record_*`는 `get_current_run_tree()`로 현재 run 갱신, `propagate_trace_attributes`는 `tracing_context`로 세션·사용자 전파

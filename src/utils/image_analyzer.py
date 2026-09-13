@@ -2,13 +2,14 @@
 이미지 분석기 - Vision 모델을 활용한 이미지 설명 생성
 """
 
-import os
 import base64
 import logging
-from typing import Optional, Dict, List
+import os
 from pathlib import Path
-from PIL import Image
+from typing import Dict, List, Optional
+
 import requests
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 

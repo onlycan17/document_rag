@@ -8,12 +8,13 @@ OpenRouter 모델 리스트 조회 유틸리티
 
 from __future__ import annotations
 
+import logging
 import time
+from typing import Any, Dict, List
+
 import requests
-from typing import List, Dict, Any
 
 from config import settings
-import logging
 
 logger = logging.getLogger(__name__)
 

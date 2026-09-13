@@ -4,9 +4,9 @@
 PDF 문서의 텍스트 추출 및 전처리를 위한 로컬 및 외부 API 모델을 제공합니다.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict
-import logging
 
 import requests
 

@@ -2,15 +2,17 @@
 에이전트 기반 PDF 변환기 - 로컬 LLM을 활용한 지능형 문서 전처리
 """
 
-import os
 import logging
-import fitz  # PyMuPDF
-from typing import List, Dict, Optional
+import os
 from pathlib import Path
+from typing import Dict, List, Optional
 
-from src.agents import ContextConnectorAgent, StructureParserAgent, QualityValidatorAgent
-from .pdf_converter import ImprovedPDFConverter
+import fitz  # PyMuPDF
+
+from src.agents import ContextConnectorAgent, QualityValidatorAgent, StructureParserAgent
+
 from .image_analyzer import create_image_analyzer
+from .pdf_converter import ImprovedPDFConverter
 
 logger = logging.getLogger(__name__)
 

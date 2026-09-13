@@ -11,9 +11,10 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
-from src.processing.preprocessing_factory import PreprocessingModelFactory
-from src.loaders.document_loader import DocumentLoader
 import logging
+
+from src.loaders.document_loader import DocumentLoader
+from src.processing.preprocessing_factory import PreprocessingModelFactory
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

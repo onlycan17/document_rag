@@ -1,16 +1,19 @@
-from typing import List, Dict, Any
-from langchain.schema import Document
-from langchain_community.document_loaders import TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter, SentenceTransformersTokenTextSplitter
+import logging
 import os
 from pathlib import Path
+from typing import Any, Dict, List
+
+from langchain.schema import Document
+from langchain.text_splitter import RecursiveCharacterTextSplitter, SentenceTransformersTokenTextSplitter
+from langchain_community.document_loaders import TextLoader
+
 from config import settings
-from .pdf_loader_advanced import AdvancedPDFLoader
-from .text_cleaning import TextCleaningMixin
+
 from .chunking import ChunkingMixin
 from .docx_loading import DocxLoadingMixin
+from .pdf_loader_advanced import AdvancedPDFLoader
 from .pdf_loading import PdfLoadingMixin
-import logging
+from .text_cleaning import TextCleaningMixin
 
 logger = logging.getLogger(__name__)
 

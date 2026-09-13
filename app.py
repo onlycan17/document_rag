@@ -60,16 +60,16 @@ sys.path.append(str(Path(__file__).parent))
 
 # 프로젝트 임포트
 from config import settings
-from src.utils.logging_config import setup_logging, get_logger
+from src.utils.logging_config import get_logger, setup_logging
 from src.utils.tracing import ensure_langsmith_env
+from ui.components.chat_interface import render_chat_controls, render_chat_interface, render_feedback_interface
 
 # UI 컴포넌트 임포트
 from ui.components.sidebar import render_sidebar
-from ui.components.chat_interface import render_chat_interface, render_chat_controls, render_feedback_interface
-from ui.styles import inject_custom_css
 
 # 파일 업로드 인터페이스는 사이드바로 이동됨
 from ui.controllers.main_controller import MainController
+from ui.styles import inject_custom_css
 
 # 로깅 설정
 setup_logging(logging.DEBUG)  # DEBUG 레벨로 변경하여 상세 로그 출력

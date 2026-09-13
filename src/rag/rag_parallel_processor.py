@@ -8,12 +8,13 @@
 import asyncio
 import concurrent.futures
 import contextvars
-from typing import List, Dict, Any, Optional, Callable
-from langchain.schema import Document
-from dataclasses import dataclass
 import logging
 import time
+from dataclasses import dataclass
 from threading import Lock
+from typing import Any, Callable, Dict, List, Optional
+
+from langchain.schema import Document
 
 from .context_chunker import ContextChunk
 from .summarizer import HierarchicalSummarizer

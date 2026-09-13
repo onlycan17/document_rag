@@ -15,7 +15,7 @@
     - `get_last_context_tokens() -> int`: 마지막 컨텍스트 토큰 수
 
 ### `src/vectorstore/vector_db.py`
-- `class EnhancedVectorDatabase`
+- `class VectorDatabase`
   - `add_documents(docs: List[Document])` : 문서 인덱싱/캐시/키워드 인덱스 구축
   - `search(query: str, k: int=None) -> List[Tuple[Document, float]]` : 하이브리드/MMR 포함 검색
   - `clear_database()` : 인덱스/캐시 삭제
@@ -40,29 +40,18 @@
 - 역할: 문서 로드→전처리→인덱싱 일괄 수행
 
 ## 3. 설정(환경 변수)
-- 필수(택1): `UPSTAGE_API_KEY` 또는 `OPENAI_API_KEY` 등 LLM 키, 혹은 로컬 LLM 설정
-- 로컬 LLM(HTTP) 기본값:
-  - `LOCAL_LLM_BASE_URL=http://210.126.109.57:1620`
-  - `LOCAL_LLM_API_KEY`(일부 서버는 불필요, 기본 `not-needed`)
+- 필수(택1): `UPSTAGE_API_KEY` 또는 `OPENAI_API_KEY` 등 LLM API 키 (외부 API만 지원)
 - 선택: `ANONYMIZED_TELEMETRY=False`, `CHROMA_TELEMETRY=False`
 
-## 3.1 로컬 HTTP 엔드포인트(최신)
-- `GET /health` : 서비스 상태
-- `GET /v1/queue/stats` : 동시성/대기열 상태
-- `GET /v1/models` : 사용 가능 모델 목록
-- `POST /v1/chat/completions` : 채팅(스트리밍 지원)
-- `POST /v1/embeddings` : 임베딩 생성
-- `POST /v1/images/generations`, `POST /v1/images/edits` : 이미지 생성/편집(옵션)
-
-### 이미지 처리 연동
-- 모듈: `src/utils/local_image_service.py`(로컬), `src/utils/openrouter_image_service.py`(외부)
-- OCR/관련성 판정: `POST {BASE}/v1/chat/completions` 멀티모달 메시지로 이미지 전달(OpenAI 호환)
+### 3.1 이미지 분석 연동 (외부 API)
+- 모듈: `src/utils/openrouter_image_service.py`, `src/utils/image_analyzer.py`
+- OCR/관련성 판정: OpenRouter `POST /v1/chat/completions` 멀티모달 메시지로 이미지 전달
   - 프롬프트: 관련성 0~1, 설명, 텍스트 추출 형식으로 응답 지시
   - 응답 파싱: `RELEVANCE:`/`DESCRIPTION:`/`TEXT:` 라벨 기반 단순 파싱
-- PDF 파이프라인: `DocumentLoader._load_pdf_file()`에서 서버 우선 사용, 실패 시 내장 추출기로 폴백
+- PDF 파이프라인: `DocumentLoader._load_pdf_file()`에서 이미지 분석을 외부 API로 수행
 
 #### OpenRouter 설정
-- 키: `.env`의 `OPNEROUTER_API_KEY`
+- 키: `.env`의 `OPENROUTER_API_KEY` (하위 호환 `OPNEROUTER_API_KEY`도 인식)
 - 기본 모델: `z-ai/glm-4.5v`
 - 엔드포인트: `https://openrouter.ai/api/v1/chat/completions`
 
@@ -71,15 +60,7 @@
 - `EXTRA_MULTIMODAL_GOOGLE_MODELS`: Google 멀티모달 모델 추가(예: `gemini-2.5-pro`)
 - `EXTRA_MULTIMODAL_ANTHROPIC_MODELS`: Anthropic 멀티모달 모델 추가
 
-#### 로컬 멀티모달 선호
-- 멀티 서버 환경에서 1620 포트를 우선 사용(현재 멀티모달 모델은 1620에만 상주)
-
-#### 큐 상태 기반 스로틀링
-- 로컬 서버: `GET /v1/queue/stats` 응답을 사용해 혼잡 시 소폭 대기(스로틀)
-- 기준(예시): `pending > 2*concurrency` 또는 `running >= concurrency`이면 0.5초 대기
-
 #### 이미지 향상(옵션)
-- 로컬: `POST /v1/images/edits` 활용, 실패 시 원본 사용
 - 설정: `ENABLE_IMAGE_ENHANCEMENT=true`와 `IMAGE_ENHANCEMENT_PROMPT`로 제어
 
 ## 4. 사용 예시
@@ -95,10 +76,3 @@ print(result["answer"])  # 한국어 요약 + 출처
 python run_rag.py           # 메뉴 실행
 python tests/test_simple.py # 스모크 테스트
 ```
-#### 로컬 모델 선택(멀티 서버)
-- 환경: 여러 로컬 서버가 각 포트에서 동작(예: 1620/1621/1622)
-- 설정: `LOCAL_LLM_BASE_URLS=http://210.126.109.57:1620,http://210.126.109.57:1621,http://210.126.109.57:1622`
-- 모델 목록 조회: 각 서버의 `/v1/models`를 순회해 통합
-- 모델 식별자: `model` 필드에 `"<id>|<base>"` 형식 저장
-  - 예: `exaone-mini|http://210.126.109.57:1621`
-- 선택 시 라우팅: `model`에 포함된 `base`를 파싱해 해당 서버로 호출

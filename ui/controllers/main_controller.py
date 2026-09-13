@@ -2,8 +2,9 @@
 메인 애플리케이션 컨트롤러
 """
 
+from typing import Any, Dict
+
 import streamlit as st
-from typing import Dict, Any
 
 from src.rag.rag_chain import RAGChain
 from src.vectorstore.vector_db import VectorDatabase

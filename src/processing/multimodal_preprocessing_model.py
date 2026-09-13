@@ -4,14 +4,15 @@
 이미지와 텍스트를 함께 처리할 수 있는 멀티모달 AI 모델을 사용한 문서 전처리
 """
 
-from typing import Dict, List, Any
-import logging
-from pathlib import Path
 import base64
+import logging
 import os
+from pathlib import Path
+from typing import Any, Dict, List
+
+from config import settings
 
 from .preprocessing_model import APIPreprocessingModel
-from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -298,6 +299,7 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
         """OpenRouter 비전 모델을 사용한 멀티모달 처리"""
         try:
             import requests
+
             from config import settings as _s
 
             api_key = getattr(_s, "openrouter_api_key", None)

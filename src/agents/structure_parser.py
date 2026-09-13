@@ -2,11 +2,13 @@
 문서 구조 파싱 에이전트 - 제목, 목차, 표 등을 올바른 마크다운으로 변환
 """
 
-import re
 import logging
-from typing import Dict, Any
-from .base_agent import BaseAgent
+import re
+from typing import Any, Dict
+
 from config import settings
+
+from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 

@@ -24,7 +24,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import settings
 from src.embeddings.embedding_model import EmbeddingModel
-from src.vectorstore.vector_db import EnhancedVectorDatabase
+from src.vectorstore.vector_db import VectorDatabase
 from src.utils.logging_config import setup_logging
 
 # 로깅 설정
@@ -139,7 +139,7 @@ class FAISSUpstageCompatibilityTester:
             original_db_type = settings.vector_db_type
             settings.vector_db_type = "faiss"
             
-            vector_db = EnhancedVectorDatabase()
+            vector_db = VectorDatabase()
             
             creation_time = time.time() - start_time
             self.test_results["performance"]["faiss_creation_time"] = creation_time
@@ -170,7 +170,7 @@ class FAISSUpstageCompatibilityTester:
             original_db_type = settings.vector_db_type
             settings.vector_db_type = "faiss"
             
-            vector_db = EnhancedVectorDatabase()
+            vector_db = VectorDatabase()
             
             # 문서 추가 테스트
             start_time = time.time()
@@ -243,7 +243,7 @@ class FAISSUpstageCompatibilityTester:
             settings.vector_db_path = test_db_path
             
             # 1. 벡터 DB 생성 및 문서 추가
-            vector_db1 = EnhancedVectorDatabase()
+            vector_db1 = VectorDatabase()
             vector_db1.add_documents(self.test_documents[:2])  # 일부 문서만 추가
             
             # 2. 저장 (자동으로 저장됨)
@@ -252,7 +252,7 @@ class FAISSUpstageCompatibilityTester:
             
             # 3. 새로운 인스턴스로 로딩
             start_time = time.time()
-            vector_db2 = EnhancedVectorDatabase()
+            vector_db2 = VectorDatabase()
             load_time = time.time() - start_time
             
             # 4. 로딩된 데이터로 검색 테스트

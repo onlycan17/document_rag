@@ -1,10 +1,12 @@
 """청킹 전략·청크 후처리 전용 믹스인"""
 
+import logging
 from typing import List
+
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 from config import settings
-import logging
 
 logger = logging.getLogger(__name__)
 

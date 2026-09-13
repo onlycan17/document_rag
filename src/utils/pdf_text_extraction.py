@@ -6,14 +6,15 @@ ImprovedPDFConverter에서 텍스트/이미지 추출과 마크다운 정제 책
 인스턴스 속성(images_dir 등)은 본체(ImprovedPDFConverter)에서 제공된다.
 """
 
-import fitz  # PyMuPDF
-from pathlib import Path
+import logging
 import re
 from datetime import datetime
-from typing import Optional, Callable, Tuple
-import logging
+from pathlib import Path
+from typing import Callable, Optional, Tuple
 
-from .pdf_heading_utils import is_real_heading, join_paragraph_lines, get_heading_level
+import fitz  # PyMuPDF
+
+from .pdf_heading_utils import get_heading_level, is_real_heading, join_paragraph_lines
 from .sentence_completion import is_incomplete_sentence
 from .text_processing import TextProcessor
 

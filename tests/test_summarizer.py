@@ -10,7 +10,6 @@ from langchain.schema import Document
 
 from src.rag.summarizer import DocumentSummary, HierarchicalSummarizer, resolve_summary_length
 
-
 CONTENT = (
     "백제의 몽촌토성은 서울 송파구에 위치한 토성 유적이다. "
     "2024년 3월 발굴조사에서 다양한 토기편이 출토되었다. "

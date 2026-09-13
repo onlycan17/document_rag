@@ -1,12 +1,14 @@
+import logging
+import random
+import time
+from functools import wraps
 from typing import List
+
 from langchain_openai import OpenAIEmbeddings
 from langchain_upstage import UpstageEmbeddings
+
 from config import settings
 from src.utils import TextProcessor
-import logging
-import time
-import random
-from functools import wraps
 
 logger = logging.getLogger(__name__)
 

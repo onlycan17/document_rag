@@ -1,11 +1,12 @@
+import logging
 import tempfile
 from typing import List
+
 import PyPDF2
-from pdf2image import convert_from_path
 import pytesseract
-from PIL import Image
 from langchain.schema import Document
-import logging
+from pdf2image import convert_from_path
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 

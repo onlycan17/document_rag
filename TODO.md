@@ -29,15 +29,14 @@
 - [x] 한국어 README의 저장소/경로/실행 방법 정정
 
 ## 다음 단계
-- [ ] 개발 자동화 도입: `pyproject.toml`, `Makefile`, `.pre-commit-config.yaml`
-- [ ] 네트워크 독립 스모크 테스트 추가(오프라인 실행 가능)
-- [ ] `app.py` 모듈 분할 설계 및 리팩토링 계획 수립(<600 LOC 목표)
-- [ ] CI 구성(GitHub Actions)으로 포맷/린트/테스트 강제
- - [ ] OpenRouter 이미지 분석 스로틀/재시도 로직 튜닝(429/타임아웃 대응)
- - [ ] 레거시 document_loader.py 모듈 분할(600줄 가이드 준수, Phase 2 이연분)
- - [ ] 저장소 전체 ruff format 일괄 적용(별도 포매팅 커밋) 후 CI에 format --check 추가
- - [ ] 대용량 PDF(>150MB) 처리 시 진행률/에러 UI 개선
- - [ ] 로컬 LLM 장애 시 클라우드 폴백 옵션 도입(사용자 토글)
+- [x] 개발 자동화 도입: `pyproject.toml`, `Makefile`, `.pre-commit-config.yaml`
+- [x] 네트워크 독립 스모크 테스트 추가(오프라인 실행 가능)
+- [x] `app.py` 모듈 분할/600줄 미만 유지(현재 297줄, `ui/` 모듈 위임 — 목표 충족)
+- [x] CI 구성(GitHub Actions)으로 포맷/린트/테스트 강제
+ - [x] OpenRouter 이미지 분석 스로틀/재시도 로직 튜닝(429/타임아웃 대응 — `api_retry_with_backoff` 재사용)
+ - [x] 레거시 document_loader.py 모듈 분할(600줄 가이드 준수, Phase 2 이연분)
+ - [x] 저장소 전체 ruff format 일괄 적용 후 CI에 format --check 추가
+ - [x] 대용량 PDF 진행률 UI(이미지 분석 단계에 `progress_callback` 연결)
 
 ## 아키텍처 개선 작업 (새로운 섹션)
 - [ ] 문서 처리 파이프라인 모듈화: `EnhancedDocumentLoader` 클래스 분리 (SRP 적용)

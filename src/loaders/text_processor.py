@@ -12,9 +12,10 @@
 - 중복 제거 및 최적화
 """
 
-import re
 import logging
-from typing import List, Dict, Any
+import re
+from typing import Any, Dict, List
+
 from langchain.schema import Document
 
 from .text_patterns import (

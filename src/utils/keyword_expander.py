@@ -5,9 +5,9 @@
 검색 성능을 향상시키는 기능을 제공합니다.
 """
 
-from typing import List, Dict
-import re
 import logging
+import re
+from typing import Dict, List
 
 from .keyword_data import DOMAIN_SPECIFIC_TERMS, KOREAN_STOPWORDS, SYNONYM_DICT
 

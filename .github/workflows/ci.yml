@@ -26,5 +26,8 @@ jobs:
       - name: Lint (ruff)
         run: ruff check .
 
-      - name: Offline smoke tests
-        run: pytest tests/test_smoke_offline.py -q
+      - name: Format check (ruff)
+        run: ruff format --check .
+
+      - name: Offline regression suite
+        run: pytest tests/ -q

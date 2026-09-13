@@ -1,10 +1,11 @@
 """DOCX 파일 로딩·이미지 추출 전용 믹스인"""
 
-from typing import List, Dict, Tuple
-from langchain.schema import Document
-from pathlib import Path
 import logging
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+from langchain.schema import Document
 
 try:
     from docx import Document as DocxDocument

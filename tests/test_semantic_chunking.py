@@ -4,10 +4,10 @@
 Phase 4에서 구현된 의미 기반 청킹 기능이 올바르게 작동하는지 검증합니다.
 """
 
-import sys
-from pathlib import Path
-import tempfile
 import shutil
+import sys
+import tempfile
+from pathlib import Path
 
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
 project_root = Path(__file__).parent.parent
@@ -308,8 +308,9 @@ def test_performance_comparison():
     print("\\n⚡ 성능 비교 테스트")
 
     try:
-        from src.utils.pdf_converter import ImprovedPDFConverter
         import time
+
+        from src.utils.pdf_converter import ImprovedPDFConverter
 
         # 테스트용 긴 텍스트 생성
         test_text = (

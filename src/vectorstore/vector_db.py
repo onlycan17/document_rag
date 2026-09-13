@@ -1,18 +1,20 @@
-from typing import List, Dict, Any, Tuple
-from langchain_community.vectorstores import FAISS
+import logging
+import os
+import pickle
+import time
+from typing import Any, Dict, List, Tuple
+
+import numpy as np
 from langchain.schema import Document
 from langchain_community.retrievers import BM25Retriever
+from langchain_community.vectorstores import FAISS
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
 from config import settings
 from src.embeddings import EmbeddingModel
 from src.utils import TextProcessor
-from src.utils.tracing import observe_if_enabled, record_input, record_retriever_output, record_metadata
-import os
-import pickle
-import logging
-import time
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from src.utils.tracing import observe_if_enabled, record_input, record_metadata, record_retriever_output
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +36,9 @@ def _retriever_sources(results: List[Tuple[Document, float]]) -> List[dict]:
     ]
 
 
-class EnhancedVectorDatabase:
+class VectorDatabase:
     """
-    향상된 벡터 데이터베이스 클래스
+    벡터 데이터베이스 클래스
     - 하이브리드 검색 (벡터 + 키워드) 지원
     - MMR (Maximal Marginal Relevance) 검색
     - 개선된 임계값 처리
@@ -590,10 +592,3 @@ class EnhancedVectorDatabase:
         except Exception as e:
             logger.error(f"관련 용어 추출 실패: {str(e)}")
             return []
-
-
-# 기존 VectorDatabase와의 호환성 유지
-class VectorDatabase(EnhancedVectorDatabase):
-    """기존 VectorDatabase와의 호환성을 위한 클래스"""
-
-    pass

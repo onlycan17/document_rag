@@ -5,14 +5,15 @@
 중복 제거, 재랭킹, 품질 평가, 컨텐츠 최적화 등의 기능을 제공합니다.
 """
 
-from typing import List, Dict, Any
-from langchain.schema import Document
-import re
 import logging
+import re
 import time
+from typing import Any, Dict, List
+
+from langchain.schema import Document
 
 from config import settings
-from src.constants import OPTIMAL_DOC_LENGTH_RANGE, MAX_DOC_LENGTH_SCORE
+from src.constants import MAX_DOC_LENGTH_SCORE, OPTIMAL_DOC_LENGTH_RANGE
 from src.utils.tracing import observe_if_enabled, record_metadata
 
 logger = logging.getLogger(__name__)

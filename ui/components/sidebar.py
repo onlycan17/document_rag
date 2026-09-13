@@ -223,8 +223,8 @@ def _render_document_upload(safe_get_vector_db) -> Dict[str, Any]:
     # 파일 처리 버튼 및 로직
     if uploaded_files:
         if st.button("문서 처리 및 저장", type="primary", use_container_width=True):
-            from ui.components.file_uploader import _process_uploaded_files
             from src.utils.document_processor import DocumentProcessor
+            from ui.components.file_uploader import _process_uploaded_files
 
             # 디렉토리 준비
             DocumentProcessor.prepare_directories()

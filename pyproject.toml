@@ -15,7 +15,10 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
+# 핵심 오류(E4/E7/E9)+미사용(F)+import 정렬(I)만 강제.
+# E501(줄길이)·W(공백류)·기타 E는 제외 — 모델명·URL·JS/CSS·프롬프트 등 정당한 긴
+# 단일 문자열이 많아 강제하면 인위적 줄바꿈만 유발한다. 줄 길이는 ruff format(120)이 관리.
+select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.ruff.lint.per-file-ignores]
 # import 전에 환경변수/경로 설정이 선행되는 진입점·스크립트·테스트

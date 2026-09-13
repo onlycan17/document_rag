@@ -4,12 +4,12 @@ Playwright MCP를 활용한 테스트 헬퍼 클래스
 - Streamlit 앱 제어 및 테스트 자동화
 """
 
+import logging
 import os
+import signal
+import subprocess
 import sys
 import time
-import logging
-import subprocess
-import signal
 from pathlib import Path
 from typing import Optional
 

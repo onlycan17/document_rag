@@ -69,9 +69,6 @@ ANTHROPIC_API_KEY="your_anthropic_api_key"
 # --- 선택 (고급 기능용) ---
 # OpenRouter API 키 (지능형 이미지 분석용)
 OPNEROUTER_API_KEY="your_openrouter_api_key"
-
-# 로컬 LLM 서버 주소 (기본값: http://localhost:11434)
-LOCAL_LLM_BASE_URL="http://localhost:11434"
 ```
 
 ### 5. (선택) OCR 기능 설치

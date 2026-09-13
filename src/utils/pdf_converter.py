@@ -14,13 +14,14 @@
 - 헤딩/문장 판정 순수 헬퍼: pdf_heading_utils
 """
 
-import fitz  # PyMuPDF
-from pathlib import Path
-from typing import Tuple, Optional, Callable
 import logging
+from pathlib import Path
+from typing import Callable, Optional, Tuple
 
-from .pdf_text_extraction import PdfTextExtractionMixin
+import fitz  # PyMuPDF
+
 from .pdf_semantic_chunking import SemanticChunkingMixin
+from .pdf_text_extraction import PdfTextExtractionMixin
 
 # 의미 기반 청킹 모듈 import
 try:
@@ -133,9 +134,10 @@ class ImprovedPDFConverter(PdfTextExtractionMixin, SemanticChunkingMixin):
 
     def _run_postprocessing(self, md_path: Path, progress_callback: Optional[Callable], image_count: int) -> None:
         """2단계 품질 개선(후처리) 실행 및 결과 콜백 보고"""
+        from config import settings as _settings
+
         from .md_postprocessor import MDPostProcessor
         from .quality_checker import QualityChecker
-        from config import settings as _settings
 
         provider, model_name = self._resolve_postprocess_models(_settings)
 

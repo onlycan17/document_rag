@@ -9,11 +9,11 @@
 - 한글 텍스트 특성을 고려한 처리
 """
 
-import re
 import logging
-from typing import List, Dict, Tuple, Optional
-from collections import Counter
 import math
+import re
+from collections import Counter
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

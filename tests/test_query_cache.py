@@ -9,11 +9,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from langchain.schema import Document
 
-from src.vectorstore.vector_db import EnhancedVectorDatabase
+from src.vectorstore.vector_db import VectorDatabase
 
 
-def make_db() -> EnhancedVectorDatabase:
-    db = object.__new__(EnhancedVectorDatabase)
+def make_db() -> VectorDatabase:
+    db = object.__new__(VectorDatabase)
     db._query_cache = {}
     db.bm25_retriever = None
     db.vector_store = object()  # None이면 search()가 조기 반환하므로 더미 객체 사용

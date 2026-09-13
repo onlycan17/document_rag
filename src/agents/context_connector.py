@@ -2,11 +2,13 @@
 문맥 연결 에이전트 - 페이지 경계에서 끊어진 문장을 자연스럽게 연결
 """
 
-import re
 import logging
+import re
 from typing import List
-from .base_agent import BaseAgent
+
 from config import settings
+
+from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 

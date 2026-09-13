@@ -4,10 +4,10 @@ PDF 페이지 경계 맥락 끊어짐 개선 테스트 스크립트
 개선된 ImprovedPDFConverter가 페이지 경계에서 문장을 올바르게 연결하는지 검증합니다.
 """
 
-import sys
-from pathlib import Path
-import tempfile
 import shutil
+import sys
+import tempfile
+from pathlib import Path
 
 import pytest
 
