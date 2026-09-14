@@ -11,7 +11,7 @@ from typing import Any, Dict, Generator, List, Optional
 from config import settings
 from src.utils import TextProcessor
 from src.utils.answer_formatter import AnswerFormatter
-from src.utils.tracing import observe_if_enabled, propagate_trace_attributes, record_input
+from src.utils.tracing import observe_if_enabled, propagate_trace_attributes, record_input, record_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -440,7 +440,27 @@ class QueryEngine:
     @observe_if_enabled(name="answer-generation", as_type="span")
     def _invoke_chain(self, context: str, question: str):
         """답변 생성 — 표준 체인 실행 (answer-generation 관측 단계)."""
-        return self.chain.invoke({"context": context, "question": question})
+        response = self.chain.invoke({"context": context, "question": question})
+        self._record_answer_usage(response)
+        return response
+
+    def _record_answer_usage(self, response: Any) -> None:
+        """답변 응답의 토큰 사용량·비용을 현재 run 메타데이터로 기록한다.
+
+        LangSmith 자동 관측이 openrouter(비등록 모델) 응답의 usage_metadata를
+        직렬화하지 않아 토큰·비용이 누락되므로, 응답에서 직접 읽어 보강한다.
+        """
+        usage = getattr(response, "usage_metadata", None)
+        token_usage = None
+        if hasattr(response, "response_metadata"):
+            token_usage = (response.response_metadata or {}).get("token_usage")
+        meta: dict = {}
+        if usage:
+            meta["usage"] = usage
+        if isinstance(token_usage, dict) and "cost" in token_usage:
+            meta["cost"] = token_usage["cost"]
+        if meta:
+            record_metadata(meta)
 
     @observe_if_enabled(name="answer-generation", as_type="span")
     def _stream_chain_stream(self, context: str, question: str):

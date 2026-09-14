@@ -1,5 +1,10 @@
 # 변경 이력(Changelog)
 
+## 2026-09-14 (관측성 — 토큰 사용량 기록 + 모델 해석 버그)
+- fix(observability): LangSmith 자동 관측이 openrouter(비등록 모델) 응답의 `usage_metadata`를 직렬화하지 않아 토큰·비용이 누락되던 문제 — `query_engine._invoke_chain`에서 응답 usage·cost를 읽어 `record_metadata`로 명시 기록. 노출: input/output/total 토큰·비용
+- feat(llm): `_create_openrouter_llm`에 `stream_usage=True` — 스트리밍 경로에서도 토큰 사용량 수신
+- fix(rag_chain): `Unknown model ID: None` 경고 — `_initialize_components`에서 `create_llm`이 내부 보정한 실사용 모델을 `self.current_model`에 동기화하도록 수정(모델 미지정 기본 경로에서 None이 `get_max_tokens`로 전달되던 버그)
+
 ## 2026-09-13 (정리 — 관측·문서·설정·린트 일치화)
 - fix(eval): `scripts/eval/retrieval_eval.py`가 삭제된 `langfuse_enabled`를 import해 실행 즉시 깨지던 문제 해결 → LangSmith 기반 `upload_to_langsmith`로 이행 (Langfuse Dataset·create_score 대신 사례별·요약 run에 Hit@k·best_rank·MRR을 metadata로 기록). `--help` 정상 동작 확인
 - ci: `pytest tests/test_smoke_offline.py`(단일 스모크) → `pytest tests/ -q`(전체 오프라인 회귀망 202개)로 변경, `ruff format --check .` 스텝 추가. `Makefile test` 타겟도 전체 회귀망으로 동기화

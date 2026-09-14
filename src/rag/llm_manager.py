@@ -164,6 +164,7 @@ class LLMManager:
             temperature=settings.temperature,
             max_tokens=max_tokens,
             streaming=streaming,
+            stream_usage=True,  # 스트리밍에서도 토큰 사용량 수신 (LangSmith 비용 기록용)
             callbacks=callbacks,
         )
 

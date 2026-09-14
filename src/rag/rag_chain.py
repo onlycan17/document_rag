@@ -76,6 +76,9 @@ class RAGChain:
         # LLM 및 체인 생성
         self.llm = self.llm_manager.create_llm(provider, model, streaming=False)
         self.streaming_llm = self.llm_manager.create_llm(provider, model, streaming=True)
+        # create_llm이 내부 보정한 실사용 모델을 current_*에 동기화 (None 경고 방지)
+        self.current_provider = self.llm_manager.current_provider
+        self.current_model = self.llm_manager.current_model
         self.prompt_template = self.llm_manager.create_prompt_template()
 
         # 체인 생성
