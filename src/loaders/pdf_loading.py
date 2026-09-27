@@ -380,12 +380,18 @@ class PdfLoadingMixin:
                 progress_callback(0.4, "PDF 분석 중... (OCR 모드)")
             documents = self.advanced_pdf_loader.load_pdf(file_path, progress_callback)
             logger.info(f"고급 PDF 로더로 처리: {file_path}")
-            return documents
         except Exception as e:
             logger.warning(f"고급 PDF 로더 실패, 기본 로더 사용: {str(e)}")
             if progress_callback:
                 progress_callback(0.6, "기본 PDF 로더로 전환...")
             return None
+
+        # 변환기 경로와 같이 converted_docs에 저장하고 분할 LLM 교정(processed_docs)을 거쳐 검토할 수 있게 한다
+        for document in documents:
+            engine = document.metadata.get("ocr_engine")
+            method_name = f"OCR ({engine})" if engine else "PyPDF 텍스트 추출"
+            self._save_md_and_postprocess(document, file_path, document.page_content, [], method_name)
+        return documents
 
     def _load_with_basic_loader(self, file_path: str, progress_callback) -> List[Document]:
         """3차 시도: 기본 PDF 로더(최후 수단)"""

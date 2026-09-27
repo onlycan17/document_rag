@@ -76,3 +76,28 @@ def test_text_pdf_uses_improved_converter(tmp_path):
     result = _routing_loader(calls)._load_pdf_file(str(_make_text_pdf(tmp_path / "text.pdf")))
 
     assert calls == ["image_analysis", "agent", "improved"] and result == ["improved"]
+
+
+def test_ocr_output_is_saved_as_markdown_and_postprocessed():
+    """OCR 결과도 converted_docs 저장 → MD 후처리(분할 LLM 교정)를 거쳐 검토할 수 있어야 한다"""
+    from langchain.schema import Document
+
+    from src.loaders.document_loader import EnhancedDocumentLoader
+
+    saved = []
+    loader = object.__new__(EnhancedDocumentLoader)
+    loader.use_ocr = True
+    loader.advanced_pdf_loader = type(
+        "StubLoader",
+        (),
+        {
+            "load_pdf": lambda self, path, cb=None: [
+                Document(page_content="[페이지 1]\n본문", metadata={"ocr_engine": "upstage"})
+            ]
+        },
+    )()
+    loader._save_md_and_postprocess = lambda document, path, content, images, method: saved.append((content, method))
+
+    documents = loader._load_with_ocr("scan.pdf", None)
+
+    assert saved == [("[페이지 1]\n본문", "OCR (upstage)")] and len(documents) == 1
