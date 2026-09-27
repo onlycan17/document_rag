@@ -214,30 +214,19 @@ class VectorDatabase:
 
     def _mmr_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
         """MMR (Maximal Marginal Relevance) 검색"""
+        # 점수 포함 MMR은 FAISS만 지원 — 그 외 스토어는 유사도 검색 사용
+        if settings.vector_db_type != "faiss":
+            return self._similarity_search(query, k)
         try:
-            # MMR 검색 수행
-            docs = self.vector_store.max_marginal_relevance_search(
-                query,
+            # 질의는 한 번만 임베딩하고, 점수는 FAISS 거리 그대로 사용 (임계값과 동일 척도)
+            query_embedding = self.embedding_model.store_embeddings.embed_query(query)
+            results = self.vector_store.max_marginal_relevance_search_with_score_by_vector(
+                query_embedding,
                 k=k,
                 fetch_k=k * 2,  # 더 많은 후보에서 선택
                 lambda_mult=1 - settings.mmr_diversity_score,  # 다양성 조절
             )
-
-            # 점수는 별도로 계산해야 함 (MMR은 점수를 반환하지 않음)
-            scored_results = []
-            for doc in docs:
-                # 임베딩을 통한 유사도 계산
-                doc_embedding = self.embedding_model.embed_query(doc.page_content)
-                query_embedding = self.embedding_model.embed_query(query)
-
-                # 코사인 유사도 계산
-                similarity = cosine_similarity([query_embedding], [doc_embedding])[0][0]
-                # FAISS 거리로 변환 (낮을수록 좋음)
-                distance = 1 - similarity
-
-                scored_results.append((doc, distance))
-
-            return self._filter_by_threshold(scored_results)
+            return self._filter_by_threshold(results)
 
         except Exception as e:
             logger.warning(f"MMR 검색 실패, 기본 검색 사용: {str(e)}")
