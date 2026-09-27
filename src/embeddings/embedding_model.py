@@ -4,6 +4,7 @@ import time
 from functools import wraps
 from typing import List
 
+from langchain_core.embeddings import Embeddings
 from langchain_openai import OpenAIEmbeddings
 from langchain_upstage import UpstageEmbeddings
 
@@ -96,6 +97,22 @@ def api_retry_with_backoff(max_retries=None, base_delay=None, max_delay=None):
     return decorator
 
 
+class PassageQueryEmbeddings(Embeddings):
+    """벡터 스토어용 임베딩: 문서는 passage 모델, 질의는 query 모델로 임베딩한다."""
+
+    def __init__(self, doc_embeddings: Embeddings, query_embeddings: Embeddings):
+        self.doc_embeddings = doc_embeddings
+        self.query_embeddings = query_embeddings
+
+    @api_retry_with_backoff()
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self.doc_embeddings.embed_documents(texts)
+
+    @api_retry_with_backoff()
+    def embed_query(self, text: str) -> List[float]:
+        return self.query_embeddings.embed_query(text)
+
+
 class EmbeddingModel:
     """
     향상된 임베딩 모델 클래스
@@ -128,6 +145,8 @@ class EmbeddingModel:
                 "사용 가능한 임베딩 API 키가 없습니다. "
                 ".env에 UPSTAGE_API_KEY(권장) 또는 OPENAI_API_KEY를 설정해주세요."
             )
+        # FAISS/Chroma에 넘기는 임베딩 (인덱싱=passage, 검색=query)
+        self.store_embeddings = PassageQueryEmbeddings(self.doc_embeddings, self.embeddings)
 
     @api_retry_with_backoff()
     def embed_documents(self, texts: List[str]) -> List[List[float]]:

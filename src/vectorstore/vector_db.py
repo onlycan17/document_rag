@@ -61,7 +61,7 @@ class VectorDatabase:
         """벡터 스토어 초기화"""
         if settings.vector_db_type == "chromadb":
             self.vector_store = Chroma(
-                persist_directory=settings.vector_db_path, embedding_function=self.embedding_model.embeddings
+                persist_directory=settings.vector_db_path, embedding_function=self.embedding_model.store_embeddings
             )
         elif settings.vector_db_type == "faiss":
             # FAISS 인덱스가 이미 존재하는지 확인
@@ -93,7 +93,7 @@ class VectorDatabase:
         elif settings.vector_db_type == "faiss":
             if self.vector_store is None:
                 # 첫 문서 추가 시 FAISS 인덱스 생성
-                self.vector_store = FAISS.from_documents(documents, self.embedding_model.embeddings)
+                self.vector_store = FAISS.from_documents(documents, self.embedding_model.store_embeddings)
             else:
                 self.vector_store.add_documents(documents)
             self.save_faiss_index()
@@ -477,7 +477,9 @@ class VectorDatabase:
                 # FAISS 벡터 스토어 로드
                 if os.path.exists(os.path.join(settings.vector_db_path, "index.faiss")):
                     self.vector_store = FAISS.load_local(
-                        settings.vector_db_path, self.embedding_model.embeddings, allow_dangerous_deserialization=True
+                        settings.vector_db_path,
+                        self.embedding_model.store_embeddings,
+                        allow_dangerous_deserialization=True,
                     )
 
                     # 문서 캐시 로드
