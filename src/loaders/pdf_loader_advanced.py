@@ -7,6 +7,7 @@ from langchain.schema import Document
 
 from config import settings
 
+from ..utils.sentence_completion import join_page_boundaries
 from .ocr_engines import OCR_ENGINES, available_engines
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,8 @@ class AdvancedPDFLoader:
             raise ValueError(f"텍스트 레이어가 없는 PDF이며 OCR이 비활성화되어 있습니다: {file_path}")
 
         engine, page_texts = self._ocr_pages(file_path, progress_callback)
-        ocr_text = "".join(f"\n--- 페이지 {n} ---\n{text}" for n, text in enumerate(page_texts, 1) if text.strip())
+        page_texts = join_page_boundaries(page_texts)
+        ocr_text = "".join(f"\n[페이지 {n}]\n{text}\n" for n, text in enumerate(page_texts, 1) if text.strip())
         if not ocr_text.strip():
             raise ValueError(f"PDF에서 텍스트를 추출할 수 없습니다: {file_path}")
 

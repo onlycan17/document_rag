@@ -15,7 +15,7 @@ from typing import Callable, Optional, Tuple
 import fitz  # PyMuPDF
 
 from .pdf_heading_utils import get_heading_level, is_real_heading, join_paragraph_lines
-from .sentence_completion import is_incomplete_sentence
+from .sentence_completion import can_join_lines, is_incomplete_sentence
 from .text_processing import TextProcessor
 
 logger = logging.getLogger(__name__)
@@ -179,7 +179,7 @@ class PdfTextExtractionMixin:
                 next_line = all_lines[i + 1]
 
                 # 현재 줄이 불완전한 문장이고 다음 줄과 연결 가능한지 확인
-                if is_incomplete_sentence(current_line) and self._can_connect_to_next(current_line, next_line):
+                if is_incomplete_sentence(current_line) and can_join_lines(current_line, next_line):
                     # 연결 처리
                     connected_line = current_line + next_line
                     connected_lines.append(connected_line)
@@ -196,56 +196,6 @@ class PdfTextExtractionMixin:
             i += 1
 
         return "\n".join(connected_lines)
-
-    def _can_connect_to_next(self, current_line: str, next_line: str) -> bool:
-        """현재 줄과 다음 줄이 연결 가능한지 판단"""
-        if not current_line or not next_line:
-            return False
-
-        current_line = current_line.strip()
-        next_line = next_line.strip()
-
-        # 다음 줄이 명백한 새로운 문장/단락으로 시작하는 경우 연결하지 않음
-        new_sentence_starters = [
-            "그러나",
-            "하지만",
-            "따라서",
-            "그런데",
-            "또한",
-            "그리고",
-            "한편",
-            "첫째",
-            "둘째",
-            "셋째",
-            "다음",
-            "마지막으로",
-            "제",
-            "장",
-            "절",  # 제1장, 제2절 등
-            "그 결과",
-            "이에 따라",
-            "결론적으로",
-        ]
-
-        for starter in new_sentence_starters:
-            if next_line.startswith(starter):
-                return False
-
-        # 숫자나 기호로 시작하는 새로운 항목들
-        if re.match(r"^\d+[\.\)]\s", next_line):  # 1. 또는 1)
-            return False
-        if re.match(r"^[가-힣][\.\)]\s", next_line):  # 가. 또는 가)
-            return False
-
-        # 대문자로 시작하는 새로운 영어 문장
-        if re.match(r"^[A-Z][a-z]", next_line):
-            return False
-
-        # 현재 줄이 숫자나 짧은 단어로 끝나고, 다음 줄이 자연스럽게 이어질 수 있는 경우
-        if len(current_line.split()[-1]) <= 3:  # 마지막 단어가 3글자 이하
-            return True
-
-        return True
 
     def _extract_and_process_images(
         self, doc, pdf_path: Path, page_images: list, progress_callback: Optional[Callable] = None

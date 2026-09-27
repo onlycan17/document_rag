@@ -15,6 +15,8 @@ import pytest
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
+from src.utils.sentence_completion import can_join_lines  # noqa: E402
+
 
 def test_pdf_converter_improvements():
     """개선된 PDF 변환기 기능 테스트"""
@@ -28,7 +30,7 @@ def test_pdf_converter_improvements():
         converter = ImprovedPDFConverter(output_dir=temp_dir)
 
         # 새로 추가된 메서드들 확인
-        required_methods = ["_connect_cross_page_text", "_can_connect_to_next", "_extract_and_process_images"]
+        required_methods = ["_connect_cross_page_text", "_extract_and_process_images"]
 
         all_exist = True
         for method in required_methods:
@@ -108,7 +110,7 @@ def test_connection_feasibility():
 
         all_passed = True
         for current, next_text, expected in test_cases:
-            result = converter._can_connect_to_next(current, next_text)
+            result = can_join_lines(current, next_text)
             if result == expected:
                 print(f"✓ '{current}' + '{next_text}' -> {result} (예상: {expected})")
             else:
@@ -166,7 +168,7 @@ def test_cross_page_text_connection():
                     next_lines = [line.strip() for line in next_text.split("\\n") if line.strip()]
                     if next_lines:
                         first_next_line = next_lines[0]
-                        can_connect = converter._can_connect_to_next(last_line, first_next_line)
+                        can_connect = can_join_lines(last_line, first_next_line)
                         print(f"  다음 페이지 첫 줄: '{first_next_line}' -> 연결 가능: {can_connect}")
                         print(f"  연결 결과: '{last_line + first_next_line}'")
 

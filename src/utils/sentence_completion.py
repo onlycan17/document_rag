@@ -379,3 +379,106 @@ def is_incomplete_sentence(line: str) -> bool:
     if line.endswith(_CONNECTIVE_ENDINGS):
         return True
     return any(line.endswith(morpheme) for morpheme in _INCOMPLETE_MORPHEMES)
+
+
+# 새 문장·항목을 시작하는 말 — 앞 줄이 미완성이어도 이어 붙이지 않는다
+_NEW_SENTENCE_STARTERS = (
+    "그러나",
+    "하지만",
+    "따라서",
+    "그런데",
+    "또한",
+    "그리고",
+    "한편",
+    "첫째",
+    "둘째",
+    "셋째",
+    "다음",
+    "마지막으로",
+    "그 결과",
+    "이에 따라",
+    "결론적으로",
+)
+# 제목·표·목록·페이지 표시·표/그림 캡션 같은 구조 요소 줄
+_STRUCTURE_LINE = re.compile(r"^(#|\||\[페이지 \d+\]|--- 페이지 \d+ ---|[<\[](표|그림)|[-*•·]\s)")
+_MAX_CARRIED_LINES = 3
+
+
+def can_join_lines(current_line: str, next_line: str) -> bool:
+    """미완성 문장 줄 뒤에 다음 줄을 이어 붙여도 되는지 (새 문장·항목·구조 요소면 False)"""
+    current, following = current_line.strip(), next_line.strip()
+    if not current or not following:
+        return False
+    if _STRUCTURE_LINE.match(current) or _STRUCTURE_LINE.match(following):
+        return False
+    if following.startswith(_NEW_SENTENCE_STARTERS):
+        return False
+    if re.match(r"^\d+[\.\)]\s", following) or re.match(r"^[가-힣][\.\)]\s", following):  # 1. / 가) 항목
+        return False
+    if re.match(r"^제\s*\d+\s*[장절편부]", following):  # 제1장·제2절 (제기·장소·절차 같은 단어는 허용)
+        return False
+    return not re.match(r"^[A-Z][a-z]", following)  # 새 영어 문장
+
+
+# 문장 끝: 마침표·물음표·느낌표 뒤 공백/줄끝 (소수점 "3.5"는 제외)
+_SENTENCE_END = re.compile(r"[.!?](?=\s|$)")
+
+
+def _take_sentence_remainder(line: str) -> tuple[str, str]:
+    """줄에서 첫 문장 끝까지(앞 페이지로 옮길 부분)와 나머지를 나눈다. 문장 끝이 없으면 줄 전체를 옮긴다."""
+    match = _SENTENCE_END.search(line)
+    if not match:
+        return line.strip(), ""
+    return line[: match.end()].strip(), line[match.end() :].strip()
+
+
+_MIN_PROSE_LINE_CHARS = 20
+
+
+def _ends_mid_sentence(line: str) -> bool:
+    """페이지 마지막 줄이 끊긴 문장인지 (명사로 끝난 긴 본문 줄도 포함)
+
+    is_incomplete_sentence는 제목 보호를 위해 명사로 끝나는 줄을 완결로 본다. 페이지 경계에서는
+    20자 이상 본문 줄이 문장부호·쪽번호 없이 끝나면 다음 페이지로 이어지는 문장으로 본다.
+    """
+    # ponytail: 규칙 판정이라 페이지 끝의 제목("…방안 연구")은 끊긴 문장과 구분 못 함 — 이후 LLM 정리가 문맥으로 보정
+    text = line.strip()
+    if re.search(r"\s\d{1,4}$", text):  # "3. 결과 분석 120" 같은 목차·쪽 참조 줄
+        return False
+    if is_incomplete_sentence(text):
+        return True
+    return (
+        len(text) >= _MIN_PROSE_LINE_CHARS
+        and not _STRUCTURE_LINE.match(text)
+        and not _SENTENCE_END.search(text[-1:])
+        and not text[-1].isdigit()
+    )
+
+
+def join_page_boundaries(page_texts: list[str]) -> list[str]:
+    """페이지 끝에서 끊긴 문장을 다음 페이지에서 문장이 끝나는 곳까지 끌어와 잇는다 (페이지 수는 유지)
+
+    문단 전체가 아니라 끊긴 문장의 나머지만 옮기므로 다음 페이지의 나머지 본문과 [페이지 N] 위치는 유지된다.
+    한글은 대부분 띄어쓰기 자리에서 줄이 바뀌므로 공백으로 잇는다. 단어 중간이 끊긴 경우의
+    잘못된 공백은 이후 LLM 정리 단계의 띄어쓰기 교정이 바로잡는다.
+    """
+    pages = [text.strip("\n").rstrip() for text in page_texts]
+    for index in range(len(pages) - 1):
+        lines = pages[index].split("\n")
+        following = pages[index + 1].split("\n")
+        carried = 0
+        while (
+            carried < _MAX_CARRIED_LINES
+            and lines[-1].strip()
+            and following
+            and _ends_mid_sentence(lines[-1])
+            and can_join_lines(lines[-1], following[0])
+        ):
+            moved, rest = _take_sentence_remainder(following.pop(0))
+            lines[-1] = f"{lines[-1].rstrip()} {moved}"
+            if rest:
+                following.insert(0, rest)
+            carried += 1
+        pages[index] = "\n".join(lines)
+        pages[index + 1] = "\n".join(following).strip("\n")
+    return pages

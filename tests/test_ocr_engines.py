@@ -77,4 +77,17 @@ def test_loader_falls_back_to_next_engine_when_preferred_fails(tmp_path, monkeyp
     documents = AdvancedPDFLoader().load_pdf(_make_blank_pdf(tmp_path / "scan.pdf", 2))
 
     assert documents[0].metadata["ocr_engine"] == "vision"
-    assert documents[0].page_content == "--- 페이지 2 ---\n2쪽 본문"
+    assert documents[0].page_content == "[페이지 2]\n2쪽 본문"
+
+
+def test_ocr_text_joins_sentences_across_pages_and_keeps_page_markers(tmp_path, monkeypatch):
+    pages = ["특히 시스템의 기능 개선 및 추가", "도입의 필요성이 제기되었다.\n다음 문단이다."]
+    monkeypatch.setattr(loader_module, "available_engines", lambda preferred: ["vision"])
+    monkeypatch.setitem(ocr_engines.OCR_ENGINES, "vision", lambda path, progress_callback=None: pages)
+
+    content = AdvancedPDFLoader().load_pdf(_make_blank_pdf(tmp_path / "scan.pdf", 2))[0].page_content
+
+    assert (
+        content
+        == "[페이지 1]\n특히 시스템의 기능 개선 및 추가 도입의 필요성이 제기되었다.\n\n[페이지 2]\n다음 문단이다."
+    )
