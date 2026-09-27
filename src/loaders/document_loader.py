@@ -11,6 +11,7 @@ from config import settings
 
 from .chunking import ChunkingMixin
 from .docx_loading import DocxLoadingMixin
+from .junk_filter import remove_junk_lines
 from .pdf_loader_advanced import AdvancedPDFLoader
 from .pdf_loading import PdfLoadingMixin
 from .text_cleaning import TextCleaningMixin
@@ -332,7 +333,8 @@ class EnhancedDocumentLoader(TextCleaningMixin, ChunkingMixin, DocxLoadingMixin,
         processed_docs = []
 
         for doc in documents:
-            content = doc.page_content
+            # 0. 정크 줄 제거 (이미지 링크·모델 토큰은 마크다운 정제가 깨뜨리기 전에 처리)
+            content = remove_junk_lines(doc.page_content)
 
             # 1. 파일 타입별 특화 전처리
             if file_extension == ".md":
