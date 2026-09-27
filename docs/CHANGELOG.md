@@ -1,5 +1,13 @@
 # 변경 이력(Changelog)
 
+## 2026-09-27 (검색 품질 — 정크 청크 필터·MMR·문서 캐시)
+- feat(loader): `src/loaders/junk_filter.py` 추가 — 이미지 링크(경로 괄호 중첩 처리, 자리표시자 alt 제거), GLM `<|begin_of_box|>` 토큰, 목차 점선, 숫자만 있는 줄, `페이지 N의 이미지` 캡션 제거 및 판권면(ISBN) 청크 제외. `_preprocess_documents`에서 타입별 정제 전에 적용
+- 기존 인덱스 정리: 1195 → 785 청크(이미지 참조 374개 등 제거). 교원 업무부담(KERIS) 문서는 PDF 본문 추출 실패(hex 문자열)로 내용이 사실상 없어 재변환 필요
+- perf(vectorstore): `_mmr_search`가 결과마다 문서·질의를 재임베딩(검색당 ~2k회)하던 것을 질의 1회 임베딩 + `max_marginal_relevance_search_with_score_by_vector`로 교체. 점수가 FAISS 거리로 임계값과 동일 척도
+- fix(vectorstore): `add_documents`가 캐시 extend 전에 저장해 `documents_cache.pkl`이 마지막 배치를 누락하던 문제(재시작 후 키워드 검색 누락)
+- fix(loader): 멀티모달 전처리의 이미지 수집 루프가 바깥 `doc`을 덮어써 모든 페이지가 마지막 페이지 metadata를 받던 문제
+- 참고: `langchain_upstage` 0.7.1은 `embed_documents`→passage, `embed_query`→query 모델로 자동 라우팅하므로 별도 분리 불필요
+
 ## 2026-09-14 (관측성 — 토큰 사용량 기록 + 모델 해석 버그)
 - fix(observability): LangSmith 자동 관측이 openrouter(비등록 모델) 응답의 `usage_metadata`를 직렬화하지 않아 토큰·비용이 누락되던 문제 — `query_engine._invoke_chain`에서 응답 usage·cost를 읽어 `record_metadata`로 명시 기록. 노출: input/output/total 토큰·비용
 - feat(llm): `_create_openrouter_llm`에 `stream_usage=True` — 스트리밍 경로에서도 토큰 사용량 수신
