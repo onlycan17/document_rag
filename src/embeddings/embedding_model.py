@@ -66,10 +66,18 @@ def api_retry_with_backoff(max_retries=None, base_delay=None, max_delay=None):
                             )
                             logger.error("   3. API 제공업체에서 Rate Limit 증가 요청 고려")
 
-                    # 네트워크 관련 오류 확인
+                    # 네트워크·일시적 서버 오류 확인 ("server error": requests의 5xx 메시지, 예: 500 Internal Server Error)
                     elif any(
                         keyword in error_message.lower()
-                        for keyword in ["connection", "timeout", "network", "temporary", "unavailable", "service"]
+                        for keyword in [
+                            "connection",
+                            "timeout",
+                            "network",
+                            "temporary",
+                            "unavailable",
+                            "service",
+                            "server error",
+                        ]
                     ):
                         if attempt < max_retries:
                             delay = min(base_delay * (2**attempt) + random.uniform(0, 0.5), max_delay)
