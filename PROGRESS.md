@@ -14,11 +14,11 @@
 - 3단계: 페이지 경계 규칙 연결 + 문장 경계 분할 LLM 교정(`chunked_cleanup`) + OCR 결과 검토 흐름 연결,
   전체 문서 LLM 전처리 제거 (KERIS: 59청크 중 52개 교정, 페이지 표시·표 보존)
 
+- KERIS 교정본(93% 교정) 인덱스 반영, 실패 청크 재시도·앞머리 페이지 표시 보존 수정
+
 ## 다음 후보
-- KERIS `processed_docs/*_processed.md` 검토 후 인덱스 반영 (현재 인덱스는 교정 전 Upstage 결과)
-- OpenRouter qwen 제공사 429 빈발 — 병렬 수(PARALLEL_WORKERS) 조정 또는 제공사 라우팅 옵션 검토
+- 앞머리 표시 수정 이후 KERIS 재교정 시 남은 4개 청크도 교정 가능 (약 $0.15, 8분 + 재색인)
 
 ## 사용자 확인 필요
 - `.env`의 `EXTRA_MULTIMODAL_*_MODELS`, `MD_POSTPROCESS_MODEL`에 옛 모델명 남아 있음
 - Anthropic 계정 크레딧 부족(claude-haiku-4-5 호출 400)
-- `vector_db_backup_20260927/` 백업 폴더 삭제 여부

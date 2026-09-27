@@ -1,5 +1,11 @@
 # 변경 이력(Changelog)
 
+## 2026-09-28 (교정 안정화·KERIS 교정본 색인)
+- feat(cleanup): 병렬 교정 후 실패 청크를 순차 1회 재시도 (OpenRouter qwen3.8-flash는 제공사 Alibaba 단독이라 라우팅 대안 없음)
+- fix(cleanup): 청크 맨 앞 `[페이지 N]`을 LLM이 반복적으로 빠뜨리는 문제 — 앞머리 표시를 떼어 보내고 결과에 다시 붙임
+- data: KERIS 교정 재실행 59청크 중 55개 교정(93%, 8분), 원문 유지 4개는 모두 위 앞머리 표시 패턴(수정 전 실행). `processed_docs` 교정본으로 인덱스 KERIS 청크 교체(244 → 243, 전체 1027)
+- chore: 옛 인덱스 백업 `vector_db_backup_20260927/` 삭제
+
 ## 2026-09-28 (페이지 경계를 고려한 분할 LLM 교정)
 - feat(ocr): `sentence_completion.join_page_boundaries` — 페이지 끝에서 끊긴 문장을 다음 페이지에서 문장이 끝나는 곳까지만 끌어와 연결(`[페이지 N]` 표시 유지, 목차·제목·표·목록은 제외). 기존 연결 규칙이 '제·장·절'로 시작하는 모든 줄을 새 문장으로 보던 문제 수정(제N장 패턴으로 한정)
 - feat(cleanup): `src/utils/chunked_cleanup.py` — 문장이 끝난 문단에서만 약 3,000자로 분할, 앞뒤 청크 원문을 참고 문맥으로 함께 전송(병렬 3), 글자 수 85~115%·`[페이지 N]`·표 행 수 검증 실패 시 원문 유지. `MDPostProcessor`·`ContextConnectorAgent`가 공용 사용
