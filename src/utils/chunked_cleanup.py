@@ -100,6 +100,7 @@ def _visible_length(text: str) -> int:
 
 _PAGE_MARKER = re.compile(r"^\[페이지 \d+\]$", re.MULTILINE)
 _TABLE_ROW = re.compile(r"^\|", re.MULTILINE)
+_LEADING_PAGE_MARKERS = re.compile(r"(?:\[페이지 \d+\]\n)+")
 
 
 def _structure_signature(text: str) -> tuple[list[str], int]:
@@ -117,13 +118,16 @@ def clean_document(text: str, call_llm: Callable[[str], str], max_workers: int =
     chunks = split_into_chunks(text)
 
     def clean_chunk(index: int) -> tuple[str, bool]:
+        # 청크 맨 앞의 [페이지 N]은 LLM이 반복적으로 빠뜨리므로 떼어 두었다가 결과 앞에 다시 붙인다
+        marker = _LEADING_PAGE_MARKERS.match(chunks[index])
+        head = marker.group(0) if marker else ""
         prompt = _PROMPT.format(
             previous=chunks[index - 1][-CONTEXT_CHARS:] if index > 0 else "(문서 시작)",
-            chunk=chunks[index],
+            chunk=chunks[index][len(head) :],
             following=chunks[index + 1][:CONTEXT_CHARS] if index + 1 < len(chunks) else "(문서 끝)",
         )
         try:
-            corrected = strip_llm_artifacts(call_llm(prompt) or "")
+            corrected = head + strip_llm_artifacts(call_llm(prompt) or "")
         except Exception as e:
             logger.warning(f"청크 {index + 1}/{len(chunks)} 교정 실패, 원문 사용: {type(e).__name__}: {e}")
             return chunks[index], False

@@ -118,17 +118,17 @@ def test_chunk_that_drops_page_marker_or_table_row_falls_back(monkeypatch):
     monkeypatch.setattr(cleanup, "TARGET_CHUNK_CHARS", 50)
     text = "\n\n".join(
         [
-            f"[페이지 1]\n{TWO_SENTENCES}",
-            f"[페이지 2]\n{TWO_SENTENCES}\n| 구분 | 값 |\n| --- | --- |\n| 사전 | 45.50 |",
+            f"{TWO_SENTENCES}\n[페이지 1]\n{TWO_SENTENCES}",  # 청크 중간의 페이지 표시
+            f"{TWO_SENTENCES}\n| 구분 | 값 |\n| --- | --- |\n| 사전 | 45.50 |",
             f"[페이지 3]\n{TWO_SENTENCES}",
         ]
     )
 
     def fake_llm(prompt: str) -> str:
         body = _body(prompt)
-        if body.startswith("[페이지 1]"):
+        if "[페이지 1]" in body:
             return body.replace("[페이지 1]\n", "")  # 페이지 표시 삭제
-        if body.startswith("[페이지 2]"):
+        if "| 사전 |" in body:
             return body.replace("| 사전 | 45.50 |", "사전 45.50")  # 표 행 변형
         return body.replace("| --- |", "|---|")  # 구분선 형식 변경은 허용
 
@@ -156,3 +156,19 @@ def test_failed_chunks_are_retried_once_sequentially(monkeypatch):
 
     assert attempts == {"0번": 2, "1번": 1, "2번": 2}
     assert result.fallback_chunks == [3]
+
+
+def test_leading_page_marker_is_kept_out_of_llm_and_restored(monkeypatch):
+    monkeypatch.setattr(cleanup, "TARGET_CHUNK_CHARS", 50)
+    text = f"[페이지 74]\n{TWO_SENTENCES}\n\n[페이지 75]\n{TWO_SENTENCES}"
+    bodies = []
+
+    def llm_dropping_first_line_marker(prompt: str) -> str:
+        body = _body(prompt)
+        bodies.append(body)
+        return re.sub(r"^\[페이지 \d+\]\n", "", body)  # 맨 앞 표시를 빠뜨리는 실제 패턴
+
+    result = cleanup.clean_document(text, llm_dropping_first_line_marker, max_workers=1)
+
+    assert not any(body.startswith("[페이지") for body in bodies)
+    assert result.fallback_chunks == [] and result.text == text
