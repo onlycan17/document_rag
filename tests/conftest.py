@@ -4,7 +4,7 @@ tests/에는 오프라인 회귀 테스트와 실제 외부 API를 호출하는 
 실제 API 호출 테스트는 `network` 마커로 자동 표시되며, pyproject의
 `addopts = -m "not network"` 설정 때문에 기본 실행에서 제외된다.
 
-- 자동 표시 대상: debug/, integration/, legacy/, processing/, utils/ 디렉토리
+- 자동 표시 대상: agent/, debug/, integration/, legacy/, processing/, utils/ 디렉토리
   (tests/README.md 기준 - 실제 문서 처리/LLM 호출을 검증하는 수동 테스트) 및
   아래 NETWORK_ROOT_FILES에 명시된 루트 레벨 파일.
 - 수동 실행: `pytest tests/ -m network` (느리고 API 비용이 발생함에 유의)
@@ -26,7 +26,7 @@ NETWORK_ROOT_FILES = {
 }
 
 # 실제 처리 파이프라인을 실행하는 수동/디버그 테스트 디렉토리
-NETWORK_DIRS = {"debug", "integration", "legacy", "processing", "utils"}
+NETWORK_DIRS = {"agent", "debug", "integration", "legacy", "processing", "utils"}
 
 # 위 network 디렉토리 안에 있지만 순수 오프라인 회귀 테스트인 파일 (기본 실행에 포함)
 OFFLINE_EXCEPTIONS = {
