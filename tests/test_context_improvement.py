@@ -91,40 +91,15 @@ def test_sentence_completion_logic():
 
 def test_connection_feasibility():
     """문장 연결 가능성 테스트"""
-    print("\\n🔗 문장 연결 가능성 테스트")
-
-    try:
-        from src.utils.pdf_converter import ImprovedPDFConverter
-
-        temp_dir = tempfile.mkdtemp()
-        converter = ImprovedPDFConverter(output_dir=temp_dir)
-
-        # 테스트 케이스: 문장 연결 가능성
-        test_cases = [
-            ("그 결과, 몽", "촌토성이 풍납동", True),  # 연결 가능
-            ("풍납동 토", "성에서 원삼국시대", True),  # 연결 가능
-            ("따라서 본 연구에서는", "1. 서론", False),  # 새로운 섹션 시작 (연결 불가)
-            ("이것은 완전한 문장이다.", "그러나 다른", False),  # 새로운 문장 시작 (연결 불가)
-            ("연구", "결과를 분석하면", True),  # 연결 가능
-        ]
-
-        all_passed = True
-        for current, next_text, expected in test_cases:
-            result = can_join_lines(current, next_text)
-            if result == expected:
-                print(f"✓ '{current}' + '{next_text}' -> {result} (예상: {expected})")
-            else:
-                print(f"✗ '{current}' + '{next_text}' -> {result} (예상: {expected})")
-                all_passed = False
-
-        # 임시 디렉토리 정리
-        shutil.rmtree(temp_dir)
-
-        return all_passed
-
-    except Exception as e:
-        print(f"✗ 문장 연결 가능성 테스트 실패: {e}")
-        return False
+    test_cases = [
+        ("그 결과, 몽", "촌토성이 풍납동", True),  # 연결 가능
+        ("풍납동 토", "성에서 원삼국시대", True),  # 연결 가능
+        ("따라서 본 연구에서는", "1. 서론", False),  # 새로운 섹션 시작 (연결 불가)
+        ("이것은 완전한 문장이다.", "그러나 다른", False),  # 새로운 문장 시작 (연결 불가)
+        ("연구", "결과를 분석하면", True),  # 연결 가능
+    ]
+    for current, next_text, expected in test_cases:
+        assert can_join_lines(current, next_text) == expected, (current, next_text)
 
 
 def test_cross_page_text_connection():
