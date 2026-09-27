@@ -32,7 +32,7 @@ NETWORK_DIRS = {"debug", "integration", "legacy", "processing", "utils"}
 OFFLINE_EXCEPTIONS = {
     Path("utils") / "test_log_masking.py",
     Path("utils") / "test_retry_contract.py",
-    Path("utils") / "test_embedding_routing.py",
+    Path("utils") / "test_retrieval_regressions.py",
 }
 
 

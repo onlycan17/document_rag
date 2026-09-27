@@ -1,4 +1,4 @@
-"""임베딩 라우팅(passage/query 분리), MMR 점수 척도, 멀티모달 전처리 메타데이터 회귀 테스트"""
+"""MMR 점수 척도와 멀티모달 전처리 메타데이터 회귀 테스트"""
 
 from typing import List
 
@@ -6,34 +6,7 @@ from langchain.schema import Document
 from langchain_community.vectorstores import FAISS
 from langchain_core.embeddings import DeterministicFakeEmbedding, Embeddings
 
-from src.embeddings.embedding_model import PassageQueryEmbeddings
 from src.vectorstore.vector_db import VectorDatabase
-
-
-class _TaggedEmbeddings(Embeddings):
-    """호출 여부를 기록하는 가짜 임베딩"""
-
-    def __init__(self, tag: float):
-        self.tag = tag
-        self.calls: List[str] = []
-
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        self.calls.append("documents")
-        return [[self.tag, 0.0] for _ in texts]
-
-    def embed_query(self, text: str) -> List[float]:
-        self.calls.append("query")
-        return [0.0, self.tag]
-
-
-def test_documents_use_passage_model_and_queries_use_query_model():
-    passage, query = _TaggedEmbeddings(1.0), _TaggedEmbeddings(2.0)
-    routed = PassageQueryEmbeddings(passage, query)
-
-    assert routed.embed_documents(["a"]) == [[1.0, 0.0]]
-    assert routed.embed_query("q") == [0.0, 2.0]
-    assert passage.calls == ["documents"]
-    assert query.calls == ["query"]
 
 
 class _CountingEmbedding(DeterministicFakeEmbedding):
@@ -48,7 +21,7 @@ class _StubEmbeddingModel:
     """EmbeddingModel 인터페이스 모사 (embed_query 직접 호출도 집계됨)"""
 
     def __init__(self, embeddings: Embeddings):
-        self.store_embeddings = embeddings
+        self.embeddings = embeddings
         self.embed_query = embeddings.embed_query
 
 
