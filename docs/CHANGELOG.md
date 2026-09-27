@@ -1,5 +1,11 @@
 # 변경 이력(Changelog)
 
+## 2026-09-28 (스캔 PDF OCR — Upstage Document Parse)
+- feat(ocr): `src/loaders/ocr_engines.py` 신규 — 스캔 PDF OCR 1순위를 Upstage Document Parse로(`OCR_ENGINE=upstage`), 실패·미설정 시 macOS Vision → Tesseract 자동 폴백. 50쪽 단위 분할 요청, 응답 상대 페이지를 원본으로 매핑, header/footer 요소(머리말·쪽번호) 제외
+- fix(retry): `api_retry_with_backoff`가 500·502 등 일시적 서버 오류를 재시도하지 않던 문제("server error" 키워드 추가). Upstage 151~200쪽 요청이 500으로 실패했다가 재요청 시 정상 처리되는 것을 확인
+- test(conftest): 실제 LLM을 호출하는 `tests/agent`를 network 마커 대상에 추가(기본 실행 3분 → 8초)
+- data: KERIS 보고서를 Upstage로 재변환(220쪽, 81초, 표 306개 보존) → `converted_docs` 교체, 인덱스 KERIS 청크 230 → 244개(전체 1028)
+
 ## 2026-09-28 (비전·기본 모델 교체)
 - fix(image): `OpenRouterImageService.analyze_image`가 이미지를 `input_image`(Responses API 형식)로 보내 Chat Completions에서 **이미지가 모델에 전달되지 않던** 문제 — `image_url`로 수정. 이전 지능형 이미지 분석은 이미지를 보지 않고 관련도·설명을 생성했음
 - feat(model): 비전·OpenRouter 텍스트 기본 모델 `z-ai/glm-4.5v`·`glm-4.5-air` → `qwen/qwen3.8-flash`. 한국어 보고서 7쪽 OCR 비교에서 glm-4.5v 평균 F1 0.738 → 0.935, 비용 약 1/5. `glm-5.3-flash`는 추론 모드 필수로 쪽당 최대 12분·빈 응답이 있어 제외

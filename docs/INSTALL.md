@@ -75,8 +75,11 @@ OPNEROUTER_API_KEY="your_openrouter_api_key"
 
 스캔된 PDF(텍스트 레이어가 없는 이미지 PDF)는 자동으로 OCR로 처리됩니다.
 
-- **macOS**: 내장 Vision OCR을 우선 사용합니다. `requirements.txt`의 `pyobjc-framework-Vision`만 있으면 되며 추가 설치가 필요 없습니다. 기울임꼴 한글도 정확히 인식합니다.
-- **그 외 OS**: Tesseract OCR 엔진과 한국어 언어팩이 필요합니다.
+엔진 우선순위는 `.env`의 `OCR_ENGINE`(기본 `upstage`)이며, 실패하거나 사용할 수 없으면 Vision → Tesseract 순으로 자동 전환됩니다.
+
+- **Upstage Document Parse (기본)**: `UPSTAGE_API_KEY`만 있으면 됩니다. 표 구조를 보존하고 머리말·쪽번호를 제외합니다. 비용 $0.01/쪽(220쪽 약 $2.2).
+- **macOS Vision (무료 폴백)**: `requirements.txt`의 `pyobjc-framework-Vision`으로 추가 설치 없이 동작합니다. 기울임꼴 한글도 인식하지만 표는 줄 단위로 풀립니다.
+- **Tesseract (그 외 OS 폴백)**: Tesseract OCR 엔진과 한국어 언어팩이 필요합니다.
 
 ```bash
 # 자동 설치 스크립트 실행 (macOS/Linux)

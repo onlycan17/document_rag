@@ -10,6 +10,7 @@
 
 ## 2. 컴포넌트
 - `src/loaders/DocumentLoader`: PDF/OCR/Markdown/TXT 로딩 및 전처리/청크 분할.
+  - 스캔 PDF(페이지당 텍스트 50자 미만)는 이미지 분석·변환기를 건너뛰고 `src/loaders/ocr_engines.py`로 OCR: Upstage Document Parse(기본) → macOS Vision → Tesseract 순 폴백.
    - 지능형 이미지 처리: OpenRouter만 사용(폴백 없음, 엄격 모드)
      - OpenRouter: `src/utils/openrouter_image_service.py`(모델: `qwen/qwen3.8-flash`)
 - `src/embeddings/EmbeddingModel`: Upstage/OpenAI/HuggingFace 임베딩 선택, 배치 처리, 재시도.
