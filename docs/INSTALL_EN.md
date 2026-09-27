@@ -51,14 +51,13 @@ A Docker image with all dependencies pre-installed will be available soon.
 - **Core**: streamlit, langchain ecosystem
 - **Vector DB**: faiss-cpu, chromadb
 - **ML/AI**: sentence-transformers, torch, transformers
-- **PDF Processing**: pypdf, PyPDF2, pdf2image[jpeg]
-- **OCR**: pytesseract (Python wrapper for Tesseract)
+- **PDF Processing**: pypdf, PyPDF2, PyMuPDF
+- **OCR**: pyobjc-framework-Vision (macOS Vision OCR, preferred), pytesseract (fallback on other OSes)
 - **API Clients**: openai, anthropic, google-generativeai
 
 ### System Packages (via package manager)
-- **tesseract-ocr**: OCR engine
+- **tesseract-ocr**: OCR engine (not needed on macOS, which uses Vision)
 - **tesseract-ocr-kor**: Korean language support
-- **poppler-utils**: PDF rendering (required by pdf2image)
 
 ## Verification
 

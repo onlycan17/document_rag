@@ -114,12 +114,13 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
 ### 선택: OCR 기능 (스캔된 PDF용)
+macOS는 내장 Vision OCR을 사용하므로 추가 설치가 필요 없습니다. 그 외 OS에서는 Tesseract를 설치하세요.
 ```bash
 # 자동 설치
 bash scripts/setup/install_ocr.sh
 
 # 또는 수동 설치 (macOS)
-brew install tesseract tesseract-lang-kor poppler
+brew install tesseract tesseract-lang
 ```
 
 ## 📚 사용 방법

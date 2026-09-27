@@ -7,6 +7,7 @@ echo "이 스크립트는 Tesseract OCR과 한국어 언어팩을 설치합니�
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
     echo "🍎 macOS 환경 감지됨"
+    echo "ℹ️  macOS에서는 Vision OCR(pyobjc-framework-Vision, requirements.txt)을 우선 사용하며 Tesseract는 폴백입니다."
     
     # Homebrew 확인
     if ! command -v brew &> /dev/null; then
@@ -23,10 +24,6 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "🇰🇷 한국어 언어팩 설치 중..."
     brew install tesseract-lang
     
-    # poppler 설치 (pdf2image 의존성)
-    echo "📄 Poppler 설치 중..."
-    brew install poppler
-    
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     # Linux
     echo "🐧 Linux 환경 감지됨"
@@ -38,16 +35,10 @@ elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
         sudo apt-get update
         sudo apt-get install -y tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng
         
-        echo "📄 Poppler 설치 중..."
-        sudo apt-get install -y poppler-utils
-        
     elif command -v yum &> /dev/null; then
         # RedHat/CentOS
         echo "📦 Tesseract 설치 중..."
         sudo yum install -y tesseract tesseract-langpack-kor tesseract-langpack-eng
-        
-        echo "📄 Poppler 설치 중..."
-        sudo yum install -y poppler-utils
     else
         echo "❌ 지원되지 않는 Linux 배포판입니다."
         exit 1
@@ -72,12 +63,6 @@ if command -v tesseract &> /dev/null; then
     fi
 else
     echo "❌ Tesseract 설치 실패"
-fi
-
-if command -v pdftoppm &> /dev/null; then
-    echo "✓ Poppler 설치됨"
-else
-    echo "❌ Poppler 설치 실패"
 fi
 
 echo ""

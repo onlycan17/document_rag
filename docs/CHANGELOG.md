@@ -1,5 +1,10 @@
 # 변경 이력(Changelog)
 
+## 2026-09-27 (스캔 PDF OCR 폴백)
+- fix(loader): 텍스트 레이어가 없는 스캔·이미지 PDF를 `has_text_layer()`(페이지당 50자 기준)로 먼저 판별해, 지능형 이미지 분석·에이전트·개선된 변환기를 건너뛰고 곧장 OCR로 처리. 이전에는 개선된 변환기가 이미지 링크만 담긴 마크다운을 "성공"으로 반환해 OCR 폴백이 동작하지 않았고, 지능형 이미지 추출이 페이지 이미지 조각을 OpenRouter로 분석하는 비용도 발생
+- feat(ocr): macOS에서는 Vision OCR(`pyobjc-framework-Vision==12.2.2`, darwin 전용) 우선, 그 외는 Tesseract 폴백. Tesseract가 판독하지 못하던 기울임꼴 한글 인식
+- perf(ocr): `pdf2image`로 전체 페이지를 메모리에 올리던 방식을 PyMuPDF 페이지 단위 렌더링(300dpi)으로 교체. `pdf2image`·poppler 의존성 제거(requirements·설치 스크립트·설치 문서 동기화)
+
 ## 2026-09-27 (검색 품질 — 정크 청크 필터·MMR·문서 캐시)
 - feat(loader): `src/loaders/junk_filter.py` 추가 — 이미지 링크(경로 괄호 중첩 처리, 자리표시자 alt 제거), GLM `<|begin_of_box|>` 토큰, 목차 점선, 숫자만 있는 줄, `페이지 N의 이미지` 캡션 제거 및 판권면(ISBN) 청크 제외. `_preprocess_documents`에서 타입별 정제 전에 적용
 - 기존 인덱스 정리: 1195 → 785 청크(이미지 참조 374개 등 제거). 교원 업무부담(KERIS) 문서는 PDF 본문 추출 실패(hex 문자열)로 내용이 사실상 없어 재변환 필요

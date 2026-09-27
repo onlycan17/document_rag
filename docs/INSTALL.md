@@ -73,14 +73,17 @@ OPNEROUTER_API_KEY="your_openrouter_api_key"
 
 ### 5. (선택) OCR 기능 설치
 
-스캔된 PDF나 이미지 형식의 문서에서 텍스트를 추출하려면 Tesseract OCR 엔진이 필요합니다.
+스캔된 PDF(텍스트 레이어가 없는 이미지 PDF)는 자동으로 OCR로 처리됩니다.
+
+- **macOS**: 내장 Vision OCR을 우선 사용합니다. `requirements.txt`의 `pyobjc-framework-Vision`만 있으면 되며 추가 설치가 필요 없습니다. 기울임꼴 한글도 정확히 인식합니다.
+- **그 외 OS**: Tesseract OCR 엔진과 한국어 언어팩이 필요합니다.
 
 ```bash
 # 자동 설치 스크립트 실행 (macOS/Linux)
 bash scripts/setup/install_ocr.sh
 
 # 또는 수동 설치 (macOS 예시)
-brew install tesseract tesseract-lang-kor poppler
+brew install tesseract tesseract-lang
 ```
 
 ## ✅ 설치 확인 및 실행
