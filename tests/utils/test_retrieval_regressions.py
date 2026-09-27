@@ -1,4 +1,4 @@
-"""MMR 점수 척도, 멀티모달 전처리 메타데이터, 문서 캐시 저장 회귀 테스트"""
+"""MMR 점수 척도, 문서 캐시 저장 회귀 테스트"""
 
 from typing import List
 
@@ -42,32 +42,6 @@ def test_mmr_search_embeds_query_once_and_returns_faiss_distances():
     assert results
     for doc, score in results:
         assert abs(score - expected[doc.page_content]) < 1e-4
-
-
-class _EchoMultimodalModel:
-    """전달받은 이미지 목록을 본문으로 돌려주는 가짜 멀티모달 전처리 모델"""
-
-    def preprocess_document_with_images(self, content: str, images: list) -> str:
-        return f"{content} images={images}"
-
-    def preprocess_text(self, content: str) -> str:
-        return content
-
-
-def test_multimodal_preprocessing_keeps_each_page_metadata_and_images():
-    from src.loaders.document_loader import EnhancedDocumentLoader
-
-    loader = object.__new__(EnhancedDocumentLoader)
-    loader._preprocessing_model = _EchoMultimodalModel()
-    loader.preprocessing_model = "fake"
-    loader.enable_multimodal_preprocessing = True
-    body = "몽촌토성 발굴 조사 내용입니다. " * 10
-    pages = [Document(page_content=body, metadata={"page": i, "images": [f"img{i}.png"]}) for i in range(2)]
-
-    processed = loader._preprocess_documents(pages, ".pdf")
-
-    assert [doc.metadata["page"] for doc in processed] == [0, 1]
-    assert "img0.png" in processed[0].page_content and "img1.png" not in processed[0].page_content
 
 
 def test_add_documents_persists_cache_including_latest_batch(tmp_path, monkeypatch):

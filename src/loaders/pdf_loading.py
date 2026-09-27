@@ -252,22 +252,16 @@ class PdfLoadingMixin:
 
     def _resolve_agent_provider_model(self) -> tuple:
         """에이전트 LLM 제공자/모델을 UI 선택값 또는 설정으로 강제 동기화"""
-        provider = None
-        model = None
+        provider = self.preprocessing_model
         try:
             import streamlit as st  # type: ignore
 
             # 전처리 섹션의 선택값을 최우선으로 사용
-            provider = st.session_state.get("preprocessing_model", None) or self.preprocessing_model
-            if st.session_state.get("enable_multimodal_preprocessing", False):
-                model = st.session_state.get("preproc_mm_model", None)
-            else:
-                model = st.session_state.get("preproc_text_model", None)
-        except Exception:
-            # 세션을 사용할 수 없으면 인자로 받은 전처리 모델 타입 사용
-            provider = self.preprocessing_model
+            provider = st.session_state.get("preprocessing_model", None) or provider
+        except Exception as err:
+            logger.debug(f"세션 전처리 제공자 조회 실패(무시): {err}")
 
-        return resolve_provider_model(provider, model)
+        return resolve_provider_model(provider, None)
 
     def _load_with_agent_converter(self, file_path: str, progress_callback) -> Optional[List[Document]]:
         """에이전트 기반 PDF 변환. 실패 시 None 반환(상위 폴백 유도)"""

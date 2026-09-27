@@ -47,25 +47,3 @@ def test_image_analysis_sends_image_as_image_url_with_reasoning_off(monkeypatch,
     assert image_parts and all(p["type"] == "image_url" for p in image_parts)
     assert captured["reasoning"] == {"enabled": False}
     assert result["relevance"] == 0.9
-
-
-def test_multimodal_preprocessing_retries_on_rate_limit(monkeypatch):
-    import src.embeddings.embedding_model as embedding_module
-    import src.processing.multimodal_preprocessing_model as module
-
-    class FakeResponse:
-        def __init__(self, status_code, payload):
-            self.status_code, self._payload, self.text = status_code, payload, str(payload)
-
-        def json(self):
-            return self._payload
-
-    responses = [FakeResponse(429, {"error": "rate limit"}), FakeResponse(200, {"choices": []})]
-    sent = []
-    monkeypatch.setattr(
-        module.requests, "post", lambda url, json, headers, timeout: sent.append(json) or responses.pop(0)
-    )
-    monkeypatch.setattr(embedding_module.time, "sleep", lambda seconds: None)
-
-    assert module._post_openrouter("https://example.com", {"model": "m"}, {}) == {"choices": []}
-    assert len(sent) == 2

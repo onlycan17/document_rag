@@ -141,16 +141,8 @@ class Settings(BaseSettings):
     api_base_delay: float = float(os.getenv("API_BASE_DELAY", "3.0"))  # 기본 대기 시간 증가
     api_max_delay: float = float(os.getenv("API_MAX_DELAY", "300.0"))  # 최대 대기 시간 증가 (5분)
 
-    # 문서 전처리 모델 설정
-    preprocessing_model: str = os.getenv("PREPROCESSING_MODEL", "openrouter")  # 전처리 기본 제공자를 외부 API로 전환
-    preprocessing_max_tokens: int = int(os.getenv("PREPROCESSING_MAX_TOKENS", "2000"))  # 전처리 최대 토큰 수
-    # 전처리 단계에서 사용하는 온도 (환경변수로 오버라이드 가능)
-    preprocessing_temperature: float = float(os.getenv("PREPROCESSING_TEMPERATURE", "1.0"))  # 전처리 온도
-
-    # 멀티모달 전처리 (이미지 모델은 openrouter_mm_model 사용)
-    enable_multimodal_preprocessing: bool = (
-        os.getenv("ENABLE_MULTIMODAL_PREPROCESSING", "true").lower() == "true"
-    )  # 멀티모달 전처리 활성화(기본 on)
+    # 에이전트 모드 PDF 변환에 쓰는 LLM 제공자 (문서 LLM 교정은 MD 후처리에서 수행)
+    preprocessing_model: str = os.getenv("PREPROCESSING_MODEL", "openrouter")
 
     # UI 설정
     app_title: str = "쉽게 설명하는 RAG 챗봇"

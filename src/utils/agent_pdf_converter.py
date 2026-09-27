@@ -99,10 +99,6 @@ class AgentBasedPDFConverter:
             import streamlit as st  # type: ignore
 
             provider = st.session_state.get("preprocessing_model", None)
-            if st.session_state.get("enable_multimodal_preprocessing", False):
-                model = st.session_state.get("preproc_mm_model", None)
-            else:
-                model = st.session_state.get("preproc_text_model", None)
         except Exception as err:
             logger.debug(f"세션 전처리 텍스트 모델 조회 실패(무시): {err}")
         # 2) 인자값 우선

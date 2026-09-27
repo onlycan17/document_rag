@@ -98,7 +98,6 @@ def _reinitialize_document_loader(preprocessing_settings: Dict[str, Any]) -> Non
             enable_postprocessing=preprocessing_settings.get("enable_postprocessing", False),
             use_intelligent_image_extraction=preprocessing_settings.get("use_intelligent_extraction", False),
             preprocessing_model=preprocessing_settings.get("selected_preprocessing_model", "local"),
-            enable_multimodal_preprocessing=st.session_state.enable_multimodal_preprocessing,
         )
 
 
