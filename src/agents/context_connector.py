@@ -6,7 +6,7 @@ import logging
 from typing import List
 
 from config import settings
-from src.processing.chunked_cleanup import MAX_OUTPUT_TOKENS, clean_document
+from src.utils.chunked_cleanup import MAX_OUTPUT_TOKENS, clean_document
 from src.utils.sentence_completion import join_page_boundaries
 
 from .base_agent import BaseAgent

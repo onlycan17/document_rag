@@ -2,7 +2,7 @@
 
 import re
 
-import src.processing.chunked_cleanup as cleanup
+import src.utils.chunked_cleanup as cleanup
 
 SENTENCE = "몽촌토성 북문지 일원에서 백제 토기와 기와가 다수 출토되었다."
 TWO_SENTENCES = f"{SENTENCE} {SENTENCE}"

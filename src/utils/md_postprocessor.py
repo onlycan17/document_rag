@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Optional
 
 from config import settings
 from src.agents.base_agent import BaseAgent
-from src.processing.chunked_cleanup import MAX_OUTPUT_TOKENS, clean_document
+from src.utils.chunked_cleanup import MAX_OUTPUT_TOKENS, clean_document
 
 logger = logging.getLogger(__name__)
 
