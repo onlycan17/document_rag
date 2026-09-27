@@ -13,6 +13,7 @@ from config import settings
 from ..utils.agent_pdf_converter import AgentBasedPDFConverter
 from ..utils.pdf_converter import ImprovedPDFConverter
 from ..utils.text_processing import TextProcessor
+from .pdf_loader_advanced import has_text_layer
 from .pdf_loading_helpers import (  # noqa: F401 - 외부 import 경로 유지
     build_extraction_metadata,
     cleanup_temp_dir,
@@ -166,6 +167,13 @@ class PdfLoadingMixin:
 
         # 각 파일 처리 시작 시 메타데이터 초기화
         self.image_extraction_metadata = None
+
+        # 스캔·이미지 PDF는 이미지 분석·변환기가 본문 없이 이미지 조각만 다루므로 곧장 OCR로 보낸다
+        if not has_text_layer(file_path):
+            logger.info(f"텍스트 레이어가 부족한 PDF — 이미지 분석·변환기를 건너뛰고 OCR로 처리: {file_path}")
+            return self._load_with_ocr(file_path, progress_callback) or self._load_with_basic_loader(
+                file_path, progress_callback
+            )
 
         if self.use_intelligent_image_extraction:
             self._extract_intelligent_images(file_path, progress_callback)
