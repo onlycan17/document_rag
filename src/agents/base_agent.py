@@ -221,6 +221,8 @@ class BaseAgent(ABC):
             "messages": [{"role": "user", "content": prompt}],
             "temperature": float(temperature),
             "max_tokens": int(max_tokens),
+            # 교정·검증 작업에 추론 불필요 — 추론 토큰이 max_tokens를 소진하면 출력이 잘림
+            "reasoning": {"enabled": False},
         }
         resp = requests.post(url, json=body, headers=headers, timeout=120)
         if resp.status_code != 200:

@@ -435,7 +435,7 @@ def _take_sentence_remainder(line: str) -> tuple[str, str]:
 _MIN_PROSE_LINE_CHARS = 20
 
 
-def _ends_mid_sentence(line: str) -> bool:
+def ends_mid_sentence(line: str) -> bool:
     """페이지 마지막 줄이 끊긴 문장인지 (명사로 끝난 긴 본문 줄도 포함)
 
     is_incomplete_sentence는 제목 보호를 위해 명사로 끝나는 줄을 완결로 본다. 페이지 경계에서는
@@ -471,7 +471,7 @@ def join_page_boundaries(page_texts: list[str]) -> list[str]:
             carried < _MAX_CARRIED_LINES
             and lines[-1].strip()
             and following
-            and _ends_mid_sentence(lines[-1])
+            and ends_mid_sentence(lines[-1])
             and can_join_lines(lines[-1], following[0])
         ):
             moved, rest = _take_sentence_remainder(following.pop(0))
