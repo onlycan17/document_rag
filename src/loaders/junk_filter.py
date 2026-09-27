@@ -10,7 +10,7 @@ PLACEHOLDER_ALT = re.compile(r"^\s*(이미지|이メージ|image)?\s*\d*\s*(\(�
 MODEL_BOX_TOKEN = re.compile(r"<\|(begin|end)_?of_?box\|>")
 
 JUNK_LINES = (
-    re.compile(r"[·.…]{5,}\s*\d*\s*$"),  # 목차 점선 리더: "발간사·······5"
+    re.compile(r"[·.…•∙]{5,}\s*\d*\s*$"),  # 목차 점선 리더: "발간사·······5", "모델 •••••"
     re.compile(r"^[\d\s.,%~\-]+$"),  # 숫자만 있는 줄: 도표 수치, 쪽번호
     # 기존 정제 로직이 깨뜨린 이미지 참조: "이미지 1 (페이지 1) 연구(KERIS) Fpage001img001.png)"
     re.compile(r"^(이미지|이メージ)(\s+\d+\s+\(페이지\s*\d+\))?(\s.*\.(png|jpe?g|gif|webp)\)?)?$", re.IGNORECASE),
