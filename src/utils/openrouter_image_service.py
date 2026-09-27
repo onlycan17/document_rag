@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class OpenRouterImageService:
     """
     OpenRouter 멀티모달(Chat Completions) 기반 이미지 분석/OCR 서비스.
-    - 모델 기본값: `OPENROUTER_MM_MODEL`(기본 `z-ai/glm-4.5v`)
+    - 모델 기본값: `OPENROUTER_MM_MODEL`(기본 `qwen/qwen3.8-flash`)
     - 엔드포인트: {base}/v1/chat/completions
     """
 
@@ -65,13 +65,14 @@ class OpenRouterImageService:
         )
         body = {
             "model": settings.openrouter_mm_model,
+            "reasoning": {"enabled": False},  # 관련도·설명·OCR 추출에는 추론 불필요 (비용·지연만 증가)
             "messages": [
                 {"role": "system", "content": "이미지 분석과 OCR을 수행하는 도우미"},
                 {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": prompt},
-                        {"type": "input_image", "image_url": {"url": image_url}},
+                        {"type": "image_url", "image_url": {"url": image_url}},
                     ],
                 },
             ],
