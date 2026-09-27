@@ -46,7 +46,7 @@ class MDPostProcessor(BaseAgent):
         self.stats = {"total_chunks": 0, "processed_chunks": 0, "total_chars": 0, "processing_time": 0.0}
 
         # 후처리 모델 폴백 설정
-        self.fallback_model = "qwen/qwen3-vl-235b-a22b-instruct"
+        self.fallback_model = settings.openrouter_model
 
         logger.info(f"🔧 MD 후처리 엔진 초기화 완료: {self.output_dir}")
 

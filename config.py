@@ -15,22 +15,22 @@ class Settings(BaseSettings):
 
     # OpenAI 설정
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
-    # 권장 기본값: 경량 멀티모달 고성능-저비용 모델
-    openai_model: str = "gpt-5-mini"
+    # 기본값: 저비용 최신 멀티모달 (2026-09 기준, 모델 목록은 src/models/model_registry.py)
+    openai_model: str = "gpt-6-luna"
 
     # Google Gemini 설정
     google_api_key: Optional[str] = os.getenv("GOOGLE_API_KEY")
-    google_model: str = "gemini-2.5-flash"  # 또는 "gemini-2.5-pro", "gemini-2.0-ultra"
+    google_model: str = "gemini-3.5-flash-lite"  # 저비용 최신 멀티모달
 
     # Anthropic Claude 설정
     anthropic_api_key: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
-    # 권장 기본값: 최신 세대 Claude 4 Sonnet
-    anthropic_model: str = "claude-4-sonnet"
+    # 기본값: 저비용 멀티모달
+    anthropic_model: str = "claude-haiku-4-5-20251001"
 
     # 멀티모달 추가 모델(.env에서 콤마로 확장)
-    # 예) EXTRA_MULTIMODAL_OPENAI_MODELS=gpt-5-mini,gpt-5-nano
-    #    EXTRA_MULTIMODAL_GOOGLE_MODELS=gemini-2.5-pro
-    #    EXTRA_MULTIMODAL_ANTHROPIC_MODELS=claude-opus-4-1-20250805
+    # 예) EXTRA_MULTIMODAL_OPENAI_MODELS=gpt-6-sol,gpt-5.4-mini
+    #    EXTRA_MULTIMODAL_GOOGLE_MODELS=gemini-3.8-flash
+    #    EXTRA_MULTIMODAL_ANTHROPIC_MODELS=claude-sonnet-5
     extra_multimodal_openai_models: Optional[str] = os.getenv("EXTRA_MULTIMODAL_OPENAI_MODELS")
     extra_multimodal_google_models: Optional[str] = os.getenv("EXTRA_MULTIMODAL_GOOGLE_MODELS")
     extra_multimodal_anthropic_models: Optional[str] = os.getenv("EXTRA_MULTIMODAL_ANTHROPIC_MODELS")
@@ -41,10 +41,10 @@ class Settings(BaseSettings):
     # 하위 호환: 오타 표기(OPNEROUTER_API_KEY)와 올바른 표기(OPENROUTER_API_KEY) 모두 인식
     openrouter_api_key: Optional[str] = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPNEROUTER_API_KEY")
     openrouter_api_base: str = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api")
-    # 텍스트 기본 모델(선택)과 멀티모달 기본 모델
-    # 텍스트 기본 모델은 무료 모델인 glm-4.5-air로 고정(요청사항)
-    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "z-ai/glm-4.5-air")
-    openrouter_mm_model: str = os.getenv("OPENROUTER_MM_MODEL", "z-ai/glm-4.5v")
+    # 텍스트 기본 모델과 멀티모달(이미지 분석) 기본 모델
+    # qwen3.8-flash: 2026-09 한국어 문서 OCR 비교 테스트에서 glm-4.5v 대비 정확도↑, 비용 1/5
+    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-flash")
+    openrouter_mm_model: str = os.getenv("OPENROUTER_MM_MODEL", "qwen/qwen3.8-flash")
 
     # MD 후처리 설정
     enable_md_postprocessing: bool = os.getenv("ENABLE_MD_POSTPROCESSING", "true").lower() == "true"
@@ -143,13 +143,7 @@ class Settings(BaseSettings):
     # 전처리 단계에서 사용하는 온도 (환경변수로 오버라이드 가능)
     preprocessing_temperature: float = float(os.getenv("PREPROCESSING_TEMPERATURE", "1.0"))  # 전처리 온도
 
-    # 멀티모달 전처리 모델 설정 (이미지 처리용)
-    multimodal_preprocessing_model: str = os.getenv(
-        "MULTIMODAL_PREPROCESSING_MODEL", "z-ai/glm-4.5v"
-    )  # OpenRouter 전용 이미지 분석 모델 (문서 명세 고수)
-    multimodal_preprocessing_provider: str = os.getenv(
-        "MULTIMODAL_PREPROCESSING_PROVIDER", "openrouter"
-    )  # 문서 명세: 반드시 openrouter로 고정
+    # 멀티모달 전처리 (이미지 모델은 openrouter_mm_model 사용)
     enable_multimodal_preprocessing: bool = (
         os.getenv("ENABLE_MULTIMODAL_PREPROCESSING", "true").lower() == "true"
     )  # 멀티모달 전처리 활성화(기본 on)
@@ -159,6 +153,11 @@ class Settings(BaseSettings):
     app_description: str = (
         "복잡한 문서도 쉽게! 궁금한 내용을 질문하세요. 일반인도 이해할 수 있도록 친절하게 설명해드립니다."
     )
+
+    def model_for(self, provider: str) -> str:
+        """제공자별 기본 모델 (그 외 제공자는 OpenRouter 텍스트 모델, 비어 있으면 멀티모달 모델)"""
+        models = {"openai": self.openai_model, "google": self.google_model, "anthropic": self.anthropic_model}
+        return models.get(provider) or self.openrouter_model or self.openrouter_mm_model
 
 
 settings = Settings()

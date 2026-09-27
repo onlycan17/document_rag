@@ -11,6 +11,8 @@ from typing import Dict, List, Optional
 import requests
 from PIL import Image
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -106,7 +108,7 @@ class ImageAnalyzer:
                 user_prompt += f"\n\n문맥 정보: {context}"
 
             payload = {
-                "model": "gpt-4o",  # GPT-4 Vision
+                "model": settings.openai_model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {
@@ -181,7 +183,7 @@ class ImageAnalyzer:
             genai.configure(api_key=self.api_key)
 
             # 모델 초기화
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel(settings.google_model)
 
             # 이미지 로드
             img = Image.open(image_path)

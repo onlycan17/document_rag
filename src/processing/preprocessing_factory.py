@@ -26,19 +26,6 @@ class PreprocessingModelFactory:
         "openrouter": "OpenRouter (OpenAI 호환)",
     }
 
-    # 기본 모델 설정
-    DEFAULT_MODELS = {
-        # OpenAI: 저비용 멀티모달 기본값
-        "openai": "gpt-4o-mini",
-        # Google: 저비용 멀티모달 기본값
-        "google": "gemini-1.5-flash-8b",
-        # Anthropic: 저비용 멀티모달 기본값
-        "anthropic": "claude-3-5-haiku-20241022",
-        # OpenRouter: 텍스트 전처리용 모델(없으면 멀티모달 기본값으로 폴백)
-        "openrouter": getattr(settings, "openrouter_model", None)
-        or getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v"),
-    }
-
     @classmethod
     def create_model(cls, model_type: str, model_name: Optional[str] = None, **kwargs) -> PreprocessingModel:
         """
@@ -62,7 +49,7 @@ class PreprocessingModelFactory:
 
         # 기본 모델 이름 사용
         if not model_name:
-            model_name = cls.DEFAULT_MODELS.get(model_type, "default")
+            model_name = settings.model_for(model_type)
 
         logger.info(f"전처리 모델 생성: {model_type} - {model_name}")
 
@@ -93,19 +80,7 @@ class PreprocessingModelFactory:
         # 설정에서 모델 유형 읽기
         model_type = getattr(settings, config_key, "openrouter")
 
-        # 추가 설정 읽기
-        if model_type == "openai":
-            model_name = settings.openai_model
-        elif model_type == "google":
-            model_name = settings.google_model
-        elif model_type == "anthropic":
-            model_name = settings.anthropic_model
-        elif model_type == "openrouter":
-            model_name = getattr(settings, "openrouter_model", None) or getattr(settings, "openrouter_mm_model", None)
-        else:
-            model_name = None
-
-        return cls.create_model(model_type, model_name, **kwargs)
+        return cls.create_model(model_type, settings.model_for(model_type), **kwargs)
 
     @classmethod
     def get_available_models(cls) -> Dict[str, Dict[str, Any]]:
@@ -126,7 +101,7 @@ class PreprocessingModelFactory:
             }
             model_info = {
                 "description": description,
-                "default_model": cls.DEFAULT_MODELS.get(provider, "default"),
+                "default_model": settings.model_for(provider),
                 "available": bool(api_keys.get(provider)),
                 "api_key_required": True,
             }
@@ -178,7 +153,7 @@ class PreprocessingModelFactory:
         requirements = {
             "model_type": model_type,
             "description": cls.SUPPORTED_PROVIDERS[model_type],
-            "default_model": cls.DEFAULT_MODELS.get(model_type, "default"),
+            "default_model": settings.model_for(model_type),
             "api_key_required": True,
         }
 

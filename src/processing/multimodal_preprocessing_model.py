@@ -10,43 +10,33 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List
 
+import requests
+
 from config import settings
+from src.embeddings.embedding_model import api_retry_with_backoff
 
 from .preprocessing_model import APIPreprocessingModel
 
 logger = logging.getLogger(__name__)
 
 
+@api_retry_with_backoff()
+def _post_openrouter(url: str, payload: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
+    """OpenRouter Chat Completions POST (429·네트워크 오류는 지수 백오프로 재시도)"""
+    resp = requests.post(url, json=payload, headers=headers, timeout=180)
+    if resp.status_code != 200:
+        raise RuntimeError(f"OpenRouter 멀티모달 오류: {resp.status_code} - {resp.text[:200]}")
+    return resp.json()
+
+
 class MultimodalPreprocessingModel(APIPreprocessingModel):
     """멀티모달 AI 모델을 사용한 문서 전처리 (이미지 + 텍스트)"""
 
+    # 이미지 입력을 지원하는 현행 모델 (2026-09 각 제공사 모델 목록 기준). 설정된 기본 모델은 자동 포함
     SUPPORTED_MULTIMODAL_MODELS = {
-        # OpenAI 멀티모달 지원 모델
-        "openai": [
-            "gpt-4o",
-            # gpt-4o-mini, gpt-5-mini, gpt-5-nano: 문서 명세에 따라 OpenRouter 전용 파이프라인과 혼동 방지
-            # 이 모델들은 RAG 전처리에서 사용되지 않음. OpenAI는 텍스트 생성용으로만 사용.
-        ],
-        # Google Gemini 멀티모달 지원 모델 (최신 문서 기준)
-        # 참고: https://ai.google.dev/gemini-api/docs/models
-        "google": [
-            "gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-2.0-flash",
-            "gemini-1.5-pro",
-            "gemini-1.5-flash",
-            "gemini-1.5-flash-8b",
-        ],
-        # Anthropic Claude 멀티모달 지원 모델 (비전 입력 지원 라인업)
-        # 참고: https://docs.anthropic.com/en/docs/about-claude/models
-        "anthropic": [
-            "claude-opus-4-1-20250805",
-            "claude-opus-4-20250514",
-            "claude-sonnet-4-20250514",
-            "claude-3-7-sonnet-20250219",
-            "claude-3-5-haiku-20241022",
-        ],
+        "openai": ["gpt-6-luna", "gpt-6-sol", "gpt-5.4-mini", "gpt-5.4-nano"],
+        "google": ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash"],
+        "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-5", "claude-opus-5-5"],
     }
 
     @classmethod
@@ -85,6 +75,8 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
                 if name not in dst:
                     dst.append(name)
 
+        for provider in ("openai", "google", "anthropic"):
+            extend_unique(base.setdefault(provider, []), settings.model_for(provider))
         extend_unique(base.setdefault("openai", []), getattr(settings, "extra_multimodal_openai_models", None))
         extend_unique(base.setdefault("google", []), getattr(settings, "extra_multimodal_google_models", None))
         extend_unique(base.setdefault("anthropic", []), getattr(settings, "extra_multimodal_anthropic_models", None))
@@ -298,8 +290,6 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
     def _process_openrouter_multimodal(self, prompt: str, images: List[Dict[str, Any]]) -> str:
         """OpenRouter 비전 모델을 사용한 멀티모달 처리"""
         try:
-            import requests
-
             from config import settings as _s
 
             api_key = getattr(_s, "openrouter_api_key", None)
@@ -335,8 +325,9 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
                     )
 
             payload = {
-                "model": self.model_name or getattr(_s, "openrouter_mm_model", "z-ai/glm-4.5v"),
+                "model": self.model_name or _s.openrouter_mm_model,
                 "messages": [{"role": "user", "content": content}],
+                "reasoning": {"enabled": False},  # 추론 모드는 비용·지연만 늘림 (전처리는 전사·정리 작업)
                 "max_tokens": self.preprocessing_max_tokens,
                 "temperature": self.preprocessing_temperature,
             }
@@ -346,10 +337,7 @@ class MultimodalPreprocessingModel(APIPreprocessingModel):
                 "X-Title": "RAG-Multimodal-Preprocessor",
             }
 
-            resp = requests.post(url, json=payload, headers=headers, timeout=180)
-            if resp.status_code != 200:
-                raise RuntimeError(f"OpenRouter 멀티모달 오류: {resp.status_code} - {resp.text[:200]}")
-            data = resp.json()
+            data = _post_openrouter(url, payload, headers)
             processed_text = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
             logger.info(f"OpenRouter 멀티모달 전처리 완료: {len(processed_text)}자")
             return processed_text

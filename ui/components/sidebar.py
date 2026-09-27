@@ -113,8 +113,8 @@ def _render_text_preprocessing() -> Dict[str, Any]:
     # 현재 적용될 기본 모델 이름 표시
     try:
         if fixed_provider == "openrouter":
-            text_model = getattr(settings, "openrouter_model", "z-ai/glm-4.5-air")
-            mm_model = getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")
+            text_model = settings.openrouter_model
+            mm_model = settings.openrouter_mm_model
         elif fixed_provider == "openai":
             text_model = settings.openai_model
             mm_model = settings.openai_model
@@ -196,7 +196,7 @@ def _render_image_extraction() -> Dict[str, Any]:
     if intelligent_extraction:
         try:
             provider = getattr(settings, "image_analysis_provider", "openrouter")
-            model = getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")
+            model = settings.openrouter_mm_model
             st.caption(f"이미지 추출 경로: {provider} ({model})")
         except Exception:
             st.caption("이미지 추출 경로: OpenRouter 기본")

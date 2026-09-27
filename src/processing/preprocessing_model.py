@@ -47,8 +47,8 @@ def extract_responses_text(resp: Any) -> str | None:
 
 
 def resolve_openrouter_model() -> str:
-    """설정에서 OpenRouter 모델을 해석한다 (텍스트→멀티모달→하드코딩 기본)."""
-    return getattr(settings, "openrouter_model", None) or getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")
+    """설정에서 OpenRouter 모델을 해석한다 (텍스트 모델이 비어 있으면 멀티모달 모델)."""
+    return settings.openrouter_model or settings.openrouter_mm_model
 
 
 def build_openrouter_url() -> str:
@@ -139,7 +139,7 @@ class PreprocessingModel(ABC):
 class APIPreprocessingModel(PreprocessingModel):
     """외부 API 모델을 사용한 문서 전처리"""
 
-    def __init__(self, model_name: str = "gpt-4o-mini", provider: str = "openai"):
+    def __init__(self, model_name: str, provider: str = "openai"):
         """
         API 전처리 모델 초기화
 

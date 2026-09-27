@@ -112,17 +112,7 @@ class AgentBasedPDFConverter:
         if not model:
             model = llm_model
         if not model:
-            if provider == "openai":
-                model = getattr(_settings, "openai_model", "gpt-4o-mini")
-            elif provider == "google":
-                model = getattr(_settings, "google_model", "gemini-1.5-flash-8b")
-            elif provider == "anthropic":
-                model = getattr(_settings, "anthropic_model", "claude-3-5-haiku-20241022")
-            else:
-                # OpenRouter 기본 모델 결정(텍스트 우선, 없으면 멀티모달 기본값)
-                model = getattr(_settings, "openrouter_model", None) or getattr(
-                    _settings, "openrouter_mm_model", "z-ai/glm-4.5v"
-                )
+            model = _settings.model_for(provider)
         return provider, model
 
     def convert_pdf_to_markdown(self, pdf_path: str, comparison_mode: bool = False) -> str:

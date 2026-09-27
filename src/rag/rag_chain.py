@@ -190,7 +190,7 @@ class RAGChain:
         provider_models = models.get(self.current_provider, [])
 
         for model_info in provider_models:
-            if model_info.get("name") == self.current_model:
+            if model_info.get("model") == self.current_model:
                 return model_info
 
         return {
@@ -251,19 +251,6 @@ class RAGChain:
                 "large_context_processing": getattr(self, "enable_large_context_processing", False),
             },
         }
-
-    # 기존 API 호환성을 위한 메서드들
-    def _get_model_max_tokens(self) -> Dict[str, int]:
-        """모델별 최대 토큰 수 반환 (기존 호환성)"""
-        return self.llm_manager._get_model_max_tokens()
-
-    def _get_model_context_window(self) -> Dict[str, int]:
-        """모델별 컨텍스트 윈도우 크기 반환 (기존 호환성)"""
-        return self.llm_manager._get_model_context_window()
-
-    def _get_max_tokens_for_model(self, provider: str, model: Optional[str] = None) -> int:
-        """특정 모델의 최대 토큰 수 반환 (기존 호환성)"""
-        return self.llm_manager._get_max_tokens_for_model(provider, model)
 
     # 대량 문서 처리 메서드들 (기존 기능 유지)
     def process_large_context(self, question: str, k_documents: int = 15) -> Dict[str, Any]:
