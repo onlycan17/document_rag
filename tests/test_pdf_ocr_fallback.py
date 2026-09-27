@@ -5,6 +5,8 @@ from pathlib import Path
 import fitz
 import pytest
 
+from config import settings
+from src.loaders.ocr_engines import available_engines
 from src.loaders.pdf_loader_advanced import AdvancedPDFLoader, has_text_layer
 
 SAMPLE_TEXT = "몽촌토성 북문지 발굴조사 보고서\n백제 한성기 토기와 기와가 출토되었다."
@@ -34,11 +36,16 @@ def test_has_text_layer_distinguishes_text_and_scanned_pdf(tmp_path):
     assert not has_text_layer(str(_make_scanned_pdf(tmp_path / "scanned.pdf")))
 
 
-@pytest.mark.skipif(not AdvancedPDFLoader.check_ocr_availability(), reason="OCR 엔진(Vision/Tesseract) 없음")
-def test_scanned_pdf_is_extracted_with_ocr(tmp_path):
+LOCAL_ENGINES = available_engines("vision")  # 유료 API(upstage)는 테스트에서 호출하지 않음
+
+
+@pytest.mark.skipif(not LOCAL_ENGINES, reason="로컬 OCR 엔진(Vision/Tesseract) 없음")
+def test_scanned_pdf_is_extracted_with_local_ocr(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "ocr_engine", LOCAL_ENGINES[0])
     documents = AdvancedPDFLoader().load_pdf(str(_make_scanned_pdf(tmp_path / "scanned.pdf")))
 
     assert documents[0].metadata["extraction_method"] == "ocr"
+    assert documents[0].metadata["ocr_engine"] == LOCAL_ENGINES[0]
     assert "몽촌토성" in documents[0].page_content
     assert "출토" in documents[0].page_content
 

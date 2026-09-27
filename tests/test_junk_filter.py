@@ -24,6 +24,7 @@ DROP_LINES = [
     "35",
     "이미지 1 (페이지 1) 적용 방안 연구(KERIS) Fpage001img001.png)",
     "이미지",
+    "![image](/image/placeholder)",  # Upstage Document Parse 그림 자리표시자
     "**이미지**: 페이지 20의 이미지 ./images/몽촌토성4+하_page020_img006.png  ",
     "이미지: 페이지 10의 이미지 ./images/몽촌토성4+상page010img002.png",
 ]

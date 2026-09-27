@@ -1,25 +1,18 @@
 import logging
-from typing import List
+from typing import List, Tuple
 
 import fitz  # PyMuPDF
 import PyPDF2
-import pytesseract
 from langchain.schema import Document
-from PIL import Image
 
-try:  # macOS Vision OCR (pyobjc). 다른 OS에서는 Tesseract만 사용
-    import objc
-    import Vision
-    from Foundation import NSData
-except ImportError:
-    Vision = None
+from config import settings
+
+from .ocr_engines import OCR_ENGINES, available_engines
 
 logger = logging.getLogger(__name__)
 
 # 페이지당 이 글자 수 미만이면 텍스트 레이어가 없는 스캔·이미지 PDF로 본다
 MIN_TEXT_CHARS_PER_PAGE = 50
-OCR_DPI = 300
-VISION_LANGUAGES = ["ko-KR", "en-US"]
 
 
 def has_text_layer(file_path: str) -> bool:
@@ -30,37 +23,15 @@ def has_text_layer(file_path: str) -> bool:
         return text_chars >= MIN_TEXT_CHARS_PER_PAGE * max(doc.page_count, 1)
 
 
-def vision_ocr_available() -> bool:
-    return Vision is not None
-
-
-def recognize_text_vision(png_bytes: bytes) -> str:
-    """macOS Vision으로 이미지의 텍스트를 인식해 줄 단위로 반환"""
-    with objc.autorelease_pool():
-        request = Vision.VNRecognizeTextRequest.alloc().init()
-        request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
-        request.setRecognitionLanguages_(VISION_LANGUAGES)
-        request.setUsesLanguageCorrection_(True)
-        image_data = NSData.dataWithBytes_length_(png_bytes, len(png_bytes))
-        handler = Vision.VNImageRequestHandler.alloc().initWithData_options_(image_data, None)
-        success, error = handler.performRequests_error_([request], None)
-        if not success:
-            raise RuntimeError(f"Vision OCR 실패: {error}")
-        return "\n".join(obs.topCandidates_(1)[0].string() for obs in (request.results() or []))
-
-
 class AdvancedPDFLoader:
-    """OCR 기능이 포함된 고급 PDF 로더 (macOS Vision 우선, 없으면 Tesseract)"""
+    """OCR 기능이 포함된 고급 PDF 로더 (설정한 OCR 엔진 우선, 실패 시 로컬 엔진으로 폴백)"""
 
-    def __init__(self, use_ocr: bool = True, ocr_language: str = "kor+eng"):
+    def __init__(self, use_ocr: bool = True):
         """
         Args:
-            use_ocr: OCR 사용 여부
-            ocr_language: Tesseract OCR 언어 설정 (kor: 한국어, eng: 영어, kor+eng: 한국어+영어)
+            use_ocr: OCR 사용 여부 (엔진 우선순위는 settings.ocr_engine)
         """
         self.use_ocr = use_ocr
-        self.ocr_language = ocr_language
-        self.ocr_engine = "vision" if vision_ocr_available() else "tesseract"
 
     def load_pdf(self, file_path: str, progress_callback=None) -> List[Document]:
         """PDF 파일을 로드하고 텍스트 추출 (텍스트 레이어가 부족하면 OCR)"""
@@ -76,18 +47,24 @@ class AdvancedPDFLoader:
         if not self.use_ocr:
             raise ValueError(f"텍스트 레이어가 없는 PDF이며 OCR이 비활성화되어 있습니다: {file_path}")
 
-        logger.info(f"텍스트 레이어 부족 — OCR({self.ocr_engine})로 텍스트 추출: {file_path}")
-        ocr_text = self._extract_text_ocr(file_path, progress_callback)
-        if not ocr_text:
+        engine, page_texts = self._ocr_pages(file_path, progress_callback)
+        ocr_text = "".join(f"\n--- 페이지 {n} ---\n{text}" for n, text in enumerate(page_texts, 1) if text.strip())
+        if not ocr_text.strip():
             raise ValueError(f"PDF에서 텍스트를 추출할 수 없습니다: {file_path}")
 
-        metadata = {
-            "source": file_path,
-            "extraction_method": "ocr",
-            "ocr_engine": self.ocr_engine,
-            "page_count": page_count,
-        }
-        return [Document(page_content=ocr_text, metadata=metadata)]
+        metadata = {"source": file_path, "extraction_method": "ocr", "ocr_engine": engine, "page_count": page_count}
+        return [Document(page_content=ocr_text.strip(), metadata=metadata)]
+
+    def _ocr_pages(self, file_path: str, progress_callback=None) -> Tuple[str, List[str]]:
+        """사용 가능한 엔진을 우선순위대로 시도해 (엔진명, 페이지별 텍스트)를 반환"""
+        engines = available_engines(settings.ocr_engine)
+        for engine in engines:
+            try:
+                logger.info(f"텍스트 레이어 부족 — OCR({engine})로 텍스트 추출: {file_path}")
+                return engine, OCR_ENGINES[engine](file_path, progress_callback)
+            except Exception as e:
+                logger.warning(f"{engine} OCR 실패, 다음 엔진으로 폴백: {type(e).__name__}: {e}")
+        raise ValueError(f"사용 가능한 OCR 엔진이 모두 실패했습니다 (시도: {engines}): {file_path}")
 
     def _extract_text_pypdf(self, file_path: str) -> str:
         """PyPDF2를 사용한 텍스트 추출"""
@@ -105,31 +82,6 @@ class AdvancedPDFLoader:
 
         return text.strip()
 
-    def _extract_text_ocr(self, file_path: str, progress_callback=None) -> str:
-        """페이지를 하나씩 렌더링해 OCR (전체 페이지를 메모리에 올리지 않음)"""
-        parts = []
-        with fitz.open(file_path) as doc:
-            for index, page in enumerate(doc):
-                logger.info(f"페이지 {index + 1}/{doc.page_count} OCR 처리 중...")
-                if progress_callback:
-                    progress = 0.3 + (0.4 * (index / doc.page_count))
-                    progress_callback(progress, f"OCR 처리 중... (페이지 {index + 1}/{doc.page_count})")
-
-                page_text = self._ocr_page(page)
-                if page_text.strip():
-                    parts.append(f"\n--- 페이지 {index + 1} ---\n{page_text}")
-
-        return "".join(parts).strip()
-
-    def _ocr_page(self, page: fitz.Page) -> str:
-        """단일 페이지를 그레이스케일로 렌더링해 OCR"""
-        pixmap = page.get_pixmap(dpi=OCR_DPI, colorspace=fitz.csGRAY)
-        if self.ocr_engine == "vision":
-            return recognize_text_vision(pixmap.tobytes("png"))
-
-        image = Image.frombytes("L", (pixmap.width, pixmap.height), pixmap.samples)
-        return pytesseract.image_to_string(image, lang=self.ocr_language, config="--psm 3")
-
     def _get_page_count(self, file_path: str) -> int:
         """PDF 페이지 수 반환"""
         try:
@@ -142,23 +94,5 @@ class AdvancedPDFLoader:
 
     @staticmethod
     def check_ocr_availability() -> bool:
-        """OCR 사용 가능 여부 확인 (macOS Vision 또는 한국어 언어팩이 있는 Tesseract)"""
-        if vision_ocr_available():
-            return True
-        try:
-            # Tesseract 설치 확인
-            import subprocess
-
-            result = subprocess.run(["tesseract", "--version"], capture_output=True, text=True)
-            if result.returncode == 0:
-                # 한국어 언어팩 확인
-                result = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True)
-                if "kor" in result.stdout:
-                    return True
-                else:
-                    logger.warning("Tesseract 한국어 언어팩이 설치되지 않았습니다.")
-                    return False
-            return False
-        except OSError:
-            # tesseract 미설치 시 FileNotFoundError 등
-            return False
+        """사용 가능한 OCR 엔진(Upstage 키·macOS Vision·한국어 Tesseract)이 하나라도 있는지 확인"""
+        return bool(available_engines(settings.ocr_engine))

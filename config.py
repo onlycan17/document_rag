@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     # 이미지 분석 프로바이더 (pdf 전처리용): 외부 API만 지원 ("openai" | "google" | "anthropic" | "openrouter")
     image_analysis_provider: str = os.getenv("IMAGE_ANALYSIS_PROVIDER", "openrouter")
 
+    # 스캔 PDF OCR 1순위 엔진: "upstage" | "vision" | "tesseract" (실패·미설정 시 vision → tesseract 순 폴백)
+    # upstage: 2026-09 한국어 보고서 비교에서 표 구조·정확도·속도 최상, $0.01/쪽
+    ocr_engine: str = os.getenv("OCR_ENGINE", "upstage")
+
     # MD 후처리 전용 오버라이드(선택): 이 값이 설정되면 후처리만 별도 provider/model 사용
     md_postprocess_provider: Optional[str] = os.getenv("MD_POSTPROCESS_PROVIDER")
     md_postprocess_model: Optional[str] = os.getenv("MD_POSTPROCESS_MODEL")
