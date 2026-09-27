@@ -139,6 +139,13 @@ def clean_document(text: str, call_llm: Callable[[str], str], max_workers: int =
     with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
         results = list(pool.map(clean_chunk, range(len(chunks))))
 
+    # 병렬 호출이 몰려 난 요청 한도 초과(429)나 LLM의 비결정적 구조 훼손은 한 번 더 순차로 시도하면 대부분 통과
+    retry_indices = [index for index, (_, ok) in enumerate(results) if not ok]
+    if retry_indices:
+        logger.info(f"실패 청크 {[index + 1 for index in retry_indices]} 순차 재시도")
+        for index in retry_indices:
+            results[index] = clean_chunk(index)
+
     fallback = [index + 1 for index, (_, ok) in enumerate(results) if not ok]
     logger.info(f"분할 교정 완료: {len(chunks)}개 청크, 원문 대체 {len(fallback)}개 {fallback}")
     return CleanupResult("\n\n".join(text for text, _ in results), len(chunks), fallback)

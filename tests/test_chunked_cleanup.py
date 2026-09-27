@@ -136,3 +136,23 @@ def test_chunk_that_drops_page_marker_or_table_row_falls_back(monkeypatch):
 
     assert result.fallback_chunks == [1, 2]
     assert result.text == text
+
+
+def test_failed_chunks_are_retried_once_sequentially(monkeypatch):
+    monkeypatch.setattr(cleanup, "TARGET_CHUNK_CHARS", 50)
+    text = "\n\n".join(f"{index}번 문단. {TWO_SENTENCES}" for index in range(3))
+    attempts = {}
+
+    def flaky_llm(prompt: str) -> str:
+        body = _body(prompt)
+        attempts[body[:2]] = attempts.get(body[:2], 0) + 1
+        if body.startswith("0번") and attempts["0번"] == 1:
+            raise RuntimeError("429 Too Many Requests")  # 첫 시도만 실패
+        if body.startswith("2번"):
+            return "요약"  # 계속 실패
+        return body
+
+    result = cleanup.clean_document(text, flaky_llm, max_workers=3)
+
+    assert attempts == {"0번": 2, "1번": 1, "2번": 2}
+    assert result.fallback_chunks == [3]
