@@ -358,11 +358,8 @@ class EnhancedDocumentLoader(TextCleaningMixin, ChunkingMixin, DocxLoadingMixin,
                     ):
                         # 멀티모달 전처리
                         logger.info("멀티모달 전처리 수행")
-                        # PDF에서 추출된 이미지 정보 가져오기
-                        images = []
-                        for doc in documents:
-                            if hasattr(doc, "metadata") and "images" in doc.metadata:
-                                images.extend(doc.metadata["images"])
+                        # 현재 문서에 속한 이미지만 사용 (바깥 루프 변수 doc을 덮어쓰지 않도록 주의)
+                        images = doc.metadata.get("images") or []
 
                         if images:
                             processed_result = self._preprocessing_model.preprocess_document_with_images(
