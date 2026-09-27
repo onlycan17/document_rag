@@ -238,7 +238,10 @@ streamlit run app.py
 - 기본 모델(2026-09 갱신, 단일 출처: `config.py` + `src/models/model_registry.py`)
   - OpenAI: `gpt-6-luna`, Google: `gemini-3.5-flash-lite`, Anthropic: `claude-haiku-4-5-20251001`, OpenRouter: `qwen/qwen3.8-flash`
   - 제공자별 기본값 조회는 `settings.model_for(provider)` 하나로 통일
-- 멀티모달 전처리 기본 ON(`ENABLE_MULTIMODAL_PREPROCESSING=true`)
+- 문서 LLM 교정: PDF 변환 결과(`converted_docs/*.md`)를 MD 후처리 한 번으로 교정 → `processed_docs/*_processed.md`(검토 후 색인)
+  - `src/utils/chunked_cleanup.py`: 문장이 끝난 문단에서만 약 3,000자로 분할, 앞뒤 청크 원문을 참고 문맥으로 전달, 3개 병렬
+  - 검증: 공백 제외 글자 수 85~115%, `[페이지 N]` 표시·표 행 수 동일 — 어긋난 청크는 원문 유지
+  - 페이지 경계 문장은 LLM 전에 규칙으로 연결(`sentence_completion.join_page_boundaries`)
 - 멀티모달 모델 목록 동적 확장(.env):
   - `EXTRA_MULTIMODAL_OPENAI_MODELS`, `EXTRA_MULTIMODAL_GOOGLE_MODELS`, `EXTRA_MULTIMODAL_ANTHROPIC_MODELS`
   - 설정된 기본 모델은 멀티모달 지원 목록에 자동 포함

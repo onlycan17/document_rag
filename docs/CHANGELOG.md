@@ -1,5 +1,14 @@
 # 변경 이력(Changelog)
 
+## 2026-09-28 (페이지 경계를 고려한 분할 LLM 교정)
+- feat(ocr): `sentence_completion.join_page_boundaries` — 페이지 끝에서 끊긴 문장을 다음 페이지에서 문장이 끝나는 곳까지만 끌어와 연결(`[페이지 N]` 표시 유지, 목차·제목·표·목록은 제외). 기존 연결 규칙이 '제·장·절'로 시작하는 모든 줄을 새 문장으로 보던 문제 수정(제N장 패턴으로 한정)
+- feat(cleanup): `src/utils/chunked_cleanup.py` — 문장이 끝난 문단에서만 약 3,000자로 분할, 앞뒤 청크 원문을 참고 문맥으로 함께 전송(병렬 3), 글자 수 85~115%·`[페이지 N]`·표 행 수 검증 실패 시 원문 유지. `MDPostProcessor`·`ContextConnectorAgent`가 공용 사용
+- feat(loader): OCR 결과도 `converted_docs` 저장 → MD 후처리로 검토 가능
+- refactor(preprocess): 문서 전체를 한 번에 보내 4,000토큰에서 잘리던 `_preprocess_documents` LLM 단계(KERIS 35만 자 → 6천 자) 제거, `src/processing`의 전처리 모델 3개 모듈·사이드바 멀티모달 전처리 토글·`ENABLE_MULTIMODAL_PREPROCESSING` 등 삭제. LLM 교정은 MD 후처리 한 번으로 통일
+- fix(agent): OpenRouter 에이전트 호출에 `reasoning.enabled=false`(추론 토큰이 출력 한도를 소진하는 문제 방지)
+- fix(make): lint·test 타겟이 실패를 "미설치"로 숨기고 종료 코드 0을 내던 문제
+- data: KERIS 실검증 — 59청크 중 52개 교정(88%), 7개 원문 유지(구조 검증 실패 5·429 2), `[페이지 N]` 215개·표 행 485개 보존, 글자 수 99.1%, 13.5분
+
 ## 2026-09-28 (스캔 PDF OCR — Upstage Document Parse)
 - feat(ocr): `src/loaders/ocr_engines.py` 신규 — 스캔 PDF OCR 1순위를 Upstage Document Parse로(`OCR_ENGINE=upstage`), 실패·미설정 시 macOS Vision → Tesseract 자동 폴백. 50쪽 단위 분할 요청, 응답 상대 페이지를 원본으로 매핑, header/footer 요소(머리말·쪽번호) 제외
 - fix(retry): `api_retry_with_backoff`가 500·502 등 일시적 서버 오류를 재시도하지 않던 문제("server error" 키워드 추가). Upstage 151~200쪽 요청이 500으로 실패했다가 재요청 시 정상 처리되는 것을 확인

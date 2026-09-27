@@ -11,11 +11,12 @@
 - 공용 재시도가 5xx를 재시도하지 않던 문제 수정
 - KERIS 보고서 Upstage 재변환·재색인 (인덱스 1028 청크)
 
-## 다음 (3단계): 페이지 경계를 고려한 분할 전처리
-- 문제: PDF 경로의 LLM 전처리(`preprocess_text`)가 문서 전체를 한 번에 보내 출력 4000토큰에서 잘림(35만 자 → 6천 자)
-- 설계: ① `is_incomplete_sentence()`로 페이지 경계 규칙 연결 ② 완결 문장 문단 경계에서만 ~3000자 분할
-  ③ 앞뒤 문맥을 참고용으로 함께 전달 ④ 출력 길이가 입력의 85~115% 밖이면 원문 사용 ⑤ 결과는 converted_docs/*.md로 검토 후 색인
-- 대상: `src/agents/context_connector.py`(ContextConnectorAgent) 수정, `preprocess_text` 경로 대체
+- 3단계: 페이지 경계 규칙 연결 + 문장 경계 분할 LLM 교정(`chunked_cleanup`) + OCR 결과 검토 흐름 연결,
+  전체 문서 LLM 전처리 제거 (KERIS: 59청크 중 52개 교정, 페이지 표시·표 보존)
+
+## 다음 후보
+- KERIS `processed_docs/*_processed.md` 검토 후 인덱스 반영 (현재 인덱스는 교정 전 Upstage 결과)
+- OpenRouter qwen 제공사 429 빈발 — 병렬 수(PARALLEL_WORKERS) 조정 또는 제공사 라우팅 옵션 검토
 
 ## 사용자 확인 필요
 - `.env`의 `EXTRA_MULTIMODAL_*_MODELS`, `MD_POSTPROCESS_MODEL`에 옛 모델명 남아 있음
