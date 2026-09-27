@@ -20,5 +20,4 @@
 - 앞머리 표시 수정 이후 KERIS 재교정 시 남은 4개 청크도 교정 가능 (약 $0.15, 8분 + 재색인)
 
 ## 사용자 확인 필요
-- `.env`의 `EXTRA_MULTIMODAL_*_MODELS`, `MD_POSTPROCESS_MODEL`에 옛 모델명 남아 있음
 - Anthropic 계정 크레딧 부족(claude-haiku-4-5 호출 400)
