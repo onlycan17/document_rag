@@ -6,7 +6,7 @@
 - 출력: LangChain `Document`(content+metadata)
  - 이미지 처리(지능형):
    - 경로: OpenRouter만 사용(폴백 없음, 엄격 모드)
-   - OpenRouter 기본 모델: `z-ai/glm-4.5v`
+   - OpenRouter 기본 모델: `qwen/qwen3.8-flash`
    - 공통: `POST {BASE}/v1/chat/completions` 멀티모달로 OCR/관련성/설명 동시 요청
  - 임계값(`LOCAL_IMAGE_RELEVANCE_THRESHOLD`) 이상만 저장
  - 실패 시 폴백 없음: 오류를 표면화하여 즉시 중단(운영 정책)
@@ -39,10 +39,10 @@
 ## 7. 멀티모달 전처리 및 모델 목록 확장
 - 멀티모달 전처리 기본 ON(`ENABLE_MULTIMODAL_PREPROCESSING=true`)
 - 기본 전처리 모델(저비용 지향):
-  - OpenAI: `gpt-4o-mini`, Google: `gemini-1.5-flash-8b`, Anthropic: `claude-3-5-haiku-20241022`
+  - OpenAI: `gpt-6-luna`, Google: `gemini-3.5-flash-lite`, Anthropic: `claude-haiku-4-5-20251001`, OpenRouter: `qwen/qwen3.8-flash`
 - 지원 목록 동적 확장(.env):
   - `EXTRA_MULTIMODAL_OPENAI_MODELS`, `EXTRA_MULTIMODAL_GOOGLE_MODELS`, `EXTRA_MULTIMODAL_ANTHROPIC_MODELS`
-  - 예: `EXTRA_MULTIMODAL_OPENAI_MODELS=gpt-5-mini,gpt-5-nano`
+  - 예: `EXTRA_MULTIMODAL_OPENAI_MODELS=gpt-6-sol,gpt-5.4-mini`
 
 ## 5. 실행/운영
 - run_rag.py 메뉴: 앱 실행/벡터DB 관리/테스트/설정/정보

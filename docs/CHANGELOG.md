@@ -1,5 +1,12 @@
 # 변경 이력(Changelog)
 
+## 2026-09-28 (비전·기본 모델 교체)
+- fix(image): `OpenRouterImageService.analyze_image`가 이미지를 `input_image`(Responses API 형식)로 보내 Chat Completions에서 **이미지가 모델에 전달되지 않던** 문제 — `image_url`로 수정. 이전 지능형 이미지 분석은 이미지를 보지 않고 관련도·설명을 생성했음
+- feat(model): 비전·OpenRouter 텍스트 기본 모델 `z-ai/glm-4.5v`·`glm-4.5-air` → `qwen/qwen3.8-flash`. 한국어 보고서 7쪽 OCR 비교에서 glm-4.5v 평균 F1 0.738 → 0.935, 비용 약 1/5. `glm-5.3-flash`는 추론 모드 필수로 쪽당 최대 12분·빈 응답이 있어 제외
+- feat(model): 제공자별 기본 모델 `gpt-5-mini`/`gemini-2.5-flash`/`claude-4-sonnet`(존재하지 않는 ID) → `gpt-6-luna`/`gemini-3.5-flash-lite`/`claude-haiku-4-5-20251001` (각 제공사 모델 목록 API로 확인)
+- refactor(model): 기본 모델 결정 로직 4벌(`base_agent`·`agent_pdf_converter`·`preprocessing_factory`·`llm_manager`)과 하드코딩 폴백 9곳을 `settings.model_for(provider)`로 통일. `llm_manager.get_available_models`의 별도 하드코딩 목록과 미사용 호환 메서드를 제거하고 `ModelRegistry`를 단일 출처로. 레지스트리를 현행 모델로 교체, 미사용 설정 `MULTIMODAL_PREPROCESSING_MODEL/PROVIDER` 삭제
+- feat(openrouter): 이미지 분석·멀티모달 전처리 요청에 `reasoning.enabled=false`, 멀티모달 전처리 POST에 429 지수 백오프 재시도(`api_retry_with_backoff` 재사용)
+
 ## 2026-09-27 (스캔 PDF OCR 폴백)
 - fix(loader): 텍스트 레이어가 없는 스캔·이미지 PDF를 `has_text_layer()`(페이지당 50자 기준)로 먼저 판별해, 지능형 이미지 분석·에이전트·개선된 변환기를 건너뛰고 곧장 OCR로 처리. 이전에는 개선된 변환기가 이미지 링크만 담긴 마크다운을 "성공"으로 반환해 OCR 폴백이 동작하지 않았고, 지능형 이미지 추출이 페이지 이미지 조각을 OpenRouter로 분석하는 비용도 발생
 - feat(ocr): macOS에서는 Vision OCR(`pyobjc-framework-Vision==12.2.2`, darwin 전용) 우선, 그 외는 Tesseract 폴백. Tesseract가 판독하지 못하던 기울임꼴 한글 인식

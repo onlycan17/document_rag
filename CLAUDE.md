@@ -235,14 +235,15 @@ streamlit run app.py
 ## 핵심 워크플로우 - 반드시 이 순서를 따르세요!
 
 ## 최신 전처리/멀티모달 업데이트(요약)
-- 기본 전처리 모델을 저비용·멀티모달 우선으로 재정렬
-  - OpenAI: `gpt-5-mini`, Google: `gemini-2.5-flash`, Anthropic: `claude-4-sonnet`
+- 기본 모델(2026-09 갱신, 단일 출처: `config.py` + `src/models/model_registry.py`)
+  - OpenAI: `gpt-6-luna`, Google: `gemini-3.5-flash-lite`, Anthropic: `claude-haiku-4-5-20251001`, OpenRouter: `qwen/qwen3.8-flash`
+  - 제공자별 기본값 조회는 `settings.model_for(provider)` 하나로 통일
 - 멀티모달 전처리 기본 ON(`ENABLE_MULTIMODAL_PREPROCESSING=true`)
 - 멀티모달 모델 목록 동적 확장(.env):
   - `EXTRA_MULTIMODAL_OPENAI_MODELS`, `EXTRA_MULTIMODAL_GOOGLE_MODELS`, `EXTRA_MULTIMODAL_ANTHROPIC_MODELS`
-  - OpenAI 목록에 `gpt-5-pro`, `gpt-5`, `gpt-5-mini` 추가(공식 페이지 미러 근거)
+  - 설정된 기본 모델은 멀티모달 지원 목록에 자동 포함
 - OpenRouter를 이용한 지능형 이미지 추출 기본 경로
-  - `IMAGE_ANALYSIS_PROVIDER=openrouter`, `OPENROUTER_MM_MODEL=z-ai/glm-4.5v`, `OPNEROUTER_API_KEY` 필요
+  - `IMAGE_ANALYSIS_PROVIDER=openrouter`, `OPENROUTER_MM_MODEL=qwen/qwen3.8-flash`(추론 모드 끔, 429 재시도), `OPNEROUTER_API_KEY` 필요
 - OpenAI API 호출 경로 개선: Responses API → Chat Completions 폴백
 
 ### 조사 → 계획 → 구현

@@ -10,7 +10,7 @@
 - sentence-transformers/HuggingFaceEmbeddings: 임베딩(오픈소스)
 - Upstage/OpenAI/Google/Anthropic: 상용 LLM/임베딩 백엔드
 - Local HTTP LLM: OpenAI 호환 서버(`{BASE}/v1`) — 채팅/임베딩 엔드포인트 제공
-- OpenRouter: 외부 멀티모달 분석(Preprocessing) — 기본 `z-ai/glm-4.5v`
+- OpenRouter: 외부 멀티모달 분석(Preprocessing) — 기본 `qwen/qwen3.8-flash`
 - scikit-learn: TF‑IDF/코사인 유사도
 
 ## 3. 구조/모듈
@@ -24,7 +24,7 @@
 
 ## 4. 설정/비밀정보
 - `.env`에 외부 API 키를 저장, `config.py`에 기본값.
- - OpenRouter: `OPENROUTER_API_KEY`, `OPENROUTER_MM_MODEL`(기본: `z-ai/glm-4.5v`)
+ - OpenRouter: `OPENROUTER_API_KEY`, `OPENROUTER_MM_MODEL`(기본: `qwen/qwen3.8-flash`)
  - 멀티모달 모델 확장: `EXTRA_MULTIMODAL_*` 3종(OpenAI/Google/Anthropic)
 - 텔레메트리 비활성화 환경 변수 설정.
 

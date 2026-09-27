@@ -12,7 +12,7 @@
 - OpenRouter(이미지/전처리 고정):
   - `IMAGE_ANALYSIS_PROVIDER=openrouter`
   - `OPNEROUTER_API_KEY`(주의: 정확한 철자)
-  - `OPENROUTER_MM_MODEL=z-ai/glm-4.5v`
+  - `OPENROUTER_MM_MODEL=qwen/qwen3.8-flash`
   - `DISABLE_IMAGE_FALLBACK=true`(엄격 모드)
   - `USE_LOCAL_IMAGE_SERVER=false`(로컬 폴백 차단)
 - 멀티모달 모델 확장: `EXTRA_MULTIMODAL_*` 3종(OpenAI/Google/Anthropic)

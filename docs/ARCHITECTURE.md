@@ -11,7 +11,7 @@
 ## 2. 컴포넌트
 - `src/loaders/DocumentLoader`: PDF/OCR/Markdown/TXT 로딩 및 전처리/청크 분할.
    - 지능형 이미지 처리: OpenRouter만 사용(폴백 없음, 엄격 모드)
-     - OpenRouter: `src/utils/openrouter_image_service.py`(모델: `z-ai/glm-4.5v`)
+     - OpenRouter: `src/utils/openrouter_image_service.py`(모델: `qwen/qwen3.8-flash`)
 - `src/embeddings/EmbeddingModel`: Upstage/OpenAI/HuggingFace 임베딩 선택, 배치 처리, 재시도.
 - `src/vectorstore/VectorDatabase`: FAISS/Chroma 선택, 하이브리드 검색(BM25+TF‑IDF)·MMR·임계값 동적 조정.
 - `src/rag/RAGChain`: 

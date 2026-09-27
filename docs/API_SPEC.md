@@ -52,11 +52,11 @@
 
 #### OpenRouter 설정
 - 키: `.env`의 `OPENROUTER_API_KEY` (하위 호환 `OPNEROUTER_API_KEY`도 인식)
-- 기본 모델: `z-ai/glm-4.5v`
+- 기본 모델: `qwen/qwen3.8-flash`
 - 엔드포인트: `https://openrouter.ai/api/v1/chat/completions`
 
 #### 멀티모달 모델 확장(.env)
-- `EXTRA_MULTIMODAL_OPENAI_MODELS`: OpenAI 멀티모달 모델 추가(예: `gpt-5-mini,gpt-5-nano`)
+- `EXTRA_MULTIMODAL_OPENAI_MODELS`: OpenAI 멀티모달 모델 추가(예: `gpt-6-sol,gpt-5.4-mini`)
 - `EXTRA_MULTIMODAL_GOOGLE_MODELS`: Google 멀티모달 모델 추가(예: `gemini-2.5-pro`)
 - `EXTRA_MULTIMODAL_ANTHROPIC_MODELS`: Anthropic 멀티모달 모델 추가
 

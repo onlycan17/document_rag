@@ -60,17 +60,18 @@
 - 상세: `docs/improvement/IMPROVEMENT_PLAN.md` Phase 0
 
 ## 최근 변경 요약(전처리/멀티모달/모델)
-- 기본 전처리 모델(저비용·멀티모달 지향) 업데이트
-  - OpenAI: `gpt-4o-mini`
-  - Google: `gemini-1.5-flash-8b`
-  - Anthropic: `claude-3-5-haiku-20241022`
+- 기본 모델(2026-09 갱신, `config.py` + `src/models/model_registry.py`, 조회는 `settings.model_for`)
+  - OpenAI: `gpt-6-luna`
+  - Google: `gemini-3.5-flash-lite`
+  - Anthropic: `claude-haiku-4-5-20251001`
+  - OpenRouter(텍스트·비전): `qwen/qwen3.8-flash`
 - 멀티모달 전처리 기본값 ON: `ENABLE_MULTIMODAL_PREPROCESSING=true`(config 기본)
 - 멀티모달 지원 목록 최신화 + 환경변수로 동적 확장
   - `EXTRA_MULTIMODAL_OPENAI_MODELS`, `EXTRA_MULTIMODAL_GOOGLE_MODELS`, `EXTRA_MULTIMODAL_ANTHROPIC_MODELS`
-  - OpenAI 목록에 `gpt-5-mini`, `gpt-5-nano` 지원(공식 가격 페이지 미러 확인 근거)
+  - 설정된 제공자별 기본 모델(`settings.model_for`)은 목록에 자동 포함
 - OpenRouter 기반 지능형 이미지 추출 기본 경로 도입
   - 프로바이더: `IMAGE_ANALYSIS_PROVIDER=openrouter`
-  - 모델: `OPENROUTER_MM_MODEL=z-ai/glm-4.5v`
+  - 모델: `OPENROUTER_MM_MODEL=qwen/qwen3.8-flash`
   - 키: `OPNEROUTER_API_KEY`(주의: 프로젝트 사양상 철자 고정)
 - OpenAI 호출 안정성 개선: Responses API 우선 → 실패 시 Chat Completions 폴백
 - UI 임포트 수정: `app.py`에 `from src.processing import PreprocessingModelFactory`
