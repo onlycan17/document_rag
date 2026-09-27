@@ -1,4 +1,4 @@
-"""MMR 점수 척도와 멀티모달 전처리 메타데이터 회귀 테스트"""
+"""MMR 점수 척도, 멀티모달 전처리 메타데이터, 문서 캐시 저장 회귀 테스트"""
 
 from typing import List
 
@@ -68,3 +68,21 @@ def test_multimodal_preprocessing_keeps_each_page_metadata_and_images():
 
     assert [doc.metadata["page"] for doc in processed] == [0, 1]
     assert "img0.png" in processed[0].page_content and "img1.png" not in processed[0].page_content
+
+
+def test_add_documents_persists_cache_including_latest_batch(tmp_path, monkeypatch):
+    import pickle
+
+    from config import settings
+
+    monkeypatch.setattr(settings, "vector_db_path", str(tmp_path))
+    db = object.__new__(VectorDatabase)
+    db.embedding_model = _StubEmbeddingModel(DeterministicFakeEmbedding(size=16))
+    db.vector_store, db.documents_cache, db._query_cache = None, [], {}
+    db.bm25_retriever = db.tfidf_vectorizer = db.tfidf_matrix = None
+
+    db.add_documents([Document(page_content="첫 번째 배치 문서")])
+    db.add_documents([Document(page_content="두 번째 배치 문서")])
+
+    with open(tmp_path / "documents_cache.pkl", "rb") as f:
+        assert len(pickle.load(f)) == 2

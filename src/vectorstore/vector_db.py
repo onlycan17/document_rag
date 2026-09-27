@@ -96,10 +96,11 @@ class VectorDatabase:
                 self.vector_store = FAISS.from_documents(documents, self.embedding_model.embeddings)
             else:
                 self.vector_store.add_documents(documents)
-            self.save_faiss_index()
 
-        # 키워드 검색용 문서 캐시 업데이트
+        # 키워드 검색용 문서 캐시 업데이트 (저장 전에 반영해야 재시작 후에도 캐시가 인덱스와 일치)
         self.documents_cache.extend(documents)
+        if settings.vector_db_type == "faiss":
+            self.save_faiss_index()
         # 문서 구성이 바뀌었으므로 질의 캐시 무효화
         self._query_cache.clear()
         self._update_keyword_search_index()
