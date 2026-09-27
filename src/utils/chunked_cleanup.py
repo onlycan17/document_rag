@@ -2,8 +2,8 @@
 
 - 분할: 빈 줄로 나뉜 문단 단위로 모으고, 문장이 끝난 문단에서만 자른다 (표·제목은 쪼개지 않음)
 - 문맥: 각 청크에 앞뒤 청크의 원문 일부를 "참고용"으로 함께 보낸다 → 청크끼리 독립이라 병렬 처리 가능
-- 검증: 교정은 띄어쓰기·문장 연결만 하므로 출력 글자 수가 입력과 거의 같아야 한다.
-  범위를 벗어나면 요약·잘림으로 보고 그 청크는 원문을 쓴다
+- 검증: 교정은 띄어쓰기·문장 연결만 하므로 출력 글자 수가 입력과 거의 같아야 하고,
+  [페이지 N] 표시(출처 페이지)와 표 행 수가 그대로여야 한다. 어긋나면 그 청크는 원문을 쓴다
 """
 
 import logging
@@ -30,7 +30,7 @@ _PROMPT = """PDF에서 추출한 문서의 [본문]을 교정하세요.
 1. 줄바꿈으로 끊긴 문장을 한 문장으로 잇고 띄어쓰기를 교정한다 (예: "운영에홍승연은" → "운영에 홍승연은")
 2. 끊어진 단어·고유명사를 복원한다 (예: "삼국사기 백 제본기" → "삼국사기 백제본기")
 3. 내용 추가·삭제·요약 금지. 숫자·단위·고유명사·인용 표시는 원문 그대로 둔다
-4. 제목(#), 목록, 마크다운 표, [페이지 N] 표시는 형태와 위치를 그대로 유지한다
+4. 제목(#), 목록, 마크다운 표는 형태를 유지한다. [페이지 N] 줄은 하나도 빠짐없이 원래 위치에 그대로 둔다
 5. [앞 문맥]과 [뒤 문맥]은 문장이 어떻게 이어지는지 판단하는 참고용이다. 교정하거나 출력하지 않는다
 6. 설명·머리말 없이 교정한 [본문]만 출력한다
 
@@ -98,9 +98,18 @@ def _visible_length(text: str) -> int:
     return len(re.sub(r"\s", "", text))
 
 
+_PAGE_MARKER = re.compile(r"^\[페이지 \d+\]$", re.MULTILINE)
+_TABLE_ROW = re.compile(r"^\|", re.MULTILINE)
+
+
+def _structure_signature(text: str) -> tuple[list[str], int]:
+    return _PAGE_MARKER.findall(text), len(_TABLE_ROW.findall(text))
+
+
 def _is_faithful(original: str, corrected: str) -> bool:
     ratio = _visible_length(corrected) / max(_visible_length(original), 1)
-    return MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO
+    same_structure = _structure_signature(original) == _structure_signature(corrected)
+    return MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO and same_structure
 
 
 def clean_document(text: str, call_llm: Callable[[str], str], max_workers: int = 3) -> CleanupResult:
@@ -120,8 +129,9 @@ def clean_document(text: str, call_llm: Callable[[str], str], max_workers: int =
             return chunks[index], False
         if not _is_faithful(chunks[index], corrected):
             logger.warning(
-                f"청크 {index + 1}/{len(chunks)} 출력 길이 이상({_visible_length(corrected)}/"
-                f"{_visible_length(chunks[index])}자), 원문 사용"
+                f"청크 {index + 1}/{len(chunks)} 검증 실패(글자 {_visible_length(corrected)}/"
+                f"{_visible_length(chunks[index])}, 페이지 표시·표 행 {_structure_signature(corrected)} ≠ "
+                f"{_structure_signature(chunks[index])}), 원문 사용"
             )
             return chunks[index], False
         return corrected, True

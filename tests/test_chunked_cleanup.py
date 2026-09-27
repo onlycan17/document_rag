@@ -106,7 +106,33 @@ def test_context_connector_joins_pages_before_llm_cleanup(monkeypatch):
     bodies = []
     monkeypatch.setattr(agent, "_call_llm", lambda prompt, **kwargs: bodies.append(_body(prompt)) or _body(prompt))
 
-    blocks = agent.process(["한강이 서울지역을 강남과 강북으로 구분하는 경계이며 그 총", "연장은 497.5㎞이다.\n다음 문장이다."])
+    blocks = agent.process(
+        ["한강이 서울지역을 강남과 강북으로 구분하는 경계이며 그 총", "연장은 497.5㎞이다.\n다음 문장이다."]
+    )
 
     assert "그 총 연장은 497.5㎞이다." in bodies[0]
     assert blocks == ["한강이 서울지역을 강남과 강북으로 구분하는 경계이며 그 총 연장은 497.5㎞이다.\n\n다음 문장이다."]
+
+
+def test_chunk_that_drops_page_marker_or_table_row_falls_back(monkeypatch):
+    monkeypatch.setattr(cleanup, "TARGET_CHUNK_CHARS", 50)
+    text = "\n\n".join(
+        [
+            f"[페이지 1]\n{TWO_SENTENCES}",
+            f"[페이지 2]\n{TWO_SENTENCES}\n| 구분 | 값 |\n| --- | --- |\n| 사전 | 45.50 |",
+            f"[페이지 3]\n{TWO_SENTENCES}",
+        ]
+    )
+
+    def fake_llm(prompt: str) -> str:
+        body = _body(prompt)
+        if body.startswith("[페이지 1]"):
+            return body.replace("[페이지 1]\n", "")  # 페이지 표시 삭제
+        if body.startswith("[페이지 2]"):
+            return body.replace("| 사전 | 45.50 |", "사전 45.50")  # 표 행 변형
+        return body.replace("| --- |", "|---|")  # 구분선 형식 변경은 허용
+
+    result = cleanup.clean_document(text, fake_llm, max_workers=1)
+
+    assert result.fallback_chunks == [1, 2]
+    assert result.text == text
