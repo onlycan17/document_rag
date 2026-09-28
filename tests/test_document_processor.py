@@ -32,6 +32,13 @@ def test_similarity_jaccard_edges():
     assert processor.calculate_content_similarity("사과", "배") == 0.0
 
 
+def test_document_quality_is_domain_neutral():
+    processor = DocumentProcessor()
+    heritage = Document(page_content="몽촌토성 발굴 조사에서 백제 토기가 출토되었다.")
+    education = Document(page_content="교원 업무 경감을 위해 공문 작성을 자동화하였다.")
+    assert processor.calculate_document_quality(heritage) == processor.calculate_document_quality(education)
+
+
 def test_normalize_score_faiss_distance_to_similarity(monkeypatch):
     from config import settings
 

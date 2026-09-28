@@ -236,35 +236,6 @@ class DocumentProcessor:
         if any(pattern in content for pattern in ["1.", "2.", "•", "-", "가.", "나."]):
             quality_score += 0.1
 
-        # 전문 용어 및 키워드 포함 여부
-        professional_terms = [
-            "시스템",
-            "정보",
-            "구축",
-            "운영",
-            "관리",
-            "지침",
-            "규정",
-            "법령",
-            "발굴",
-            "유물",
-            "토기",
-            "백제",
-            "고구려",
-            "출토",
-            "유적",
-            "조사",
-            "파수",
-            "고배",
-            "호",
-            "옹",
-            "시루",
-            "토성",
-            "몽촌토성",
-        ]
-        term_count = sum(1 for term in professional_terms if term in content)
-        quality_score += min(0.2, term_count * 0.05)
-
         return min(1.0, quality_score)
 
     def calculate_length_score(self, content: str) -> float:
