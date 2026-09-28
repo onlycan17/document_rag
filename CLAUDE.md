@@ -180,6 +180,7 @@ streamlit run app.py
 - **효과**: 로컬 모델의 제한된 컨텍스트 내에서 안정적 동작
 
 ### 14. 쿼리 확장 기능 강화 (src/rag/rag_chain.py, src/embeddings/embedding_model.py)
+> 2026-09-28부터 기본 꺼짐(`ENABLE_QUERY_EXPANSION=false`): 골든 셋 평가에서 확장이 검색을 악화시킴(Hit@5 93.9% → 87.9%).
 - **개선사항**:
   - 몽촌토성 관련 확장: "몽촌토성" → "몽촌토성 몽촌 토성 백제 한성 왕성 토성 백제왕성 백제토성 한성백제토성"
   - 백제/고구려 관련 키워드 추가
