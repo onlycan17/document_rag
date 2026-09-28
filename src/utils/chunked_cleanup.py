@@ -113,6 +113,11 @@ def _is_faithful(original: str, corrected: str) -> bool:
     return MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO and same_structure
 
 
+def _context(snippet: str) -> str:
+    """참고 문맥에서 [페이지 N]을 뺀다 — LLM이 문맥의 표시를 본문으로 베껴 넣는 문제 방지"""
+    return _PAGE_MARKER.sub("", snippet).strip()
+
+
 def clean_document(text: str, call_llm: Callable[[str], str], max_workers: int = 3) -> CleanupResult:
     """문서를 분할해 병렬로 교정하고, 검증에 실패한 청크는 원문으로 되돌려 합친다"""
     chunks = split_into_chunks(text)
@@ -122,9 +127,9 @@ def clean_document(text: str, call_llm: Callable[[str], str], max_workers: int =
         marker = _LEADING_PAGE_MARKERS.match(chunks[index])
         head = marker.group(0) if marker else ""
         prompt = _PROMPT.format(
-            previous=chunks[index - 1][-CONTEXT_CHARS:] if index > 0 else "(문서 시작)",
+            previous=_context(chunks[index - 1][-CONTEXT_CHARS:]) if index > 0 else "(문서 시작)",
             chunk=chunks[index][len(head) :],
-            following=chunks[index + 1][:CONTEXT_CHARS] if index + 1 < len(chunks) else "(문서 끝)",
+            following=_context(chunks[index + 1][:CONTEXT_CHARS]) if index + 1 < len(chunks) else "(문서 끝)",
         )
         try:
             corrected = head + strip_llm_artifacts(call_llm(prompt) or "")

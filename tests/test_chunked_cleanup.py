@@ -172,3 +172,13 @@ def test_leading_page_marker_is_kept_out_of_llm_and_restored(monkeypatch):
 
     assert not any(body.startswith("[페이지") for body in bodies)
     assert result.fallback_chunks == [] and result.text == text
+
+
+def test_page_markers_are_removed_from_neighbor_context(monkeypatch):
+    monkeypatch.setattr(cleanup, "TARGET_CHUNK_CHARS", 50)
+    text = f"{TWO_SENTENCES}\n[페이지 74]\n{TWO_SENTENCES}\n\n{TWO_SENTENCES}\n[페이지 75]\n{TWO_SENTENCES}"
+    prompts = []
+    cleanup.clean_document(text, lambda prompt: prompts.append(prompt) or _body(prompt), max_workers=1)
+
+    contexts = [_section(p, "앞 문맥", "본문") + p.split("[뒤 문맥]\n")[1] for p in prompts]
+    assert len(prompts) == 2 and not any("[페이지" in context for context in contexts)
