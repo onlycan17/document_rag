@@ -89,8 +89,9 @@ class Settings(BaseSettings):
     vector_db_type: str = "faiss"  # "faiss" 또는 "chromadb"
 
     # 청크 설정 - 성능 최적화
-    chunk_size: int = int(os.getenv("CHUNK_SIZE", "150"))  # 검색 정밀도 향상을 위한 청크 크기 조정
-    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "50"))  # 오버랩 조정
+    # 현 인덱스(평균 약 800자)의 구축 값. 짧은 청크 병합 상한(chunk_size × 1.5)도 이 값을 따른다
+    chunk_size: int = int(os.getenv("CHUNK_SIZE", "1000"))
+    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "200"))
     # 의미 기반 청킹 설정
     use_semantic_chunking: bool = os.getenv("USE_SEMANTIC_CHUNKING", "false").lower() == "true"
     semantic_chunk_sentences: int = 3  # 의미 기반 청킹 시 문장 단위
