@@ -1,5 +1,5 @@
 {
-  "description": "검색 품질 평가 골든 셋 — data/documents 실재 문서 기반. expected_sources는 메타데이터 source에 부분 일치로 판정한다.",
+  "description": "검색 품질 평가 골든 셋 — 인덱스 실재 문서 기반. expected_sources는 메타데이터 source에 부분 일치, expected_content가 있으면 청크 본문에 그 구절 중 하나가 있어야 정답(청크 단위 판정).",
   "cases": [
     {
       "question": "몽촌토성 4구역 상부 발굴 조사 결과를 알려줘",
@@ -62,6 +62,224 @@
       "question": "연구 결과로 제안된 정책 과제나 시사점은 무엇인가요?",
       "expected_sources": [
         "KERIS"
+      ]
+    },
+    {
+      "question": "몽촌토성 성벽의 기저부 너비, 상부 너비, 높이는 얼마인가요?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "상부 너비 7.5"
+      ]
+    },
+    {
+      "question": "몽촌토성은 어떤 하천의 물길을 해자로 이용했나요?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "성내천의 물길을 해자로"
+      ]
+    },
+    {
+      "question": "2013년에 재개된 몽촌토성 1차 발굴조사의 기간과 조사 면적은?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "2013년 11월 11일부터"
+      ]
+    },
+    {
+      "question": "1980년대 몽촌토성 발굴이 체계적으로 진행되지 못한 이유는?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "88서울올림픽을 위한 정비사업"
+      ]
+    },
+    {
+      "question": "몽촌토성 구슬류 에너지분산분광분석(EDS)의 측정 조건은?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "전압 20㎸, 측정시간 120초"
+      ]
+    },
+    {
+      "question": "유리구슬의 X선 투과촬영으로 무엇을 추정할 수 있나요?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "납(Pb)이 함유한 정도"
+      ]
+    },
+    {
+      "question": "Ⅰ-25호 수혈유구의 규모는 어떻게 되나요?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "길이 316㎝, 너비 206㎝"
+      ]
+    },
+    {
+      "question": "몽촌토성에서 출토된 백제 어망추는 어떤 형태인가요?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "원통형으로 중앙에는"
+      ]
+    },
+    {
+      "question": "7호 수혈의 바닥면에는 어떤 퇴적층이 있었나요?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "7호 수혈의 바닥면 위로는"
+      ]
+    },
+    {
+      "question": "고구려 수혈유구에서 백제 토기편이 출토된 이유는?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "인위적인 매물 과정에서 유입"
+      ]
+    },
+    {
+      "question": "몽촌토성 북문지 일원에서 출토된 뚜껑류의 구경 범위는?",
+      "expected_sources": [
+        "몽촌토성4+상",
+        "몽촌토성4+하"
+      ],
+      "expected_content": [
+        "구경이 10~30㎝"
+      ]
+    },
+    {
+      "question": "OpenAI o1 모델은 어떤 추론 기법을 적용했나요?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "CoT(Chain-of-Thought)를 기반으로"
+      ]
+    },
+    {
+      "question": "멀티모달 바이러스학 문제에서 GPT-4o와 o1의 정확도 차이는?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "41%의 정확도"
+      ]
+    },
+    {
+      "question": "GPT-4o의 MMMU 벤치마크 점수는 얼마인가요?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "MMMU (%) (val) | 69.1"
+      ]
+    },
+    {
+      "question": "온라인 결석계 업무의 중요도와 구현 가능성 점수는?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "온라인 결석계 | 5.00 | 5.80"
+      ]
+    },
+    {
+      "question": "종이 신청서 수합 문제를 해결하기 위해 제안된 방법은?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "온라인 서명 형태로 신청서"
+      ]
+    },
+    {
+      "question": "생활 지도 결과를 학부모에게 어떻게 전달하나요?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "나이스플러스 앱"
+      ]
+    },
+    {
+      "question": "공문 검색을 도와주는 AI 챗봇은 어떻게 동작하나요?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "검색 어시스턴트"
+      ]
+    },
+    {
+      "question": "LMMs를 학교에 적용할 때 함께 고려해야 할 사항은?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "개인정보 보호 방안, 그리고 윤리적 측면"
+      ]
+    },
+    {
+      "question": "프로토타입 실증 설문조사는 얼마나 걸리나요?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "약 15분 정도 소요"
+      ]
+    },
+    {
+      "question": "2차 FGI에서 보충된 교원 업무 유형에는 무엇이 있나요?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "온라인 결석계, 학부모 민원 대응"
+      ]
+    },
+    {
+      "question": "LVLM-Interpret은 어떤 기능을 제공하나요?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "LVLM-Interpret"
+      ]
+    },
+    {
+      "question": "미래 환경의 교원 업무경감 시나리오는 어떤 방법으로 작성했나요?",
+      "expected_sources": [
+        "KERIS"
+      ],
+      "expected_content": [
+        "스토리텔링을 통해 LMMs가"
       ]
     }
   ]

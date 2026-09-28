@@ -7,18 +7,30 @@
 from typing import Optional
 
 
-def best_relevant_rank(sources: list[str], expected_sources: list[str]) -> Optional[int]:
-    """검색 결과 순서에서 기대 문서가 처음 등장하는 1-based 순위.
+def best_relevant_rank(
+    sources: list[str],
+    expected_sources: list[str],
+    contents: Optional[list[str]] = None,
+    expected_content: Optional[list[str]] = None,
+) -> Optional[int]:
+    """검색 결과 순서에서 정답 청크가 처음 등장하는 1-based 순위.
 
     Args:
         sources: 검색된 문서들의 식별 문자열(메타데이터 source 등) 목록 (순서 = 관련도 순)
         expected_sources: 정답으로 인정할 문서 식별 문자열 목록 (부분 일치)
+        contents: 검색된 청크 본문 목록 (sources와 같은 순서). expected_content 판정에 사용
+        expected_content: 주어지면 청크 본문에 이 구절 중 하나가 있어야 정답 (청크 단위 판정)
 
     Returns:
-        1-based 순위. 기대 문서가 결과에 없으면 None
+        1-based 순위. 정답이 결과에 없으면 None
     """
     for rank, source in enumerate(sources, start=1):
-        if any(expected in source for expected in expected_sources):
+        if not any(expected in source for expected in expected_sources):
+            continue
+        if not expected_content:
+            return rank
+        content = contents[rank - 1] if contents else ""
+        if any(phrase in content for phrase in expected_content):
             return rank
     return None
 

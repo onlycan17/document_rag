@@ -17,6 +17,22 @@ def test_best_relevant_rank_returns_none_when_missing():
     assert best_relevant_rank(["a.pdf", "b.pdf"], ["없는문서.pdf"]) is None
 
 
+def test_best_relevant_rank_requires_expected_content_in_chunk():
+    sources = ["KERIS.md", "KERIS.md", "KERIS.md"]
+    contents = ["서론", "o1 모델은 CoT 기반", "기타"]
+    assert best_relevant_rank(sources, ["KERIS"], contents, ["CoT 기반"]) == 2
+
+
+def test_best_relevant_rank_content_match_needs_matching_source():
+    sources = ["몽촌토성4+상.md", "KERIS.md"]
+    contents = ["CoT 기반", "CoT 기반"]
+    assert best_relevant_rank(sources, ["KERIS"], contents, ["CoT 기반"]) == 2
+
+
+def test_best_relevant_rank_content_missing_returns_none():
+    assert best_relevant_rank(["KERIS.md"], ["KERIS"], ["무관한 본문"], ["CoT 기반"]) is None
+
+
 def test_hit_at_k_counts_ranks_within_k():
     ranks = [1, 3, 7, None]
     assert hit_at_k(ranks, k=5) == 0.5
