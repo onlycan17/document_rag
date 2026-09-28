@@ -22,6 +22,7 @@ from src.constants import (
     TOKEN_TO_CHAR_RATIO,
 )
 from src.models import ModelRegistry
+from src.utils.openrouter_models import get_openrouter_context_length
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +196,15 @@ class LLMManager:
         return ModelRegistry.get_max_tokens(model_id, default=settings.max_tokens)
 
     def get_model_context_window(self, model_id: str) -> int:
-        """모델별 전체 컨텍스트 윈도우 크기 반환 (토큰 단위)"""
+        """모델별 전체 컨텍스트 윈도우 크기 반환 (토큰 단위)
+
+        레지스트리에 없는 OpenRouter 모델("제공사/모델")은 OpenRouter 목록의 실제 크기를 쓴다.
+        기본값 8192를 쓰면 52만 토큰 모델도 컨텍스트가 약 9천 자로 잘린다.
+        """
+        if model_id and "/" in model_id and model_id not in ModelRegistry.MODEL_CONFIGS:
+            context_length = get_openrouter_context_length(model_id)
+            if context_length:
+                return context_length
         return ModelRegistry.get_context_window(model_id, default=8192)
 
     def get_max_tokens_for_model(self, provider: str, model: str) -> int:

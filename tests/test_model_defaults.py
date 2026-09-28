@@ -70,3 +70,37 @@ def test_record_input_merges_inputs_without_add_inputs_method(monkeypatch):
 
     assert run.inputs == {"question": "q", "top_k": 12}
     assert run.outputs == {"answer": "a"} and run.metadata == {"cache_hit": False}
+
+
+def test_unregistered_openrouter_model_uses_openrouter_context_length(monkeypatch):
+    import src.rag.llm_manager as llm_module
+    from src.rag.llm_manager import LLMManager
+
+    manager = object.__new__(LLMManager)
+    monkeypatch.setattr(
+        llm_module, "get_openrouter_context_length", lambda model_id: {"upstage/solar-pro4": 524288}.get(model_id)
+    )
+
+    assert manager.get_model_context_window("upstage/solar-pro4") == 524288
+    assert manager.get_model_context_window("vendor/unknown-model") == 8192  # 조회 실패 시 기본값
+    assert manager.get_model_context_window("qwen/qwen3.8-flash") == ModelRegistry.get_context_window(
+        "qwen/qwen3.8-flash"
+    )
+
+
+def test_openrouter_context_lengths_are_cached_from_model_list(monkeypatch):
+    import src.utils.openrouter_models as openrouter_models
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"data": [{"id": "upstage/solar-pro4", "context_length": 524288}, {"id": "a/b"}]}
+
+    calls = []
+    monkeypatch.setattr(openrouter_models, "_cache", {"models": [], "contexts": {}, "ts": 0.0})
+    monkeypatch.setattr(openrouter_models.requests, "get", lambda *a, **k: calls.append(1) or FakeResponse())
+
+    assert openrouter_models.get_openrouter_context_length("upstage/solar-pro4") == 524288
+    assert openrouter_models.get_openrouter_context_length("a/b") is None
+    assert len(calls) == 1  # 캐시 재사용
