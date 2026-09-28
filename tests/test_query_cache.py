@@ -15,7 +15,7 @@ from src.vectorstore.vector_db import VectorDatabase
 def make_db() -> VectorDatabase:
     db = object.__new__(VectorDatabase)
     db._query_cache = {}
-    db.bm25_retriever = None
+    db.char_vectorizer = db.char_matrix = None
     db.vector_store = object()  # None이면 search()가 조기 반환하므로 더미 객체 사용
     db.documents_cache = []
     return db

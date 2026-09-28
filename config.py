@@ -102,10 +102,9 @@ class Settings(BaseSettings):
     use_mmr_search: bool = os.getenv("USE_MMR_SEARCH", "true").lower() == "true"  # MMR 검색 활성화 (다양성 향상)
     mmr_diversity_score: float = 0.3  # MMR 다양성 점수
 
-    # 하이브리드 검색 설정
-    enable_hybrid_search: bool = os.getenv("ENABLE_HYBRID_SEARCH", "false").lower() == "true"
-    keyword_search_weight: float = float(os.getenv("KEYWORD_SEARCH_WEIGHT", "0.3"))  # 키워드 검색 가중치
-    vector_search_weight: float = float(os.getenv("VECTOR_SEARCH_WEIGHT", "0.7"))  # 벡터 검색 가중치
+    # 하이브리드 검색: 벡터 + 문자 n-gram TF-IDF 순위를 RRF로 융합
+    # 2026-09-28 골든 셋 33질의에서 Hit@5 90.9% → 93.9%, MRR 0.826 → 0.874 (벡터 MMR 대비)
+    enable_hybrid_search: bool = os.getenv("ENABLE_HYBRID_SEARCH", "true").lower() == "true"
 
     # 유사 질의 캐시 (전처리 완료 쿼리의 정확 일치 결과 재사용)
     query_cache_ttl_seconds: int = int(os.getenv("QUERY_CACHE_TTL_SECONDS", "300"))
