@@ -14,7 +14,7 @@
    - 지능형 이미지 처리: OpenRouter만 사용(폴백 없음, 엄격 모드)
      - OpenRouter: `src/utils/openrouter_image_service.py`(모델: `qwen/qwen3.8-flash`)
 - `src/embeddings/EmbeddingModel`: Upstage/OpenAI/HuggingFace 임베딩 선택, 배치 처리, 재시도.
-- `src/vectorstore/VectorDatabase`: FAISS/Chroma 선택, 하이브리드 검색(BM25+TF‑IDF)·MMR·임계값 동적 조정.
+- `src/vectorstore/VectorDatabase`: FAISS/Chroma 선택, 하이브리드 검색(벡터 + 문자 n-gram TF‑IDF, RRF 순위 융합, 기본 켜짐)·MMR·임계값 동적 조정.
 - `src/rag/RAGChain`: 
   - LLM 초기화(provider: openai/google/anthropic/openrouter — 외부 API 전용)
   - 대용량 컨텍스트 처리(ContextChunker, Summarizer, 병렬 처리)
@@ -41,9 +41,9 @@
 - 대량 문서: 임계값 초과 시 컨텍스트 분할→부분 요약→병렬 처리로 결합.
 
 ## 5. 검색 전략
-- 기본: 벡터 유사도 검색(similarity, 거리 낮을수록 유사).
+- 기본(`ENABLE_HYBRID_SEARCH=true`): 하이브리드 — 벡터 상위 2k와 문자 n-gram(2~3자) TF‑IDF 상위 2k를 RRF(순위 역수 합, 상수 60)로 융합. 점수는 FAISS 거리를 유지해 재랭킹·관련도 표시와 척도가 같다.
 - 옵션: 
-  - 하이브리드(BM25/TF‑IDF) 결과와 벡터 결과 가중 통합(가중 평균).
+  - 하이브리드를 끄면 벡터 검색(MMR 또는 유사도, 거리 낮을수록 유사).
   - MMR(용어(설명: 상호 유사하지 않게 다양성을 보장하도록 선택)).
   - 동적 임계값(검색 품질 낮을 때 완화).
 

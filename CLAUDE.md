@@ -79,7 +79,7 @@ tests/
 - 최신 자료 우선 순위 부여
 
 ### 2. 검색 개선
-- 하이브리드 검색 활성화 (enable_hybrid_search = true)
+- ~~하이브리드 검색 활성화~~ → 2026-09-28 적용(문자 n-gram TF-IDF + RRF, 기본 켜짐)
 - MMR 다양성 점수 조정 (mmr_diversity_score)
 
 ### 3. 청킹 전략

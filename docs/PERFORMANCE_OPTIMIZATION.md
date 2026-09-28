@@ -86,44 +86,7 @@ class OptimizedChunkingStrategy:
 
 ### 3.1 하이브리드 검색 최적화
 
-#### 현재 문제점
-- [`_hybrid_search`](src/vectorstore/vector_db.py:206)에서 벡터/키워드 검색 순차 실행
-- [`_combine_search_results`](src/vectorstore/vector_db.py:281)의 O(n²) 연산
-
-#### 최적화 방안
-```python
-class OptimizedHybridSearch:
-    async def search_async(self, query: str, k: int) -> List[Tuple[Document, float]]:
-        # 벡터 검색과 키워드 검색 병렬 실행
-        vector_task = asyncio.create_task(self._vector_search_async(query, k))
-        keyword_task = asyncio.create_task(self._keyword_search_async(query, k))
-        
-        vector_results, keyword_results = await asyncio.gather(vector_task, keyword_task)
-        
-        # 효율적인 결과 통합 (O(n log n))
-        return self._optimized_combine_results(vector_results, keyword_results)
-    
-    def _optimized_combine_results(self, vector_results, keyword_results):
-        # 해시맵을 이용한 O(1) 조회로 성능 개선
-        results_map = {}
-        
-        for doc, score in vector_results:
-            doc_id = self._get_doc_id(doc)
-            results_map[doc_id] = {'doc': doc, 'vector_score': score}
-        
-        for doc, score in keyword_results:
-            doc_id = self._get_doc_id(doc)
-            if doc_id in results_map:
-                results_map[doc_id]['keyword_score'] = score
-            else:
-                results_map[doc_id] = {'doc': doc, 'keyword_score': score}
-        
-        return self._calculate_combined_scores(results_map)
-```
-
-#### 기대 효과
-- 검색 응답 시간 60% 이상 개선
-- CPU 사용량 감소
+2026-09-28 해결: 가중 평균 통합(`_combine_search_results`)과 BM25 경로를 삭제하고 RRF 융합으로 교체(`vector_db.reciprocal_rank_fusion`). 벡터 거리는 평면 인덱스 전수 검색 1회로 얻는다 — 수십만 청크 규모가 되면 후보만 `index.reconstruct`로 계산하도록 바꾼다.
 
 ### 3.2 캐싱 전략 구현
 
