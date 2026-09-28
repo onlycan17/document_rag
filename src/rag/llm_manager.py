@@ -4,23 +4,25 @@ LLM 관리 모듈
 이 모듈은 다양한 외부 LLM 제공자(OpenAI, Google, Anthropic, OpenRouter)의 초기화와 관리를 담당합니다.
 """
 
-from typing import Optional, Dict, List
-from langchain_openai import ChatOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_anthropic import ChatAnthropic
-from langchain.prompts import PromptTemplate
+import logging
+from typing import Dict, List, Optional
+
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain.prompts import PromptTemplate
+from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 from config import settings
-from src.models import ModelRegistry
 from src.constants import (
-    MODEL_PROMPT_TOKENS,
-    MODEL_MIN_CONTEXT,
     MODEL_MAX_CONTEXT,
+    MODEL_MIN_CONTEXT,
+    MODEL_PROMPT_TOKENS,
     MODEL_SAFETY_MARGIN,
     TOKEN_TO_CHAR_RATIO,
 )
-import logging
+from src.models import ModelRegistry
+from src.utils.openrouter_models import get_openrouter_context_length
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +65,7 @@ class LLMManager:
         # OpenRouter 방어로직: 비어있거나 잘못된 기본값이 들어오면 안전한 기본값으로 보정
         if provider == "openrouter":
             if not actual_model or str(actual_model).strip().lower() in ("", "local-model"):
-                try:
-                    fallback = getattr(settings, "openrouter_model", None) or getattr(
-                        settings, "openrouter_mm_model", "z-ai/glm-4.5v"
-                    )
-                except Exception:
-                    fallback = "z-ai/glm-4.5v"
+                fallback = settings.model_for("openrouter")
                 if actual_model != fallback:
                     logger.warning(f"OpenRouter 모델 자동 보정: '{actual_model}' → '{fallback}'")
                     actual_model = fallback
@@ -163,6 +160,7 @@ class LLMManager:
             temperature=settings.temperature,
             max_tokens=max_tokens,
             streaming=streaming,
+            stream_usage=True,  # 스트리밍에서도 토큰 사용량 수신 (LangSmith 비용 기록용)
             callbacks=callbacks,
         )
 
@@ -198,7 +196,15 @@ class LLMManager:
         return ModelRegistry.get_max_tokens(model_id, default=settings.max_tokens)
 
     def get_model_context_window(self, model_id: str) -> int:
-        """모델별 전체 컨텍스트 윈도우 크기 반환 (토큰 단위)"""
+        """모델별 전체 컨텍스트 윈도우 크기 반환 (토큰 단위)
+
+        레지스트리에 없는 OpenRouter 모델("제공사/모델")은 OpenRouter 목록의 실제 크기를 쓴다.
+        기본값 8192를 쓰면 52만 토큰 모델도 컨텍스트가 약 9천 자로 잘린다.
+        """
+        if model_id and "/" in model_id and model_id not in ModelRegistry.MODEL_CONFIGS:
+            context_length = get_openrouter_context_length(model_id)
+            if context_length:
+                return context_length
         return ModelRegistry.get_context_window(model_id, default=8192)
 
     def get_max_tokens_for_model(self, provider: str, model: str) -> int:
@@ -243,104 +249,9 @@ class LLMManager:
         return max(min_context, min(max_context, max_context_chars))
 
     def get_available_models(self) -> Dict[str, List[Dict[str, str]]]:
-        """사용 가능한 모델 목록 반환"""
-        models = {
-            # 2025년 9월 18일 기준 최신 모델 목록
-            "openai": [
-                {
-                    "id": "gpt-5-pro",
-                    "name": "GPT-5 Pro",
-                    "description": f"최고 성능 모델 (출력: {self.get_model_max_tokens('gpt-5-pro'):,}, 컨텍스트: {self.get_model_context_window('gpt-5-pro'):,}K)",
-                },
-                {
-                    "id": "gpt-5",
-                    "name": "GPT-5",
-                    "description": f"표준 모델 (출력: {self.get_model_max_tokens('gpt-5'):,}, 컨텍스트: {self.get_model_context_window('gpt-5'):,}K)",
-                },
-                {
-                    "id": "gpt-5-lite",
-                    "name": "GPT-5 Lite",
-                    "description": f"경량 모델 (출력: {self.get_model_max_tokens('gpt-5-lite'):,}, 컨텍스트: {self.get_model_context_window('gpt-5-lite'):,}K)",
-                },
-                {
-                    "id": "gpt-5-mini",
-                    "name": "GPT-5 Mini",
-                    "description": f"초경량 모델 (출력: {self.get_model_max_tokens('gpt-5-mini'):,}, 컨텍스트: {self.get_model_context_window('gpt-5-mini'):,}K)",
-                },
-            ],
-            "google": [
-                {
-                    "id": "gemini-2.5-pro",
-                    "name": "Gemini 2.5 Pro",
-                    "description": f"고성능 모델 (출력: {self.get_model_max_tokens('gemini-2.5-pro'):,}, 컨텍스트: {self.get_model_context_window('gemini-2.5-pro'):,}K)",
-                },
-                {
-                    "id": "gemini-2.5-flash",
-                    "name": "Gemini 2.5 Flash",
-                    "description": f"경량 모델 (출력: {self.get_model_max_tokens('gemini-2.5-flash'):,}, 컨텍스트: {self.get_model_context_window('gemini-2.5-flash'):,}K)",
-                },
-            ],
-            "anthropic": [
-                {
-                    "id": "claude-4-1-opus-20250901",
-                    "name": "Claude 4.1 Opus",
-                    "description": f"최고 성능 모델 (출력: {self.get_model_max_tokens('claude-4-1-opus-20250901'):,}, 컨텍스트: {self.get_model_context_window('claude-4-1-opus-20250901'):,}K)",
-                },
-                {
-                    "id": "claude-4-sonnet",
-                    "name": "Claude 4 Sonnet",
-                    "description": f"균형 모델 (출력: {self.get_model_max_tokens('claude-4-sonnet'):,}, 컨텍스트: {self.get_model_context_window('claude-4-sonnet'):,}K)",
-                },
-                {
-                    "id": "claude-4-1-haiku-20250901",
-                    "name": "Claude 4.1 Haiku",
-                    "description": f"경량 모델 (출력: {self.get_model_max_tokens('claude-4-1-haiku-20250901'):,}, 컨텍스트: {self.get_model_context_window('claude-4-1-haiku-20250901'):,}K)",
-                },
-            ],
-        }
-
-        return models
+        """사용 가능한 모델 목록 반환 (ModelRegistry 단일 출처)"""
+        return ModelRegistry.get_all_models()
 
     def create_chain(self, llm, prompt_template: PromptTemplate):
         """LLM과 프롬프트 템플릿으로 체인 생성 (최신 Runnable 방식)"""
         return prompt_template | llm
-
-    # 기존 호환성 메서드들
-    def _get_model_max_tokens(self) -> Dict[str, int]:
-        """모델별 최대 토큰 수 반환 (기존 호환성)"""
-        models = {}
-        for provider_models in self.get_available_models().values():
-            for model_info in provider_models:
-                model_id = model_info.get("id") or model_info.get("model")
-                if model_id:
-                    models[model_id] = self.get_model_max_tokens(model_id)
-        return models
-
-    def _get_model_context_window(self) -> Dict[str, int]:
-        """모델별 컨텍스트 윈도우 크기 반환 (기존 호환성)"""
-        # 2025년 9월 18일 기준 최신 모델 정보로 업데이트
-        return {
-            "gpt-5-pro": 1024,
-            "gpt-5": 512,
-            "gpt-5-lite": 256,
-            "gpt-5-mini": 128,
-            "gemini-2.0-ultra": 8192,
-            "gemini-2.5-pro": 4096,
-            "gemini-2.5-flash": 2048,
-            "claude-4-1-opus-20250901": 2048,
-            "claude-4-sonnet": 1024,
-            "claude-4-1-haiku-20250901": 500,
-        }
-
-    def _get_model_context_window_full(self) -> Dict[str, int]:
-        models = {}
-        for provider_models in self.get_available_models().values():
-            for model_info in provider_models:
-                model_id = model_info.get("id")
-                if model_id:
-                    models[model_id] = self.get_model_context_window(model_id)
-        return models
-
-    def _get_max_tokens_for_model(self, provider: str, model: Optional[str] = None) -> int:
-        """특정 모델의 최대 토큰 수 반환 (기존 호환성)"""
-        return self.get_max_tokens_for_model(provider, model)

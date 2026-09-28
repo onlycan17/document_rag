@@ -9,11 +9,11 @@ Phase 5: 전체 시스템이 함께 작동하는지 검증
 - Phase 4: 의미 기반 청킹 알고리즘
 """
 
-import sys
-from pathlib import Path
-import tempfile
 import shutil
+import sys
+import tempfile
 import time
+from pathlib import Path
 
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
 project_root = Path(__file__).parent.parent

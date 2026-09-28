@@ -1,16 +1,20 @@
-from typing import List, Dict, Any
-from langchain.schema import Document
-from langchain_community.document_loaders import TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter, SentenceTransformersTokenTextSplitter
+import logging
 import os
 from pathlib import Path
+from typing import Any, Dict, List
+
+from langchain.schema import Document
+from langchain.text_splitter import RecursiveCharacterTextSplitter, SentenceTransformersTokenTextSplitter
+from langchain_community.document_loaders import TextLoader
+
 from config import settings
-from .pdf_loader_advanced import AdvancedPDFLoader
-from .text_cleaning import TextCleaningMixin
+
 from .chunking import ChunkingMixin
 from .docx_loading import DocxLoadingMixin
+from .junk_filter import remove_junk_lines
+from .pdf_loader_advanced import AdvancedPDFLoader
 from .pdf_loading import PdfLoadingMixin
-import logging
+from .text_cleaning import TextCleaningMixin
 
 logger = logging.getLogger(__name__)
 
@@ -32,21 +36,15 @@ class EnhancedDocumentLoader(TextCleaningMixin, ChunkingMixin, DocxLoadingMixin,
         enable_postprocessing: bool = False,
         use_intelligent_image_extraction: bool = False,
         preprocessing_model: str = "openrouter",
-        enable_multimodal_preprocessing: bool = False,
     ):
         self.use_ocr = use_ocr
         self.use_agent_preprocessing = use_agent_preprocessing
         self.enable_postprocessing = enable_postprocessing
         self.use_intelligent_image_extraction = use_intelligent_image_extraction
-        self.preprocessing_model = preprocessing_model
-        self.enable_multimodal_preprocessing = enable_multimodal_preprocessing
+        self.preprocessing_model = preprocessing_model  # 에이전트 모드 LLM 제공자
 
         # 지능형 이미지 추출 메타데이터 저장용
         self.image_extraction_metadata = None
-
-        # 전처리 모델 초기화
-        self._preprocessing_model = None
-        self._initialize_preprocessing_model()
 
         # 기본 텍스트 분할기 (기존 방식)
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -106,40 +104,6 @@ class EnhancedDocumentLoader(TextCleaningMixin, ChunkingMixin, DocxLoadingMixin,
             if not ocr_available:
                 logger.warning("OCR을 사용할 수 없습니다. Tesseract와 한국어 언어팩을 설치해주세요.")
                 self.use_ocr = False
-
-    def _initialize_preprocessing_model(self):
-        """전처리 모델을 초기화합니다."""
-        try:
-            from src.processing.preprocessing_factory import PreprocessingModelFactory
-
-            # 선택된 전처리 모델로 초기화
-            # 멀티모달 활성화 시 UI에서 선택된 모델명을 우선 적용,
-            # 아니면 텍스트 전처리용 선택 모델(preproc_text_model) 사용
-            selected_model_name = None
-            try:
-                import streamlit as st  # type: ignore
-
-                if st.session_state.get("enable_multimodal_preprocessing", False):
-                    selected_model_name = st.session_state.get("preproc_mm_model", None)
-                else:
-                    selected_model_name = st.session_state.get("preproc_text_model", None)
-            except Exception as err:
-                logger.debug(f"세션 전처리 모델 이름 조회 실패(무시): {err}")
-
-            self._preprocessing_model = PreprocessingModelFactory.create_model(
-                self.preprocessing_model, model_name=selected_model_name
-            )
-            logger.info(f"전처리 모델 초기화 완료: {self.preprocessing_model}")
-
-        except Exception as e:
-            logger.error(f"전처리 모델 초기화 실패: {e}")
-            # 실패 시 OpenRouter(외부 API)로 폴백
-            try:
-                self._preprocessing_model = PreprocessingModelFactory.create_model("openrouter")
-                logger.warning("전처리 모델 초기화 실패, OpenRouter로 폴백")
-            except Exception as fallback_error:
-                logger.error(f"OpenRouter 폴백도 실패: {fallback_error}")
-                self._preprocessing_model = None
 
     def load_document(self, file_path: str, progress_callback=None) -> List[Document]:
         """
@@ -324,12 +288,13 @@ class EnhancedDocumentLoader(TextCleaningMixin, ChunkingMixin, DocxLoadingMixin,
         - 불필요한 내용 제거
         - 텍스트 정규화
         - 한국어 최적화
-        - 선택된 전처리 모델 적용
+        (LLM 교정은 PDF 변환 단계의 MD 후처리에서 문장 경계 분할로 한 번만 수행)
         """
         processed_docs = []
 
         for doc in documents:
-            content = doc.page_content
+            # 0. 정크 줄 제거 (이미지 링크·모델 토큰은 마크다운 정제가 깨뜨리기 전에 처리)
+            content = remove_junk_lines(doc.page_content)
 
             # 1. 파일 타입별 특화 전처리
             if file_extension == ".md":
@@ -343,56 +308,7 @@ class EnhancedDocumentLoader(TextCleaningMixin, ChunkingMixin, DocxLoadingMixin,
             # 3. 구조화된 내용 보존
             content = self._preserve_structure(content)
 
-            # 4. 선택된 전처리 모델 적용 (PDF 파일에만 적용)
-            if file_extension == ".pdf" and self._preprocessing_model:
-                try:
-                    logger.info(
-                        f"전처리 모델 적용: {self.preprocessing_model} (멀티모달: {self.enable_multimodal_preprocessing})"
-                    )
-
-                    if self.enable_multimodal_preprocessing and hasattr(
-                        self._preprocessing_model, "preprocess_document_with_images"
-                    ):
-                        # 멀티모달 전처리
-                        logger.info("멀티모달 전처리 수행")
-                        # PDF에서 추출된 이미지 정보 가져오기
-                        images = []
-                        for doc in documents:
-                            if hasattr(doc, "metadata") and "images" in doc.metadata:
-                                images.extend(doc.metadata["images"])
-
-                        if images:
-                            processed_result = self._preprocessing_model.preprocess_document_with_images(
-                                content, images
-                            )
-                            if processed_result and len(processed_result.strip()) > 0:
-                                content = processed_result
-                                logger.info(f"멀티모달 전처리 완료: {len(content)}자")
-                            else:
-                                logger.warning("멀티모달 전처리가 빈 결과를 반환했습니다. 일반 전처리로 폴백합니다.")
-                                processed_result = self._preprocessing_model.preprocess_text(content)
-                                if processed_result and len(processed_result.strip()) > 0:
-                                    content = processed_result
-                                    logger.info(f"일반 전처리 폴백 완료: {len(content)}자")
-                        else:
-                            logger.info("이미지가 없어 일반 전처리로 수행")
-                            processed_result = self._preprocessing_model.preprocess_text(content)
-                            if processed_result and len(processed_result.strip()) > 0:
-                                content = processed_result
-                                logger.info(f"전처리 모델 적용 완료: {len(content)}자")
-                    else:
-                        # 일반 전처리
-                        processed_result = self._preprocessing_model.preprocess_text(content)
-                        if processed_result and len(processed_result.strip()) > 0:
-                            content = processed_result
-                            logger.info(f"전처리 모델 적용 완료: {len(content)}자")
-                        else:
-                            logger.warning("전처리 모델이 빈 결과를 반환했습니다. 원본 텍스트를 사용합니다.")
-
-                except Exception as e:
-                    logger.error(f"전처리 모델 적용 실패: {e}. 원본 텍스트를 사용합니다.")
-
-            # 5. 너무 짧은 내용 필터링 (100자 이상)
+            # 4. 너무 짧은 내용 필터링 (100자 이상)
             if len(content.strip()) >= 100:  # 최소 길이 100자
                 processed_docs.append(Document(page_content=content, metadata=doc.metadata))
             else:

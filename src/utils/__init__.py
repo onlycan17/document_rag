@@ -1,6 +1,6 @@
 # 유틸리티 모듈
 from .document_processor import DocumentProcessor
-from .logging_config import setup_logging, get_logger
+from .logging_config import get_logger, setup_logging
 
 # 기본 모듈 (의존성 체크 필요)
 try:

@@ -114,12 +114,13 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
 ### 선택: OCR 기능 (스캔된 PDF용)
+기본은 Upstage Document Parse(`OCR_ENGINE=upstage`, `UPSTAGE_API_KEY` 사용, $0.01/쪽)이며, 실패 시 macOS Vision(무료) → Tesseract 순으로 자동 전환됩니다. macOS가 아닌 환경에서 무료 폴백이 필요하면 Tesseract를 설치하세요.
 ```bash
 # 자동 설치
 bash scripts/setup/install_ocr.sh
 
 # 또는 수동 설치 (macOS)
-brew install tesseract tesseract-lang-kor poppler
+brew install tesseract tesseract-lang
 ```
 
 ## 📚 사용 방법

@@ -2,24 +2,26 @@
 OpenRouter 모델 리스트 조회 유틸리티
 
 기능:
-- OpenRouter /v1/models 엔드포인트에서 모델 목록 조회
+- OpenRouter /v1/models 엔드포인트에서 모델 목록과 컨텍스트 크기 조회
 - 간단한 TTL 캐싱으로 불필요한 호출 감소
 """
 
 from __future__ import annotations
 
+import logging
 import time
+from typing import Any, Dict, List, Optional
+
 import requests
-from typing import List, Dict, Any
 
 from config import settings
-import logging
 
 logger = logging.getLogger(__name__)
 
 
 _cache: Dict[str, Any] = {
     "models": [],
+    "contexts": {},  # 모델 ID → 컨텍스트 크기(토큰)
     "ts": 0.0,
 }
 
@@ -60,12 +62,15 @@ def list_openrouter_models(refresh: bool = False) -> List[str]:
         items = data.get("data", [])
         # 각 item은 {id, name, ...} 형태가 일반적. id 우선 사용
         ids: List[str] = []
+        contexts: Dict[str, int] = {}
         for it in items:
             mid = it.get("id") or it.get("name")
             if isinstance(mid, str):
                 ids.append(mid)
+                if isinstance(it.get("context_length"), int):
+                    contexts[mid] = it["context_length"]
         ids.sort()
-        _cache["models"], _cache["ts"] = ids, now
+        _cache["models"], _cache["contexts"], _cache["ts"] = ids, contexts, now
         return list(ids)
     except Exception as e:
         logger.warning(f"OpenRouter 모델 목록 조회 실패, 캐시 사용 ({type(e).__name__}): {e}")
@@ -82,3 +87,9 @@ def search_openrouter_models(query: str, refresh: bool = False, limit: int = 200
         return models[:limit]
     filtered = [m for m in models if q in m.lower()]
     return filtered[:limit]
+
+
+def get_openrouter_context_length(model_id: str) -> Optional[int]:
+    """OpenRouter 모델의 컨텍스트 크기(토큰). 목록 조회 실패·미존재 시 None"""
+    list_openrouter_models()
+    return _cache["contexts"].get(model_id)

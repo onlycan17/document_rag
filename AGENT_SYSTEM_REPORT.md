@@ -1,5 +1,9 @@
 # 에이전트 기반 PDF 전처리 시스템 개발 완료 보고서
 
+> ⚠️ **고지** — 이 문서는 구형 로컬 LLM(`Midm-2.0`) 기반 시스템 구축 당시의 완료 보고서입니다.
+> 이후 모든 내장(로컬) 모델 호출이 제거되고 외부 API(OpenRouter/OpenAI/Google/Anthropic) 전용으로
+> 전환되었습니다. 현재 아키텍처는 `docs/ARCHITECTURE.md`·`docs/API_SPEC.md`를 참고하세요.
+
 ## 🎯 프로젝트 목표
 사용자가 요청한 로컬 LLM 모델(`Midm-2.0-Base-Instruct-Q4_K_S.gguf`)을 활용하여 한국어 PDF 문서의 텍스트 분절 문제를 해결하는 에이전트 기반 전처리 시스템 구축
 

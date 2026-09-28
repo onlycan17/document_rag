@@ -1,10 +1,5 @@
 """
-문서 전처리 모듈
+문서 처리 파이프라인 모듈
 
-PDF 문서의 전처리를 위한 외부 API 모델 인터페이스를 제공합니다.
+문서 로딩 결과를 합치고 메타데이터를 구성하는 파이프라인 헬퍼를 제공합니다.
 """
-
-from .preprocessing_model import PreprocessingModel, APIPreprocessingModel
-from .preprocessing_factory import PreprocessingModelFactory
-
-__all__ = ["PreprocessingModel", "APIPreprocessingModel", "PreprocessingModelFactory"]

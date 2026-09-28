@@ -1,8 +1,8 @@
 import logging
+import os
 import re
 import sys
 from datetime import datetime
-import os
 
 # 로그에 절대 노출되면 안 되는 환경변수 키 이름
 _SECRET_ENV_KEYS = (

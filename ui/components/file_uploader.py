@@ -2,16 +2,17 @@
 파일 업로드 컴포넌트
 """
 
-import streamlit as st
 import os
 import time
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+import streamlit as st
+
+from src.constants import LOG_FILE_PATTERN, MAX_LOG_LINES_DISPLAY, TEMP_DOCUMENT_PATH
 from src.loaders.document_loader import DocumentLoader
 from src.utils.document_processor import DocumentProcessor
-from src.constants import TEMP_DOCUMENT_PATH, LOG_FILE_PATTERN, MAX_LOG_LINES_DISPLAY
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -97,7 +98,6 @@ def _reinitialize_document_loader(preprocessing_settings: Dict[str, Any]) -> Non
             enable_postprocessing=preprocessing_settings.get("enable_postprocessing", False),
             use_intelligent_image_extraction=preprocessing_settings.get("use_intelligent_extraction", False),
             preprocessing_model=preprocessing_settings.get("selected_preprocessing_model", "local"),
-            enable_multimodal_preprocessing=st.session_state.enable_multimodal_preprocessing,
         )
 
 

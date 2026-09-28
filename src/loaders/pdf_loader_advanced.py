@@ -1,74 +1,72 @@
-import tempfile
-from typing import List
-import PyPDF2
-from pdf2image import convert_from_path
-import pytesseract
-from PIL import Image
-from langchain.schema import Document
 import logging
+from typing import List, Tuple
+
+import fitz  # PyMuPDF
+import PyPDF2
+from langchain.schema import Document
+
+from config import settings
+
+from ..utils.sentence_completion import join_page_boundaries
+from .ocr_engines import OCR_ENGINES, available_engines
 
 logger = logging.getLogger(__name__)
 
+# 페이지당 이 글자 수 미만이면 텍스트 레이어가 없는 스캔·이미지 PDF로 본다
+MIN_TEXT_CHARS_PER_PAGE = 50
+
+
+def has_text_layer(file_path: str) -> bool:
+    """PDF에 추출 가능한 텍스트 레이어가 충분한지 확인 (스캔·이미지 PDF 판별)"""
+    # ponytail: 문서 전체 기준 판정 — 일부 페이지만 스캔된 PDF는 페이지별 OCR이 필요하면 확장
+    with fitz.open(file_path) as doc:
+        text_chars = sum(len(page.get_text().strip()) for page in doc)
+        return text_chars >= MIN_TEXT_CHARS_PER_PAGE * max(doc.page_count, 1)
+
 
 class AdvancedPDFLoader:
-    """OCR 기능이 포함된 고급 PDF 로더"""
+    """OCR 기능이 포함된 고급 PDF 로더 (설정한 OCR 엔진 우선, 실패 시 로컬 엔진으로 폴백)"""
 
-    def __init__(self, use_ocr: bool = True, ocr_language: str = "kor+eng"):
+    def __init__(self, use_ocr: bool = True):
         """
         Args:
-            use_ocr: OCR 사용 여부
-            ocr_language: OCR 언어 설정 (kor: 한국어, eng: 영어, kor+eng: 한국어+영어)
+            use_ocr: OCR 사용 여부 (엔진 우선순위는 settings.ocr_engine)
         """
         self.use_ocr = use_ocr
-        self.ocr_language = ocr_language
 
     def load_pdf(self, file_path: str, progress_callback=None) -> List[Document]:
-        """PDF 파일을 로드하고 텍스트 추출"""
-        documents = []
+        """PDF 파일을 로드하고 텍스트 추출 (텍스트 레이어가 부족하면 OCR)"""
+        page_count = self._get_page_count(file_path)
 
-        # 1. 먼저 일반적인 텍스트 추출 시도
-        try:
+        # 1. 텍스트 레이어가 충분하면 일반 텍스트 추출
+        if has_text_layer(file_path):
             text_content = self._extract_text_pypdf(file_path)
-            if text_content and len(text_content.strip()) > 50:  # 의미있는 텍스트가 있는 경우
-                documents.append(
-                    Document(
-                        page_content=text_content,
-                        metadata={
-                            "source": file_path,
-                            "extraction_method": "pypdf",
-                            "page_count": self._get_page_count(file_path),
-                        },
-                    )
-                )
-                return documents
-        except Exception as e:
-            logger.warning(f"PyPDF 텍스트 추출 실패: {str(e)}")
+            metadata = {"source": file_path, "extraction_method": "pypdf", "page_count": page_count}
+            return [Document(page_content=text_content, metadata=metadata)]
 
-        # 2. 텍스트 추출이 실패하거나 내용이 부족한 경우 OCR 시도
-        if self.use_ocr:
-            try:
-                logger.info(f"OCR을 사용하여 텍스트 추출 시도: {file_path}")
-                ocr_text = self._extract_text_ocr(file_path, progress_callback)
-                if ocr_text:
-                    documents.append(
-                        Document(
-                            page_content=ocr_text,
-                            metadata={
-                                "source": file_path,
-                                "extraction_method": "ocr",
-                                "ocr_language": self.ocr_language,
-                                "page_count": self._get_page_count(file_path),
-                            },
-                        )
-                    )
-            except Exception as e:
-                logger.error(f"OCR 추출 실패: {str(e)}")
-                raise ValueError(f"PDF에서 텍스트를 추출할 수 없습니다: {file_path}")
+        # 2. 스캔·이미지 PDF는 OCR
+        if not self.use_ocr:
+            raise ValueError(f"텍스트 레이어가 없는 PDF이며 OCR이 비활성화되어 있습니다: {file_path}")
 
-        if not documents:
+        engine, page_texts = self._ocr_pages(file_path, progress_callback)
+        page_texts = join_page_boundaries(page_texts)
+        ocr_text = "".join(f"\n[페이지 {n}]\n{text}\n" for n, text in enumerate(page_texts, 1) if text.strip())
+        if not ocr_text.strip():
             raise ValueError(f"PDF에서 텍스트를 추출할 수 없습니다: {file_path}")
 
-        return documents
+        metadata = {"source": file_path, "extraction_method": "ocr", "ocr_engine": engine, "page_count": page_count}
+        return [Document(page_content=ocr_text.strip(), metadata=metadata)]
+
+    def _ocr_pages(self, file_path: str, progress_callback=None) -> Tuple[str, List[str]]:
+        """사용 가능한 엔진을 우선순위대로 시도해 (엔진명, 페이지별 텍스트)를 반환"""
+        engines = available_engines(settings.ocr_engine)
+        for engine in engines:
+            try:
+                logger.info(f"텍스트 레이어 부족 — OCR({engine})로 텍스트 추출: {file_path}")
+                return engine, OCR_ENGINES[engine](file_path, progress_callback)
+            except Exception as e:
+                logger.warning(f"{engine} OCR 실패, 다음 엔진으로 폴백: {type(e).__name__}: {e}")
+        raise ValueError(f"사용 가능한 OCR 엔진이 모두 실패했습니다 (시도: {engines}): {file_path}")
 
     def _extract_text_pypdf(self, file_path: str) -> str:
         """PyPDF2를 사용한 텍스트 추출"""
@@ -86,56 +84,6 @@ class AdvancedPDFLoader:
 
         return text.strip()
 
-    def _extract_text_ocr(self, file_path: str, progress_callback=None) -> str:
-        """OCR을 사용한 텍스트 추출"""
-        text = ""
-
-        # PDF를 이미지로 변환
-        with tempfile.TemporaryDirectory() as temp_dir:
-            try:
-                # DPI를 높이면 품질은 좋아지지만 처리 시간이 오래 걸림
-                # thread_count 제거하여 pickle 오류 방지
-                images = convert_from_path(file_path, dpi=200, output_folder=temp_dir, fmt="png")
-
-                # 각 페이지에서 OCR 수행
-                for i, image in enumerate(images):
-                    logger.info(f"페이지 {i+1}/{len(images)} OCR 처리 중...")
-
-                    if progress_callback:
-                        ocr_progress = 0.3 + (0.4 * (i / len(images)))
-                        progress_callback(ocr_progress, f"OCR 처리 중... (페이지 {i+1}/{len(images)})")
-
-                    # 이미지 전처리 (선택사항)
-                    image = self._preprocess_image(image)
-
-                    # OCR 수행
-                    page_text = pytesseract.image_to_string(
-                        image,
-                        lang=self.ocr_language,
-                        config="--psm 3",  # 페이지 분할 모드: 자동
-                    )
-
-                    if page_text.strip():
-                        text += f"\n--- 페이지 {i + 1} ---\n"
-                        text += page_text
-
-            except Exception as e:
-                logger.error(f"PDF to Image 변환 실패: {str(e)}")
-                raise
-
-        return text.strip()
-
-    def _preprocess_image(self, image: Image.Image) -> Image.Image:
-        """OCR 정확도 향상을 위한 이미지 전처리"""
-        # 그레이스케일 변환
-        if image.mode != "L":
-            image = image.convert("L")
-
-        # 추가적인 이미지 처리가 필요한 경우 여기에 구현
-        # 예: 대비 향상, 노이즈 제거 등
-
-        return image
-
     def _get_page_count(self, file_path: str) -> int:
         """PDF 페이지 수 반환"""
         try:
@@ -148,21 +96,5 @@ class AdvancedPDFLoader:
 
     @staticmethod
     def check_ocr_availability() -> bool:
-        """OCR 사용 가능 여부 확인"""
-        try:
-            # Tesseract 설치 확인
-            import subprocess
-
-            result = subprocess.run(["tesseract", "--version"], capture_output=True, text=True)
-            if result.returncode == 0:
-                # 한국어 언어팩 확인
-                result = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True)
-                if "kor" in result.stdout:
-                    return True
-                else:
-                    logger.warning("Tesseract 한국어 언어팩이 설치되지 않았습니다.")
-                    return False
-            return False
-        except OSError:
-            # tesseract 미설치 시 FileNotFoundError 등
-            return False
+        """사용 가능한 OCR 엔진(Upstage 키·macOS Vision·한국어 Tesseract)이 하나라도 있는지 확인"""
+        return bool(available_engines(settings.ocr_engine))

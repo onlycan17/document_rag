@@ -6,10 +6,10 @@ ImprovedPDFConverter에서 마크다운 → 청크 분할 책임만 분리한 �
 인스턴스 속성(enable_semantic_chunking, semantic_chunker)은 본체에서 제공된다.
 """
 
-from pathlib import Path
-from datetime import datetime
-from typing import Optional, Callable, Tuple, List, Dict
 import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

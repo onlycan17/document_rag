@@ -1,9 +1,10 @@
 """텍스트 처리 관련 공통 유틸리티"""
 
-from typing import List, Set, Dict
-import re
 import logging
+import re
 import unicodedata
+from typing import Dict, List, Set
+
 from .keyword_expander import KeywordExpander
 
 logger = logging.getLogger(__name__)

@@ -1,8 +1,8 @@
 """LLM 모델 정보 중앙 관리"""
 
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,158 +22,93 @@ class ModelConfig:
 class ModelRegistry:
     """LLM 모델 정보를 중앙에서 관리하는 레지스트리"""
 
-    # 모델별 설정 정보
+    # 모델별 설정 정보 — 2026-09-28 각 제공사 모델 목록 API와 OpenRouter 가격표로 확인한 현행 모델
+    # max_tokens는 답변 출력 상한 (모델 자체 한도는 32K~128K이나 비용·지연을 고려해 16K로 제한)
     MODEL_CONFIGS: Dict[str, Dict[str, Any]] = {
-        # OpenAI 모델
-        "gpt-4o": {"provider": "openai", "max_tokens": 4096, "context_window": 128000, "description": "최신 옴니 모델"},
-        "gpt-4o-mini": {
+        # OpenAI
+        "gpt-6-luna": {
             "provider": "openai",
             "max_tokens": 16384,
-            "context_window": 128000,
-            "description": "가벼운 옴니 모델",
+            "context_window": 1050000,
+            "description": "기본값 · 저비용 최신",
         },
-        "gpt-4.1": {
-            "provider": "openai",
-            "max_tokens": 8192,
-            "context_window": 1000000,
-            "description": "코딩 특화 1M 토큰",
-        },
-        "gpt-4.1-mini": {
-            "provider": "openai",
-            "max_tokens": 8192,
-            "context_window": 1000000,
-            "description": "균형잡힌 1M 토큰",
-        },
-        "gpt-4.1-nano": {
-            "provider": "openai",
-            "max_tokens": 4096,
-            "context_window": 1000000,
-            "description": "빠르고 저렴한 1M 토큰",
-        },
-        "gpt-5-pro": {"provider": "openai", "max_tokens": 4096, "context_window": 128000, "description": "고성능 모델"},
-        "gpt-5": {"provider": "openai", "max_tokens": 4096, "context_window": 128000, "description": "고성능 모델"},
-        "gpt-5-lite": {"provider": "openai", "max_tokens": 8192, "context_window": 65536, "description": "경량 모델"},
+        "gpt-6-sol": {"provider": "openai", "max_tokens": 16384, "context_window": 1050000, "description": "고성능"},
+        "gpt-5.4-mini": {"provider": "openai", "max_tokens": 16384, "context_window": 400000, "description": "경량"},
+        "gpt-5.4-nano": {"provider": "openai", "max_tokens": 16384, "context_window": 400000, "description": "초경량"},
         "gpt-5-mini": {
             "provider": "openai",
             "max_tokens": 16384,
-            "context_window": 128000,
-            "description": "가벼운 옴니 모델",
+            "context_window": 400000,
+            "description": "이전 세대 경량",
         },
-        # Google Gemini 모델
-        "gemini-1.5-flash": {
+        # Google Gemini
+        "gemini-3.5-flash-lite": {
             "provider": "google",
-            "max_tokens": 8192,
+            "max_tokens": 16384,
             "context_window": 1048576,
-            "description": "빠른 응답",
+            "description": "기본값 · 저비용 최신",
         },
-        "gemini-1.5-flash-8b": {
+        "gemini-3.8-flash": {
             "provider": "google",
-            "max_tokens": 8192,
+            "max_tokens": 16384,
             "context_window": 1048576,
-            "description": "더 빠른 경량 모델",
+            "description": "최신 Flash",
         },
-        "gemini-1.5-pro": {
+        "gemini-3.5-flash": {
             "provider": "google",
-            "max_tokens": 8192,
-            "context_window": 2097152,
-            "description": "고급 기능",
-        },
-        "gemini-2.0-flash": {
-            "provider": "google",
-            "max_tokens": 8192,
+            "max_tokens": 16384,
             "context_window": 1048576,
-            "description": "최신 2.0 버전",
+            "description": "고성능 Flash",
         },
         "gemini-2.5-flash": {
             "provider": "google",
-            "max_tokens": 8192,
+            "max_tokens": 16384,
             "context_window": 1048576,
-            "description": "최신 2.5 버전",
+            "description": "이전 세대 Flash",
         },
         "gemini-2.5-pro": {
             "provider": "google",
-            "max_tokens": 2048,
-            "context_window": 32768,
-            "description": "안정적인 버전",
-        },
-        "gemini-1.0-pro": {
-            "provider": "google",
-            "max_tokens": 2048,
-            "context_window": 32768,
-            "description": "안정적인 버전",
-        },
-        "gemini-2.0-ultra": {
-            "provider": "google",
-            "max_tokens": 8192,
+            "max_tokens": 16384,
             "context_window": 1048576,
-            "description": "고성능 멀티모달",
+            "description": "이전 세대 Pro",
         },
-        # Anthropic Claude 모델
-        "claude-3-5-sonnet-20241022": {
+        # Anthropic Claude
+        "claude-haiku-4-5-20251001": {
             "provider": "anthropic",
-            "max_tokens": 8192,
+            "max_tokens": 16384,
             "context_window": 200000,
-            "description": "최신 최고 성능",
+            "description": "기본값 · 저비용",
         },
-        "claude-3-haiku-20240307": {
+        "claude-sonnet-5": {
             "provider": "anthropic",
-            "max_tokens": 4096,
-            "context_window": 200000,
-            "description": "빠르고 효율적",
+            "max_tokens": 16384,
+            "context_window": 1000000,
+            "description": "균형",
         },
-        "claude-3-sonnet-20240229": {
+        "claude-sonnet-4-6": {
             "provider": "anthropic",
-            "max_tokens": 4096,
-            "context_window": 200000,
-            "description": "균형잡힌 성능",
+            "max_tokens": 16384,
+            "context_window": 1000000,
+            "description": "이전 세대 균형",
         },
-        "claude-3-opus-20240229": {
+        "claude-opus-5-5": {
             "provider": "anthropic",
-            "max_tokens": 4096,
-            "context_window": 200000,
+            "max_tokens": 16384,
+            "context_window": 1000000,
             "description": "최고 성능",
         },
-        "claude-2.1": {
-            "provider": "anthropic",
-            "max_tokens": 4096,
-            "context_window": 200000,
-            "description": "Claude 2.1",
-        },
-        "claude-2.0": {
-            "provider": "anthropic",
-            "max_tokens": 4096,
-            "context_window": 100000,
-            "description": "Claude 2.0",
-        },
-        "claude-instant-1.2": {
-            "provider": "anthropic",
-            "max_tokens": 4096,
-            "context_window": 100000,
-            "description": "빠른 응답",
-        },
-        "claude-4-1-opus-20250901": {
-            "provider": "anthropic",
-            "max_tokens": 8192,
-            "context_window": 200000,
-            "description": "최신 Claude 4 Opus",
-        },
-        "claude-4-sonnet": {
-            "provider": "anthropic",
-            "max_tokens": 8192,
-            "context_window": 200000,
-            "description": "Claude 4 Sonnet",
-        },
-        "claude-4-1-haiku-20250901": {
-            "provider": "anthropic",
-            "max_tokens": 8192,
-            "context_window": 200000,
-            "description": "Claude 4 Haiku",
+        # OpenRouter
+        "qwen/qwen3.8-flash": {
+            "provider": "openrouter",
+            "max_tokens": 16384,
+            "context_window": 1000000,
+            "description": "기본값 · 텍스트·비전 겸용",
         },
         "qwen/qwen3-vl-235b-a22b-instruct": {
             "provider": "openrouter",
             "max_tokens": 32768,
             "context_window": 262144,
-            "description": "Qwen3 VL 235B (OpenRouter)",
+            "description": "Qwen3 VL 235B",
         },
     }
 

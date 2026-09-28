@@ -10,18 +10,13 @@
 
 ## 2. 컴포넌트
 - `src/loaders/DocumentLoader`: PDF/OCR/Markdown/TXT 로딩 및 전처리/청크 분할.
+  - 스캔 PDF(페이지당 텍스트 50자 미만)는 이미지 분석·변환기를 건너뛰고 `src/loaders/ocr_engines.py`로 OCR: Upstage Document Parse(기본) → macOS Vision → Tesseract 순 폴백.
    - 지능형 이미지 처리: OpenRouter만 사용(폴백 없음, 엄격 모드)
-     - OpenRouter: `src/utils/openrouter_image_service.py`(모델: `z-ai/glm-4.5v`)
+     - OpenRouter: `src/utils/openrouter_image_service.py`(모델: `qwen/qwen3.8-flash`)
 - `src/embeddings/EmbeddingModel`: Upstage/OpenAI/HuggingFace 임베딩 선택, 배치 처리, 재시도.
-- `src/vectorstore/VectorDatabase`(실제 구현은 EnhancedVectorDatabase): FAISS/Chroma 선택, 하이브리드 검색(BM25+TF‑IDF)·MMR·임계값 동적 조정.
+- `src/vectorstore/VectorDatabase`: FAISS/Chroma 선택, 하이브리드 검색(BM25+TF‑IDF)·MMR·임계값 동적 조정.
 - `src/rag/RAGChain`: 
-  - LLM 초기화(provider: openai/google/anthropic/local)
-  - local: OpenAI 호환 HTTP 엔드포인트 사용(`{BASE}/v1`), 멀티 서버 지원
-    - `LOCAL_LLM_BASE_URLS`(콤마 구분) 순회로 모델 목록 통합
-    - 선택된 모델의 `model` 값에 `"<id>|<base>"`를 포함해 서버 라우팅
-    - 헬스: `GET {BASE}/health`, 큐: `GET {BASE}/v1/queue/stats`, 모델: `GET {BASE}/v1/models`
-    - 채팅: `POST {BASE}/v1/chat/completions`(스트리밍 지원), 임베딩: `POST {BASE}/v1/embeddings`
-    - 멀티모달(이미지 분석)은 1620 포트 서버의 모델만 사용(현재 구성)
+  - LLM 초기화(provider: openai/google/anthropic/openrouter — 외부 API 전용)
   - 대용량 컨텍스트 처리(ContextChunker, Summarizer, 병렬 처리)
   - 프롬프트 템플릿(Qwen ChatML/일반 템플릿)
   - 스트리밍/비스트리밍 체인

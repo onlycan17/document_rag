@@ -5,13 +5,14 @@
 LLM의 컨텍스트 크기 제한을 극복하여 더 많은 문서를 처리할 수 있도록 합니다.
 """
 
-from typing import List, Dict, Any, Tuple, Optional
-from langchain.schema import Document
 import logging
-import numpy as np
 from collections import defaultdict
-from sklearn.feature_extraction.text import TfidfVectorizer
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+from langchain.schema import Document
 from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 logger = logging.getLogger(__name__)
 

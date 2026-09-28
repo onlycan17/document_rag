@@ -151,14 +151,9 @@ streamlit run app.py
 - **효과**: 38% 이상의 유사도를 가진 문서만 포함하여 적절한 균형 유지
 - **계산**: FAISS 거리 = 2 * (1 - 유사도), 따라서 38% 유사도 = 1.24 거리
 
-### 10. 로컬 모델 최적화 (src/rag/rag_chain.py, config.py)
-- **문제**: 로컬 모델에서 토큰 제한 초과 오류 발생
-- **해결**:
-  - 로컬 모델 최대 토큰: 4096 → 2048
-  - 로컬 모델 컨텍스트 윈도우: 8192 → 4096
-  - 로컬 모델 최대 컨텍스트 길이: 12,000자로 제한
-  - 환경 변수로 설정 가능: `LOCAL_LLM_MAX_TOKENS`, `LOCAL_LLM_CONTEXT_WINDOW`
-- **효과**: 로컬 모델의 제한된 리소스에 맞춰 안정적 동작
+### 10. 로컬 모델 최적화 (제거됨 — 외부 API 전용 전환)
+- 내장(로컬) LLM 지원이 제거되어 해당 튜닝 항목은 더 이상 적용되지 않습니다.
+- 관련 환경 변수(`LOCAL_LLM_MAX_TOKENS`, `LOCAL_LLM_CONTEXT_WINDOW`) 역시 삭제되었습니다.
 
 ### 11. 답변 길이 제한 완전 제거 (src/rag/rag_chain.py)
 - **변경사항**:
@@ -240,14 +235,18 @@ streamlit run app.py
 ## 핵심 워크플로우 - 반드시 이 순서를 따르세요!
 
 ## 최신 전처리/멀티모달 업데이트(요약)
-- 기본 전처리 모델을 저비용·멀티모달 우선으로 재정렬
-  - OpenAI: `gpt-5-mini`, Google: `gemini-2.5-flash`, Anthropic: `claude-4-sonnet`
-- 멀티모달 전처리 기본 ON(`ENABLE_MULTIMODAL_PREPROCESSING=true`)
+- 기본 모델(2026-09 갱신, 단일 출처: `config.py` + `src/models/model_registry.py`)
+  - OpenAI: `gpt-6-luna`, Google: `gemini-3.5-flash-lite`, Anthropic: `claude-haiku-4-5-20251001`, OpenRouter: `qwen/qwen3.8-flash`
+  - 제공자별 기본값 조회는 `settings.model_for(provider)` 하나로 통일
+- 문서 LLM 교정: PDF 변환 결과(`converted_docs/*.md`)를 MD 후처리 한 번으로 교정 → `processed_docs/*_processed.md`(검토 후 색인)
+  - `src/utils/chunked_cleanup.py`: 문장이 끝난 문단에서만 약 3,000자로 분할, 앞뒤 청크 원문을 참고 문맥으로 전달, 3개 병렬
+  - 검증: 공백 제외 글자 수 85~115%, `[페이지 N]` 표시·표 행 수 동일 — 어긋난 청크는 원문 유지
+  - 페이지 경계 문장은 LLM 전에 규칙으로 연결(`sentence_completion.join_page_boundaries`)
 - 멀티모달 모델 목록 동적 확장(.env):
   - `EXTRA_MULTIMODAL_OPENAI_MODELS`, `EXTRA_MULTIMODAL_GOOGLE_MODELS`, `EXTRA_MULTIMODAL_ANTHROPIC_MODELS`
-  - OpenAI 목록에 `gpt-5-pro`, `gpt-5`, `gpt-5-mini` 추가(공식 페이지 미러 근거)
+  - 설정된 기본 모델은 멀티모달 지원 목록에 자동 포함
 - OpenRouter를 이용한 지능형 이미지 추출 기본 경로
-  - `IMAGE_ANALYSIS_PROVIDER=openrouter`, `OPENROUTER_MM_MODEL=z-ai/glm-4.5v`, `OPNEROUTER_API_KEY` 필요
+  - `IMAGE_ANALYSIS_PROVIDER=openrouter`, `OPENROUTER_MM_MODEL=qwen/qwen3.8-flash`(추론 모드 끔, 429 재시도), `OPNEROUTER_API_KEY` 필요
 - OpenAI API 호출 경로 개선: Responses API → Chat Completions 폴백
 
 ### 조사 → 계획 → 구현

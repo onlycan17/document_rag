@@ -1,18 +1,20 @@
-from typing import List, Dict, Any, Tuple
-from langchain_community.vectorstores import FAISS
+import logging
+import os
+import pickle
+import time
+from typing import Any, Dict, List, Tuple
+
+import numpy as np
 from langchain.schema import Document
 from langchain_community.retrievers import BM25Retriever
+from langchain_community.vectorstores import FAISS
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
 from config import settings
 from src.embeddings import EmbeddingModel
 from src.utils import TextProcessor
-from src.utils.tracing import observe_if_enabled, record_input, record_retriever_output, record_metadata
-import os
-import pickle
-import logging
-import time
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from src.utils.tracing import observe_if_enabled, record_input, record_metadata, record_retriever_output
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +36,9 @@ def _retriever_sources(results: List[Tuple[Document, float]]) -> List[dict]:
     ]
 
 
-class EnhancedVectorDatabase:
+class VectorDatabase:
     """
-    향상된 벡터 데이터베이스 클래스
+    벡터 데이터베이스 클래스
     - 하이브리드 검색 (벡터 + 키워드) 지원
     - MMR (Maximal Marginal Relevance) 검색
     - 개선된 임계값 처리
@@ -94,10 +96,11 @@ class EnhancedVectorDatabase:
                 self.vector_store = FAISS.from_documents(documents, self.embedding_model.embeddings)
             else:
                 self.vector_store.add_documents(documents)
-            self.save_faiss_index()
 
-        # 키워드 검색용 문서 캐시 업데이트
+        # 키워드 검색용 문서 캐시 업데이트 (저장 전에 반영해야 재시작 후에도 캐시가 인덱스와 일치)
         self.documents_cache.extend(documents)
+        if settings.vector_db_type == "faiss":
+            self.save_faiss_index()
         # 문서 구성이 바뀌었으므로 질의 캐시 무효화
         self._query_cache.clear()
         self._update_keyword_search_index()
@@ -212,30 +215,19 @@ class EnhancedVectorDatabase:
 
     def _mmr_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
         """MMR (Maximal Marginal Relevance) 검색"""
+        # 점수 포함 MMR은 FAISS만 지원 — 그 외 스토어는 유사도 검색 사용
+        if settings.vector_db_type != "faiss":
+            return self._similarity_search(query, k)
         try:
-            # MMR 검색 수행
-            docs = self.vector_store.max_marginal_relevance_search(
-                query,
+            # 질의는 한 번만 임베딩하고, 점수는 FAISS 거리 그대로 사용 (임계값과 동일 척도)
+            query_embedding = self.embedding_model.embeddings.embed_query(query)
+            results = self.vector_store.max_marginal_relevance_search_with_score_by_vector(
+                query_embedding,
                 k=k,
                 fetch_k=k * 2,  # 더 많은 후보에서 선택
                 lambda_mult=1 - settings.mmr_diversity_score,  # 다양성 조절
             )
-
-            # 점수는 별도로 계산해야 함 (MMR은 점수를 반환하지 않음)
-            scored_results = []
-            for doc in docs:
-                # 임베딩을 통한 유사도 계산
-                doc_embedding = self.embedding_model.embed_query(doc.page_content)
-                query_embedding = self.embedding_model.embed_query(query)
-
-                # 코사인 유사도 계산
-                similarity = cosine_similarity([query_embedding], [doc_embedding])[0][0]
-                # FAISS 거리로 변환 (낮을수록 좋음)
-                distance = 1 - similarity
-
-                scored_results.append((doc, distance))
-
-            return self._filter_by_threshold(scored_results)
+            return self._filter_by_threshold(results)
 
         except Exception as e:
             logger.warning(f"MMR 검색 실패, 기본 검색 사용: {str(e)}")
@@ -590,10 +582,3 @@ class EnhancedVectorDatabase:
         except Exception as e:
             logger.error(f"관련 용어 추출 실패: {str(e)}")
             return []
-
-
-# 기존 VectorDatabase와의 호환성 유지
-class VectorDatabase(EnhancedVectorDatabase):
-    """기존 VectorDatabase와의 호환성을 위한 클래스"""
-
-    pass

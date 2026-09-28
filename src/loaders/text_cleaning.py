@@ -1,7 +1,7 @@
 """텍스트 정리·한국어 정규화 전용 믹스인"""
 
-import re
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 

@@ -5,20 +5,22 @@
 LLMManager, DocumentProcessor, QueryEngine 모듈들을 조합하여 전체 RAG 파이프라인을 관리합니다.
 """
 
-from typing import List, Dict, Any, Optional, Generator, Tuple
-from langchain.schema import Document
 import logging
+from typing import Any, Dict, Generator, List, Optional, Tuple
+
+from langchain.schema import Document
 
 from config import settings
 from src.vectorstore import VectorDatabase
 
+from .context_chunker import ContextChunker
+from .document_processor import DocumentProcessor
+
 # 새로 생성한 모듈들 임포트
 from .llm_manager import LLMManager
-from .document_processor import DocumentProcessor
 from .query_engine import QueryEngine
-from .context_chunker import ContextChunker
-from .summarizer import HierarchicalSummarizer, resolve_summary_length
 from .rag_parallel_processor import ParallelRAGProcessor
+from .summarizer import HierarchicalSummarizer, resolve_summary_length
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +76,9 @@ class RAGChain:
         # LLM 및 체인 생성
         self.llm = self.llm_manager.create_llm(provider, model, streaming=False)
         self.streaming_llm = self.llm_manager.create_llm(provider, model, streaming=True)
+        # create_llm이 내부 보정한 실사용 모델을 current_*에 동기화 (None 경고 방지)
+        self.current_provider = self.llm_manager.current_provider
+        self.current_model = self.llm_manager.current_model
         self.prompt_template = self.llm_manager.create_prompt_template()
 
         # 체인 생성
@@ -185,7 +190,7 @@ class RAGChain:
         provider_models = models.get(self.current_provider, [])
 
         for model_info in provider_models:
-            if model_info.get("name") == self.current_model:
+            if model_info.get("model") == self.current_model:
                 return model_info
 
         return {
@@ -246,19 +251,6 @@ class RAGChain:
                 "large_context_processing": getattr(self, "enable_large_context_processing", False),
             },
         }
-
-    # 기존 API 호환성을 위한 메서드들
-    def _get_model_max_tokens(self) -> Dict[str, int]:
-        """모델별 최대 토큰 수 반환 (기존 호환성)"""
-        return self.llm_manager._get_model_max_tokens()
-
-    def _get_model_context_window(self) -> Dict[str, int]:
-        """모델별 컨텍스트 윈도우 크기 반환 (기존 호환성)"""
-        return self.llm_manager._get_model_context_window()
-
-    def _get_max_tokens_for_model(self, provider: str, model: Optional[str] = None) -> int:
-        """특정 모델의 최대 토큰 수 반환 (기존 호환성)"""
-        return self.llm_manager._get_max_tokens_for_model(provider, model)
 
     # 대량 문서 처리 메서드들 (기존 기능 유지)
     def process_large_context(self, question: str, k_documents: int = 15) -> Dict[str, Any]:

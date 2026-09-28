@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 import streamlit as st
 
 from config import settings
-from src.processing.preprocessing_factory import PreprocessingModelFactory
+from src.loaders.pdf_loading_helpers import resolve_postprocess_target
 from src.rag.rag_chain import RAGChain
 from src.utils.logging_config import get_logger
 from src.utils.openrouter_models import search_openrouter_models
@@ -88,80 +88,12 @@ def _render_document_management() -> Dict[str, Any]:
 
 
 def _render_text_preprocessing() -> Dict[str, Any]:
-    """문서 전처리(텍스트) 섹션 렌더링 — 단순화: 기본값 고정, 콤보박스 제거"""
-    st.markdown("**🤖 전처리 모델**")
-
-    # 1) 멀티모달 전처리 on/off만 노출 (모델 선택 제거)
-    enable_multimodal = st.checkbox(
-        "멀티모달 전처리 활성화",
-        value=st.session_state.get("enable_multimodal_preprocessing", settings.enable_multimodal_preprocessing),
-        key="enable_multimodal_preprocessing_checkbox",
-        help="이미지와 텍스트를 함께 분석하는 멀티모달 AI 모델을 사용합니다",
-    )
-    st.session_state.enable_multimodal_preprocessing = enable_multimodal
-
-    # 2) 전처리 모델은 설정 파일 기본값으로 고정
-    fixed_provider = settings.preprocessing_model  # 예: 'openrouter'
-
-    provider_names = {
-        "openai": "OpenAI GPT",
-        "google": "Google Gemini",
-        "anthropic": "Anthropic Claude",
-        "openrouter": "OpenRouter",
-    }
-
-    # 현재 적용될 기본 모델 이름 표시
-    try:
-        if fixed_provider == "openrouter":
-            text_model = getattr(settings, "openrouter_model", "z-ai/glm-4.5-air")
-            mm_model = getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")
-        elif fixed_provider == "openai":
-            text_model = settings.openai_model
-            mm_model = settings.openai_model
-        elif fixed_provider == "google":
-            text_model = settings.google_model
-            mm_model = settings.google_model
-        elif fixed_provider == "anthropic":
-            text_model = settings.anthropic_model
-            mm_model = settings.anthropic_model
-        else:
-            text_model = getattr(settings, "openrouter_model", "default")
-            mm_model = getattr(settings, "openrouter_mm_model", "default")
-    except Exception:
-        text_model = "default"
-        mm_model = "default"
-
-    st.caption(f"제공자: {provider_names.get(fixed_provider, fixed_provider)} · 텍스트: {text_model}")
-    st.caption(f"멀티모달: {mm_model} ({'ON' if enable_multimodal else 'OFF'})")
-
-    # 참고 정보(지원 모델 리스트만 안내용으로 표시)
-    _display_multimodal_models()
-
-    # 반환값: 선택 제거 → 고정값 전달
-    return {
-        "selected_preprocessing_model": fixed_provider,
-        "enable_multimodal": enable_multimodal,
-    }
-
-
-def _display_multimodal_models():
-    """멀티모달 모델 정보 표시"""
-    multimodal_models = PreprocessingModelFactory.get_multimodal_models()
-    available_models = PreprocessingModelFactory.get_available_models()
-    shown = []
-    for provider, models in multimodal_models.items():
-        is_available = available_models.get(provider, {}).get("available", False)
-        if provider == "openrouter":
-            try:
-                is_available = (
-                    bool(settings.openrouter_api_key) and settings.image_analysis_provider.lower() == "openrouter"
-                )
-            except Exception:
-                is_available = False
-        if is_available and models:
-            shown.append(f"{provider}: {', '.join(models)}")
-    if shown:
-        st.caption("지원 모델 — " + " · ".join(shown))
+    """문서 교정 모델 안내 — PDF 변환 결과(MD)를 문장 경계로 나눠 교정하는 모델 표시"""
+    st.markdown("**🤖 문서 교정 모델**")
+    provider, model = resolve_postprocess_target()
+    st.caption(f"MD 후처리: {provider} · {model or settings.model_for(provider)}")
+    st.caption(f"이미지 분석: {settings.openrouter_mm_model}")
+    return {"selected_preprocessing_model": settings.preprocessing_model}
 
 
 def _render_image_extraction() -> Dict[str, Any]:
@@ -196,7 +128,7 @@ def _render_image_extraction() -> Dict[str, Any]:
     if intelligent_extraction:
         try:
             provider = getattr(settings, "image_analysis_provider", "openrouter")
-            model = getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")
+            model = settings.openrouter_mm_model
             st.caption(f"이미지 추출 경로: {provider} ({model})")
         except Exception:
             st.caption("이미지 추출 경로: OpenRouter 기본")
@@ -223,8 +155,8 @@ def _render_document_upload(safe_get_vector_db) -> Dict[str, Any]:
     # 파일 처리 버튼 및 로직
     if uploaded_files:
         if st.button("문서 처리 및 저장", type="primary", use_container_width=True):
-            from ui.components.file_uploader import _process_uploaded_files
             from src.utils.document_processor import DocumentProcessor
+            from ui.components.file_uploader import _process_uploaded_files
 
             # 디렉토리 준비
             DocumentProcessor.prepare_directories()

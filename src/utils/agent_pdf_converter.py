@@ -2,15 +2,17 @@
 에이전트 기반 PDF 변환기 - 로컬 LLM을 활용한 지능형 문서 전처리
 """
 
-import os
 import logging
-import fitz  # PyMuPDF
-from typing import List, Dict, Optional
+import os
 from pathlib import Path
+from typing import Dict, List, Optional
 
-from src.agents import ContextConnectorAgent, StructureParserAgent, QualityValidatorAgent
-from .pdf_converter import ImprovedPDFConverter
+import fitz  # PyMuPDF
+
+from src.agents import ContextConnectorAgent, QualityValidatorAgent, StructureParserAgent
+
 from .image_analyzer import create_image_analyzer
+from .pdf_converter import ImprovedPDFConverter
 
 logger = logging.getLogger(__name__)
 
@@ -97,10 +99,6 @@ class AgentBasedPDFConverter:
             import streamlit as st  # type: ignore
 
             provider = st.session_state.get("preprocessing_model", None)
-            if st.session_state.get("enable_multimodal_preprocessing", False):
-                model = st.session_state.get("preproc_mm_model", None)
-            else:
-                model = st.session_state.get("preproc_text_model", None)
         except Exception as err:
             logger.debug(f"세션 전처리 텍스트 모델 조회 실패(무시): {err}")
         # 2) 인자값 우선
@@ -110,17 +108,7 @@ class AgentBasedPDFConverter:
         if not model:
             model = llm_model
         if not model:
-            if provider == "openai":
-                model = getattr(_settings, "openai_model", "gpt-4o-mini")
-            elif provider == "google":
-                model = getattr(_settings, "google_model", "gemini-1.5-flash-8b")
-            elif provider == "anthropic":
-                model = getattr(_settings, "anthropic_model", "claude-3-5-haiku-20241022")
-            else:
-                # OpenRouter 기본 모델 결정(텍스트 우선, 없으면 멀티모달 기본값)
-                model = getattr(_settings, "openrouter_model", None) or getattr(
-                    _settings, "openrouter_mm_model", "z-ai/glm-4.5v"
-                )
+            model = _settings.model_for(provider)
         return provider, model
 
     def convert_pdf_to_markdown(self, pdf_path: str, comparison_mode: bool = False) -> str:

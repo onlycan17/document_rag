@@ -1,5 +1,70 @@
 # 변경 이력(Changelog)
 
+## 2026-09-28 (로컬 실행 점검 후속)
+- fix(llm): 레지스트리에 없는 OpenRouter 모델의 컨텍스트 크기를 OpenRouter 모델 목록(`context_length`, 10분 캐시)에서 조회 — `upstage/solar-pro4`가 기본값 8,192토큰으로 계산돼 컨텍스트 9,228자(검색 12건 중 2건 잘림)였던 문제. 수정 후 500,000자(프로젝트 상한)
+- fix(tracing): langsmith 0.2.x `RunTree`에 `add_inputs`가 없어 입력 기록이 실패하고 같은 블록의 출력·메타데이터 기록까지 누락되던 문제 — `run.inputs`에 직접 병합
+- 참고: 답변 프롬프트에 "문서 밖 사실 금지" 규칙을 넣었다가 되돌림. 환각으로 봤던 답변 내용(풍납토성 사적 11호·배모양·성벽 너비 30∼40m 등)이 실제로는 문서에 있었고(검색 시 표기 차이로 누락), 새 규칙은 문서에 있는 내용도 "확인되지 않습니다"라고 답하는 부작용이 있었음
+
+## 2026-09-28 (교정 안정화·KERIS 교정본 색인)
+- feat(cleanup): 병렬 교정 후 실패 청크를 순차 1회 재시도 (OpenRouter qwen3.8-flash는 제공사 Alibaba 단독이라 라우팅 대안 없음)
+- fix(cleanup): 청크 맨 앞 `[페이지 N]`을 LLM이 반복적으로 빠뜨리는 문제 — 앞머리 표시를 떼어 보내고 결과에 다시 붙임
+- data: KERIS 교정 재실행 59청크 중 55개 교정(93%, 8분), 원문 유지 4개는 모두 위 앞머리 표시 패턴(수정 전 실행). `processed_docs` 교정본으로 인덱스 KERIS 청크 교체(244 → 243, 전체 1027)
+- fix(cleanup): 참고 문맥(앞뒤 청크 일부)에서 `[페이지 N]` 제거 — LLM이 문맥의 표시를 본문에 베껴 넣어 구조 검증에 실패하던 문제(실패 6개 중 4개). 앞머리 표시 누락으로 봤던 추정은 오진이었음
+- data: KERIS 최종 재교정 59청크 중 57개 교정(97%, 7.8분, 재시도로 1개 복구), 원문 유지 2개(요약 1·중간 표시 삭제 1), `[페이지 N]` 215개·표 행 485개 보존 → 인덱스 반영(KERIS 243, 전체 1027)
+- chore: 옛 인덱스 백업 `vector_db_backup_20260927/` 삭제
+
+## 2026-09-28 (페이지 경계를 고려한 분할 LLM 교정)
+- feat(ocr): `sentence_completion.join_page_boundaries` — 페이지 끝에서 끊긴 문장을 다음 페이지에서 문장이 끝나는 곳까지만 끌어와 연결(`[페이지 N]` 표시 유지, 목차·제목·표·목록은 제외). 기존 연결 규칙이 '제·장·절'로 시작하는 모든 줄을 새 문장으로 보던 문제 수정(제N장 패턴으로 한정)
+- feat(cleanup): `src/utils/chunked_cleanup.py` — 문장이 끝난 문단에서만 약 3,000자로 분할, 앞뒤 청크 원문을 참고 문맥으로 함께 전송(병렬 3), 글자 수 85~115%·`[페이지 N]`·표 행 수 검증 실패 시 원문 유지. `MDPostProcessor`·`ContextConnectorAgent`가 공용 사용
+- feat(loader): OCR 결과도 `converted_docs` 저장 → MD 후처리로 검토 가능
+- refactor(preprocess): 문서 전체를 한 번에 보내 4,000토큰에서 잘리던 `_preprocess_documents` LLM 단계(KERIS 35만 자 → 6천 자) 제거, `src/processing`의 전처리 모델 3개 모듈·사이드바 멀티모달 전처리 토글·`ENABLE_MULTIMODAL_PREPROCESSING` 등 삭제. LLM 교정은 MD 후처리 한 번으로 통일
+- fix(agent): OpenRouter 에이전트 호출에 `reasoning.enabled=false`(추론 토큰이 출력 한도를 소진하는 문제 방지)
+- fix(make): lint·test 타겟이 실패를 "미설치"로 숨기고 종료 코드 0을 내던 문제
+- data: KERIS 실검증 — 59청크 중 52개 교정(88%), 7개 원문 유지(구조 검증 실패 5·429 2), `[페이지 N]` 215개·표 행 485개 보존, 글자 수 99.1%, 13.5분
+
+## 2026-09-28 (스캔 PDF OCR — Upstage Document Parse)
+- feat(ocr): `src/loaders/ocr_engines.py` 신규 — 스캔 PDF OCR 1순위를 Upstage Document Parse로(`OCR_ENGINE=upstage`), 실패·미설정 시 macOS Vision → Tesseract 자동 폴백. 50쪽 단위 분할 요청, 응답 상대 페이지를 원본으로 매핑, header/footer 요소(머리말·쪽번호) 제외
+- fix(retry): `api_retry_with_backoff`가 500·502 등 일시적 서버 오류를 재시도하지 않던 문제("server error" 키워드 추가). Upstage 151~200쪽 요청이 500으로 실패했다가 재요청 시 정상 처리되는 것을 확인
+- test(conftest): 실제 LLM을 호출하는 `tests/agent`를 network 마커 대상에 추가(기본 실행 3분 → 8초)
+- data: KERIS 보고서를 Upstage로 재변환(220쪽, 81초, 표 306개 보존) → `converted_docs` 교체, 인덱스 KERIS 청크 230 → 244개(전체 1028)
+
+## 2026-09-28 (비전·기본 모델 교체)
+- fix(image): `OpenRouterImageService.analyze_image`가 이미지를 `input_image`(Responses API 형식)로 보내 Chat Completions에서 **이미지가 모델에 전달되지 않던** 문제 — `image_url`로 수정. 이전 지능형 이미지 분석은 이미지를 보지 않고 관련도·설명을 생성했음
+- feat(model): 비전·OpenRouter 텍스트 기본 모델 `z-ai/glm-4.5v`·`glm-4.5-air` → `qwen/qwen3.8-flash`. 한국어 보고서 7쪽 OCR 비교에서 glm-4.5v 평균 F1 0.738 → 0.935, 비용 약 1/5. `glm-5.3-flash`는 추론 모드 필수로 쪽당 최대 12분·빈 응답이 있어 제외
+- feat(model): 제공자별 기본 모델 `gpt-5-mini`/`gemini-2.5-flash`/`claude-4-sonnet`(존재하지 않는 ID) → `gpt-6-luna`/`gemini-3.5-flash-lite`/`claude-haiku-4-5-20251001` (각 제공사 모델 목록 API로 확인)
+- refactor(model): 기본 모델 결정 로직 4벌(`base_agent`·`agent_pdf_converter`·`preprocessing_factory`·`llm_manager`)과 하드코딩 폴백 9곳을 `settings.model_for(provider)`로 통일. `llm_manager.get_available_models`의 별도 하드코딩 목록과 미사용 호환 메서드를 제거하고 `ModelRegistry`를 단일 출처로. 레지스트리를 현행 모델로 교체, 미사용 설정 `MULTIMODAL_PREPROCESSING_MODEL/PROVIDER` 삭제
+- feat(openrouter): 이미지 분석·멀티모달 전처리 요청에 `reasoning.enabled=false`, 멀티모달 전처리 POST에 429 지수 백오프 재시도(`api_retry_with_backoff` 재사용)
+
+## 2026-09-27 (스캔 PDF OCR 폴백)
+- fix(loader): 텍스트 레이어가 없는 스캔·이미지 PDF를 `has_text_layer()`(페이지당 50자 기준)로 먼저 판별해, 지능형 이미지 분석·에이전트·개선된 변환기를 건너뛰고 곧장 OCR로 처리. 이전에는 개선된 변환기가 이미지 링크만 담긴 마크다운을 "성공"으로 반환해 OCR 폴백이 동작하지 않았고, 지능형 이미지 추출이 페이지 이미지 조각을 OpenRouter로 분석하는 비용도 발생
+- feat(ocr): macOS에서는 Vision OCR(`pyobjc-framework-Vision==12.2.2`, darwin 전용) 우선, 그 외는 Tesseract 폴백. Tesseract가 판독하지 못하던 기울임꼴 한글 인식
+- perf(ocr): `pdf2image`로 전체 페이지를 메모리에 올리던 방식을 PyMuPDF 페이지 단위 렌더링(300dpi)으로 교체. `pdf2image`·poppler 의존성 제거(requirements·설치 스크립트·설치 문서 동기화)
+
+## 2026-09-27 (검색 품질 — 정크 청크 필터·MMR·문서 캐시)
+- feat(loader): `src/loaders/junk_filter.py` 추가 — 이미지 링크(경로 괄호 중첩 처리, 자리표시자 alt 제거), GLM `<|begin_of_box|>` 토큰, 목차 점선, 숫자만 있는 줄, `페이지 N의 이미지` 캡션 제거 및 판권면(ISBN) 청크 제외. `_preprocess_documents`에서 타입별 정제 전에 적용
+- 기존 인덱스 정리: 1195 → 785 청크(이미지 참조 374개 등 제거). 교원 업무부담(KERIS) 문서는 PDF 본문 추출 실패(hex 문자열)로 내용이 사실상 없어 재변환 필요
+- data: KERIS 보고서 재변환 — 텍스트 레이어·폰트가 없는 이미지 타일 PDF(220쪽)라 기존 변환은 본문 대신 제목 메타데이터(EUC-KR hex)와 이미지 링크만 남겼음. Tesseract(kor)는 기울임꼴 인용문을 판독하지 못해 macOS Vision OCR(300dpi)로 재변환 → `converted_docs/` 마크다운 교체, 인덱스의 KERIS 청크 1 → 230개(전체 1014)
+- feat(loader): 목차 점선 리더에 `•`/`∙` 추가(Vision OCR 출력 형태)
+- perf(vectorstore): `_mmr_search`가 결과마다 문서·질의를 재임베딩(검색당 ~2k회)하던 것을 질의 1회 임베딩 + `max_marginal_relevance_search_with_score_by_vector`로 교체. 점수가 FAISS 거리로 임계값과 동일 척도
+- fix(vectorstore): `add_documents`가 캐시 extend 전에 저장해 `documents_cache.pkl`이 마지막 배치를 누락하던 문제(재시작 후 키워드 검색 누락)
+- fix(loader): 멀티모달 전처리의 이미지 수집 루프가 바깥 `doc`을 덮어써 모든 페이지가 마지막 페이지 metadata를 받던 문제
+- 참고: `langchain_upstage` 0.7.1은 `embed_documents`→passage, `embed_query`→query 모델로 자동 라우팅하므로 별도 분리 불필요
+
+## 2026-09-14 (관측성 — 토큰 사용량 기록 + 모델 해석 버그)
+- fix(observability): LangSmith 자동 관측이 openrouter(비등록 모델) 응답의 `usage_metadata`를 직렬화하지 않아 토큰·비용이 누락되던 문제 — `query_engine._invoke_chain`에서 응답 usage·cost를 읽어 `record_metadata`로 명시 기록. 노출: input/output/total 토큰·비용
+- feat(llm): `_create_openrouter_llm`에 `stream_usage=True` — 스트리밍 경로에서도 토큰 사용량 수신
+- fix(rag_chain): `Unknown model ID: None` 경고 — `_initialize_components`에서 `create_llm`이 내부 보정한 실사용 모델을 `self.current_model`에 동기화하도록 수정(모델 미지정 기본 경로에서 None이 `get_max_tokens`로 전달되던 버그)
+
+## 2026-09-13 (정리 — 관측·문서·설정·린트 일치화)
+- fix(eval): `scripts/eval/retrieval_eval.py`가 삭제된 `langfuse_enabled`를 import해 실행 즉시 깨지던 문제 해결 → LangSmith 기반 `upload_to_langsmith`로 이행 (Langfuse Dataset·create_score 대신 사례별·요약 run에 Hit@k·best_rank·MRR을 metadata로 기록). `--help` 정상 동작 확인
+- ci: `pytest tests/test_smoke_offline.py`(단일 스모크) → `pytest tests/ -q`(전체 오프라인 회귀망 202개)로 변경, `ruff format --check .` 스텝 추가. `Makefile test` 타겟도 전체 회귀망으로 동기화
+- docs: 삭제된 로컬 모델(LM Studio·GGUF·Gemma·1620 포트·`LOCAL_LLM_*`)·`local_image_service.py`·레거시 Langfuse 참조를 제거하고 외부 API/LangSmith 기준으로 현행화 (API_SPEC/ARCHITECTURE/INSTALL/SECURITY/TECH_STACK/PRD/README_KOREAN/CLAUDE). `AGENT_SYSTEM_REPORT.md`에 구형 시스템 고지 배너, `TODO.md` 현실 동기화
+- lint: ruff `select`에 `I`(isort) 추가, 64건 import 정렬·포맷 자동 적용. 전체 `ruff check`·`ruff format --check`·`pytest tests/` 202 passed
+- refactor(vectorstore): `EnhancedVectorDatabase`+빈 호환 서브클래스 `VectorDatabase`를 **단일 `VectorDatabase`**로 통합(호환 레이어 제거). 테스트·문서 import 갱신
+- config(lint): E501·W 등 확장 규칙은 의도적 제외 사유(`프로젝트 라인 길이 120`·정당한 긴 문자열)를 `pyproject.toml`에 명시
+- perf(image): `OpenRouterImageService.analyze_image` POST에 기존 `api_retry_with_backoff` 재사용 — 429·타임아웃·일부 5xx를 지수 백오프로 재시도(`_post_chat_completions` 분리), docstring 모델 기본값 현행화(`z-ai/glm-4.5v`)
+- feat(ui): `process_pdf`에 `progress_callback` 연결 — 대용량 PDF 이미지 분석 단계 진행률이 Streamlit 바에 실시간 반영(에러 시 중단하는 폴백 금지 정책은 유지)
+
 ## 2026-09-12 (관측성 — Langfuse → LangSmith 전환)
 - feat(observability): 관측 백엔드를 Langfuse(셀프호스팅)에서 **LangSmith(SaaS)**로 전환. `infra/langfuse/docker-compose.yml` 삭제, `docs/LANGFUSE_GUIDE.md` → `docs/LANGSMITH_GUIDE.md` 교체
 - feat(tracing): `src/utils/tracing.py`을 LangSmith 기반으로 재작성 — `ensure_langsmith_env()`로 config(`LANGSMITH_*`)를 실제 환경변수에 반영(랭체인 자동 관측 활성), `observe_if_enabled`를 `@traceable`로 매핑(run_type: chain/llm/retriever), `record_*`는 `get_current_run_tree()`로 현재 run 갱신, `propagate_trace_attributes`는 `tracing_context`로 세션·사용자 전파

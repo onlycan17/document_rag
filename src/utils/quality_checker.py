@@ -2,10 +2,10 @@
 품질 검증 시스템 - MD 파일의 문맥 연결 품질을 분석하고 점수화
 """
 
-import re
 import logging
-from typing import Dict, List, Any
+import re
 from pathlib import Path
+from typing import Any, Dict, List
 
 from src.agents.base_agent import BaseAgent
 

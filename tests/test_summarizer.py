@@ -10,7 +10,6 @@ from langchain.schema import Document
 
 from src.rag.summarizer import DocumentSummary, HierarchicalSummarizer, resolve_summary_length
 
-
 CONTENT = (
     "백제의 몽촌토성은 서울 송파구에 위치한 토성 유적이다. "
     "2024년 3월 발굴조사에서 다양한 토기편이 출토되었다. "
@@ -103,3 +102,18 @@ def test_resolve_summary_length_shrinks_for_small_output_budget():
 def test_resolve_summary_length_handles_invalid_budget():
     assert resolve_summary_length(0) == 500
     assert resolve_summary_length(-5) == 500
+
+
+def test_regex_sentence_fallback_keeps_punctuation_and_decimals():
+    """NLTK 미설치 환경(CI)의 폴백 — 빈 문장·소수점 분리 없이 문장부호 유지"""
+    from src.rag.summarizer import _regex_sent_tokenize
+
+    assert _regex_sent_tokenize("첫 문장입니다. 둘째 문장입니다.") == ["첫 문장입니다.", "둘째 문장입니다."]
+    assert _regex_sent_tokenize("총 둘레 3.5km이다! 끝인가?") == ["총 둘레 3.5km이다!", "끝인가?"]
+
+
+def test_extract_key_sentences_short_content_with_regex_fallback(monkeypatch):
+    import src.rag.summarizer as summarizer_module
+
+    monkeypatch.setattr(summarizer_module, "sent_tokenize", summarizer_module._regex_sent_tokenize)
+    assert len(HierarchicalSummarizer()._extract_key_sentences("첫 문장입니다. 둘째 문장입니다.")) == 2

@@ -1,10 +1,14 @@
 """청킹 전략·청크 후처리 전용 믹스인"""
 
+import logging
 from typing import List
+
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 from config import settings
-import logging
+
+from .junk_filter import is_colophon
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +60,9 @@ class ChunkingMixin:
             # 기본 청킹 (향상된 버전)
             logger.info("향상된 기본 청킹 사용")
             chunks = self._enhanced_default_chunking(documents)
+
+        # 판권면 청크 제외
+        chunks = [chunk for chunk in chunks if not is_colophon(chunk.page_content)]
 
         # 청킹 후 각 청크에 이미지 메타데이터 복원
         if original_image_metadata:

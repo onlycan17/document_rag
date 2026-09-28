@@ -8,10 +8,10 @@
 - 입력 문서에 개인/기밀 포함 가능 → 운영 모드에서 로그 마스킹.
 - 외부 LLM 사용 시 전송 데이터 범위 최소화(컨텍스트 최적화로 과도한 전송 방지).
 
-## 3. 로컬 LLM
-- HTTP 엔드포인트를 통해 호출(OpenAI 호환 `/v1`).
-- 사설 네트워크에서 운영 시 방화벽/접속 제어 목록(ACL) 적용.
-- 필요 시 API 키 적용(`LOCAL_LLM_API_KEY`).
+## 3. 외부 LLM API
+- 모든 LLM/임베딩 호출은 외부 API(OpenRouter·OpenAI·Google·Anthropic·Upstage)만 사용.
+- 키는 `.env`에만 저장, VCS 커밋 금지, 로그에 값 노출 금지.
+- 사설 네트워크에서 운영 시 아웃바운드 허용 도메인/엔드포인트를 방화벽으로 제한 권장.
 
 ## 4. 권장 설정
 - `ANONYMIZED_TELEMETRY=False`, `CHROMA_TELEMETRY=False`

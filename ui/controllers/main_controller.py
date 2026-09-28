@@ -2,8 +2,9 @@
 메인 애플리케이션 컨트롤러
 """
 
+from typing import Any, Dict
+
 import streamlit as st
-from typing import Dict, Any
 
 from src.rag.rag_chain import RAGChain
 from src.vectorstore.vector_db import VectorDatabase
@@ -96,7 +97,6 @@ class MainController:
                 enable_postprocessing=False,
                 use_intelligent_image_extraction=True,  # 기본값: True (권장)
                 preprocessing_model=_settings.preprocessing_model,
-                enable_multimodal_preprocessing=False,
             )
 
         if "current_provider" not in st.session_state:
@@ -117,11 +117,6 @@ class MainController:
 
         if "preprocessing_model" not in st.session_state:
             st.session_state.preprocessing_model = "local"
-
-        if "enable_multimodal_preprocessing" not in st.session_state:
-            from config import settings
-
-            st.session_state.enable_multimodal_preprocessing = settings.enable_multimodal_preprocessing
 
         if "intelligent_extraction" not in st.session_state:
             st.session_state.intelligent_extraction = False
@@ -231,7 +226,6 @@ class MainController:
             enable_postprocessing=settings.get("enable_postprocessing", False),
             use_intelligent_image_extraction=settings.get("use_intelligent_extraction", False),
             preprocessing_model=settings.get("selected_preprocessing_model", "openrouter"),
-            enable_multimodal_preprocessing=st.session_state.enable_multimodal_preprocessing,
         )
 
     def validate_configuration(self) -> Dict[str, Any]:

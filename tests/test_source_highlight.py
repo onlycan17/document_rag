@@ -8,7 +8,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.utils.source_highlight import extract_question_terms, highlight_keywords, render_source_preview
 
-
 CONTENT = """몽촌토성은 서울 송파구에 위치한 백제 시대의 토성이다.
 
 발굴조사 결과 2024년에 다양한 토기편이 출토되었다.

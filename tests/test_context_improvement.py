@@ -4,16 +4,18 @@ PDF 페이지 경계 맥락 끊어짐 개선 테스트 스크립트
 개선된 ImprovedPDFConverter가 페이지 경계에서 문장을 올바르게 연결하는지 검증합니다.
 """
 
-import sys
-from pathlib import Path
-import tempfile
 import shutil
+import sys
+import tempfile
+from pathlib import Path
 
 import pytest
 
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
+
+from src.utils.sentence_completion import can_join_lines  # noqa: E402
 
 
 def test_pdf_converter_improvements():
@@ -28,7 +30,7 @@ def test_pdf_converter_improvements():
         converter = ImprovedPDFConverter(output_dir=temp_dir)
 
         # 새로 추가된 메서드들 확인
-        required_methods = ["_connect_cross_page_text", "_can_connect_to_next", "_extract_and_process_images"]
+        required_methods = ["_connect_cross_page_text", "_extract_and_process_images"]
 
         all_exist = True
         for method in required_methods:
@@ -89,40 +91,15 @@ def test_sentence_completion_logic():
 
 def test_connection_feasibility():
     """문장 연결 가능성 테스트"""
-    print("\\n🔗 문장 연결 가능성 테스트")
-
-    try:
-        from src.utils.pdf_converter import ImprovedPDFConverter
-
-        temp_dir = tempfile.mkdtemp()
-        converter = ImprovedPDFConverter(output_dir=temp_dir)
-
-        # 테스트 케이스: 문장 연결 가능성
-        test_cases = [
-            ("그 결과, 몽", "촌토성이 풍납동", True),  # 연결 가능
-            ("풍납동 토", "성에서 원삼국시대", True),  # 연결 가능
-            ("따라서 본 연구에서는", "1. 서론", False),  # 새로운 섹션 시작 (연결 불가)
-            ("이것은 완전한 문장이다.", "그러나 다른", False),  # 새로운 문장 시작 (연결 불가)
-            ("연구", "결과를 분석하면", True),  # 연결 가능
-        ]
-
-        all_passed = True
-        for current, next_text, expected in test_cases:
-            result = converter._can_connect_to_next(current, next_text)
-            if result == expected:
-                print(f"✓ '{current}' + '{next_text}' -> {result} (예상: {expected})")
-            else:
-                print(f"✗ '{current}' + '{next_text}' -> {result} (예상: {expected})")
-                all_passed = False
-
-        # 임시 디렉토리 정리
-        shutil.rmtree(temp_dir)
-
-        return all_passed
-
-    except Exception as e:
-        print(f"✗ 문장 연결 가능성 테스트 실패: {e}")
-        return False
+    test_cases = [
+        ("그 결과, 몽", "촌토성이 풍납동", True),  # 연결 가능
+        ("풍납동 토", "성에서 원삼국시대", True),  # 연결 가능
+        ("따라서 본 연구에서는", "1. 서론", False),  # 새로운 섹션 시작 (연결 불가)
+        ("이것은 완전한 문장이다.", "그러나 다른", False),  # 새로운 문장 시작 (연결 불가)
+        ("연구", "결과를 분석하면", True),  # 연결 가능
+    ]
+    for current, next_text, expected in test_cases:
+        assert can_join_lines(current, next_text) == expected, (current, next_text)
 
 
 def test_cross_page_text_connection():
@@ -166,7 +143,7 @@ def test_cross_page_text_connection():
                     next_lines = [line.strip() for line in next_text.split("\\n") if line.strip()]
                     if next_lines:
                         first_next_line = next_lines[0]
-                        can_connect = converter._can_connect_to_next(last_line, first_next_line)
+                        can_connect = can_join_lines(last_line, first_next_line)
                         print(f"  다음 페이지 첫 줄: '{first_next_line}' -> 연결 가능: {can_connect}")
                         print(f"  연결 결과: '{last_line + first_next_line}'")
 

@@ -4,7 +4,7 @@
 
 from .base_agent import BaseAgent
 from .context_connector import ContextConnectorAgent
-from .structure_parser import StructureParserAgent
 from .quality_validator import QualityValidatorAgent
+from .structure_parser import StructureParserAgent
 
 __all__ = ["BaseAgent", "ContextConnectorAgent", "StructureParserAgent", "QualityValidatorAgent"]

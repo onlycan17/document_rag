@@ -1,12 +1,19 @@
 """PDF 파일 로딩·변환 결과 처리 전용 믹스인"""
 
-from typing import Dict, List, Optional
-from langchain.schema import Document
-from langchain_community.document_loaders import PyPDFLoader
+import logging
 import os
 from pathlib import Path
+from typing import Dict, List, Optional
+
+from langchain.schema import Document
+from langchain_community.document_loaders import PyPDFLoader
+
 from config import settings
+
+from ..utils.agent_pdf_converter import AgentBasedPDFConverter
 from ..utils.pdf_converter import ImprovedPDFConverter
+from ..utils.text_processing import TextProcessor
+from .pdf_loader_advanced import has_text_layer
 from .pdf_loading_helpers import (  # noqa: F401 - 외부 import 경로 유지
     build_extraction_metadata,
     cleanup_temp_dir,
@@ -18,9 +25,6 @@ from .pdf_loading_helpers import (  # noqa: F401 - 외부 import 경로 유지
     scan_images_dir,
     write_conversion_md,
 )
-from ..utils.agent_pdf_converter import AgentBasedPDFConverter
-from ..utils.text_processing import TextProcessor
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +168,13 @@ class PdfLoadingMixin:
         # 각 파일 처리 시작 시 메타데이터 초기화
         self.image_extraction_metadata = None
 
+        # 스캔·이미지 PDF는 이미지 분석·변환기가 본문 없이 이미지 조각만 다루므로 곧장 OCR로 보낸다
+        if not has_text_layer(file_path):
+            logger.info(f"텍스트 레이어가 부족한 PDF — 이미지 분석·변환기를 건너뛰고 OCR로 처리: {file_path}")
+            return self._load_with_ocr(file_path, progress_callback) or self._load_with_basic_loader(
+                file_path, progress_callback
+            )
+
         if self.use_intelligent_image_extraction:
             self._extract_intelligent_images(file_path, progress_callback)
 
@@ -207,6 +218,7 @@ class PdfLoadingMixin:
                     pdf_path=file_path,
                     output_dir=str(output_dir),
                     relevance_threshold=settings.local_image_relevance_threshold,
+                    progress_callback=progress_callback,
                 )
                 logger.info("OpenRouter를 이용한 지능형 추출 완료")
             except Exception as e:
@@ -240,22 +252,16 @@ class PdfLoadingMixin:
 
     def _resolve_agent_provider_model(self) -> tuple:
         """에이전트 LLM 제공자/모델을 UI 선택값 또는 설정으로 강제 동기화"""
-        provider = None
-        model = None
+        provider = self.preprocessing_model
         try:
             import streamlit as st  # type: ignore
 
             # 전처리 섹션의 선택값을 최우선으로 사용
-            provider = st.session_state.get("preprocessing_model", None) or self.preprocessing_model
-            if st.session_state.get("enable_multimodal_preprocessing", False):
-                model = st.session_state.get("preproc_mm_model", None)
-            else:
-                model = st.session_state.get("preproc_text_model", None)
-        except Exception:
-            # 세션을 사용할 수 없으면 인자로 받은 전처리 모델 타입 사용
-            provider = self.preprocessing_model
+            provider = st.session_state.get("preprocessing_model", None) or provider
+        except Exception as err:
+            logger.debug(f"세션 전처리 제공자 조회 실패(무시): {err}")
 
-        return resolve_provider_model(provider, model)
+        return resolve_provider_model(provider, None)
 
     def _load_with_agent_converter(self, file_path: str, progress_callback) -> Optional[List[Document]]:
         """에이전트 기반 PDF 변환. 실패 시 None 반환(상위 폴백 유도)"""
@@ -368,12 +374,18 @@ class PdfLoadingMixin:
                 progress_callback(0.4, "PDF 분석 중... (OCR 모드)")
             documents = self.advanced_pdf_loader.load_pdf(file_path, progress_callback)
             logger.info(f"고급 PDF 로더로 처리: {file_path}")
-            return documents
         except Exception as e:
             logger.warning(f"고급 PDF 로더 실패, 기본 로더 사용: {str(e)}")
             if progress_callback:
                 progress_callback(0.6, "기본 PDF 로더로 전환...")
             return None
+
+        # 변환기 경로와 같이 converted_docs에 저장하고 분할 LLM 교정(processed_docs)을 거쳐 검토할 수 있게 한다
+        for document in documents:
+            engine = document.metadata.get("ocr_engine")
+            method_name = f"OCR ({engine})" if engine else "PyPDF 텍스트 추출"
+            self._save_md_and_postprocess(document, file_path, document.page_content, [], method_name)
+        return documents
 
     def _load_with_basic_loader(self, file_path: str, progress_callback) -> List[Document]:
         """3차 시도: 기본 PDF 로더(최후 수단)"""
@@ -393,8 +405,8 @@ class PdfLoadingMixin:
     def _cleanup_existing_images_for_pdf(self, file_path: str) -> None:
         """동일 PDF 문서 재업로드 시 기존 이미지를 정리"""
         try:
-            from pathlib import Path
             import shutil
+            from pathlib import Path
 
             pdf_name = Path(file_path).stem
             # 파일명 정규화 규칙에 맞춘 프리픽스 생성

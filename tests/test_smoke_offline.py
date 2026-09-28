@@ -58,17 +58,6 @@ def test_base_agent_rejects_local_provider():
         DummyAgent("Dummy", provider="local")
 
 
-def test_preprocessing_factory_rejects_local():
-    """전처리 팩토리에서 local 제공자가 제거되었는지 검증"""
-    import pytest
-
-    from src.processing.preprocessing_factory import PreprocessingModelFactory
-
-    assert "local" not in PreprocessingModelFactory.SUPPORTED_PROVIDERS
-    with pytest.raises(ValueError):
-        PreprocessingModelFactory.create_model("local")
-
-
 def test_embedding_model_requires_api_key():
     """임베딩은 키 없이 조용한 로컬 폴백 대신 명확한 오류를 내는지 검증"""
     from config import settings

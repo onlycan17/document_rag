@@ -118,7 +118,8 @@ def _current_run_tree():
 def _patch_current_run(**kwargs) -> None:
     """현재 활성 run에 메타데이터·입출력을 병합한다. 비활성/활성 없음은 무시.
 
-    LangSmith의 RunTree는 add_metadata/add_inputs/add_outputs로 갱신한다.
+    입력은 run.inputs 딕셔너리에 직접 병합한다 — langsmith 0.2.x RunTree에는 add_inputs가 없어
+    예외가 나면 뒤따르는 출력·메타데이터 기록까지 건너뛰었다.
     """
     if not kwargs:
         return
@@ -132,7 +133,7 @@ def _patch_current_run(**kwargs) -> None:
         if metadata:
             run.add_metadata(metadata)
         if inputs:
-            run.add_inputs(inputs)
+            run.inputs = {**(run.inputs or {}), **inputs}
         if outputs:
             run.add_outputs(outputs)
         # metadata가 아니고 input/output도 아닌 남은 키는 metadata로 전달

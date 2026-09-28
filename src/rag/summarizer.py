@@ -5,12 +5,13 @@
 LLM이 효율적으로 처리할 수 있도록 돕는 요약 엔진.
 """
 
-from typing import List, Dict, Any, Tuple
-from langchain.schema import Document
-from langchain.prompts import PromptTemplate
-import re
 import logging
+import re
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
+from langchain.prompts import PromptTemplate
+from langchain.schema import Document
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -41,6 +42,11 @@ def _initialize_nltk():
             return False
 
 
+def _regex_sent_tokenize(text: str) -> List[str]:
+    """NLTK가 없을 때의 문장 분리 — 문장부호 뒤 공백에서만 나눠 부호를 유지하고 빈 문장·소수점 분리를 막는다"""
+    return [sentence for sentence in re.split(r"(?<=[.!?])\s+", text.strip()) if sentence]
+
+
 # NLTK 초기화 시도
 _nltk_available = _initialize_nltk()
 
@@ -51,8 +57,7 @@ try:
         raise ImportError("NLTK initialization failed")
 except ImportError:
     # NLTK 데이터가 없는 경우 간단한 대체 구현
-    def sent_tokenize(text):
-        return re.split(r"[.!?]+", text)
+    sent_tokenize = _regex_sent_tokenize
 
     def word_tokenize(text):
         return re.findall(r"\w+", text.lower())

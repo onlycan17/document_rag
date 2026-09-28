@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.utils.pdf_heading_utils import is_real_heading, ends_complete_sentence, join_paragraph_lines, get_heading_level
+from src.utils.pdf_heading_utils import ends_complete_sentence, get_heading_level, is_real_heading, join_paragraph_lines
 
 
 def test_is_real_heading():

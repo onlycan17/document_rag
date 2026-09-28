@@ -99,14 +99,7 @@ class BaseAgent(ABC):
     @staticmethod
     def _default_model_for(provider: str) -> str:
         """제공자별 기본 모델명 반환"""
-        if provider == "openai":
-            return getattr(settings, "openai_model", None) or "gpt-4o-mini"
-        if provider == "google":
-            return getattr(settings, "google_model", None) or "gemini-1.5-flash-8b"
-        if provider == "anthropic":
-            return getattr(settings, "anthropic_model", None) or "claude-3-5-haiku-20241022"
-        # openrouter: 텍스트용 모델 우선, 없으면 멀티모달 기본값
-        return getattr(settings, "openrouter_model", None) or getattr(settings, "openrouter_mm_model", "z-ai/glm-4.5v")
+        return settings.model_for(provider)
 
     @observe_if_enabled(name="llm-generation", as_type="generation", capture_input=False)
     @llm_retry_with_backoff()
@@ -228,6 +221,8 @@ class BaseAgent(ABC):
             "messages": [{"role": "user", "content": prompt}],
             "temperature": float(temperature),
             "max_tokens": int(max_tokens),
+            # 교정·검증 작업에 추론 불필요 — 추론 토큰이 max_tokens를 소진하면 출력이 잘림
+            "reasoning": {"enabled": False},
         }
         resp = requests.post(url, json=body, headers=headers, timeout=120)
         if resp.status_code != 200:

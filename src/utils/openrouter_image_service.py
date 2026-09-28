@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List
@@ -8,9 +9,9 @@ from typing import Any, Dict, List
 import fitz  # PyMuPDF
 import requests
 from PIL import Image
-import logging
 
 from config import settings
+from src.embeddings.embedding_model import api_retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 class OpenRouterImageService:
     """
     OpenRouter 멀티모달(Chat Completions) 기반 이미지 분석/OCR 서비스.
-    - 모델 기본값: qwen/qwen2.5-vl-32b-instruct
+    - 모델 기본값: `OPENROUTER_MM_MODEL`(기본 `qwen/qwen3.8-flash`)
     - 엔드포인트: {base}/v1/chat/completions
     """
 
@@ -34,6 +35,18 @@ class OpenRouterImageService:
             }
         )
 
+    @api_retry_with_backoff()
+    def _post_chat_completions(self, body: dict) -> dict:
+        """Chat Completions를 POST하고 JSON 응답을 반환한다.
+
+        `api_retry_with_backoff`가 429·네트워크 오류(타임아웃/연결 실패)·일부 5xx를
+        지수 백오프(랜덤 지터)로 재시도한다. 재시도 횟수·지연은 config
+        `API_MAX_RETRIES`/`API_BASE_DELAY`/`API_MAX_DELAY`를 따른다.
+        """
+        r = self.session.post(f"{self.base}/v1/chat/completions", json=body, timeout=90)
+        r.raise_for_status()
+        return r.json()
+
     def _image_data_url(self, image_path: str) -> str:
         with Image.open(image_path) as im:
             buf = BytesIO()
@@ -42,7 +55,6 @@ class OpenRouterImageService:
             return f"data:image/png;base64,{b64}"
 
     def analyze_image(self, image_path: str) -> Dict[str, Any]:
-        url = f"{self.base}/v1/chat/completions"
         image_url = self._image_data_url(image_path)
         prompt = (
             "당신은 문서 이미지 분석 보조자입니다.\n"
@@ -53,20 +65,19 @@ class OpenRouterImageService:
         )
         body = {
             "model": settings.openrouter_mm_model,
+            "reasoning": {"enabled": False},  # 관련도·설명·OCR 추출에는 추론 불필요 (비용·지연만 증가)
             "messages": [
                 {"role": "system", "content": "이미지 분석과 OCR을 수행하는 도우미"},
                 {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": prompt},
-                        {"type": "input_image", "image_url": {"url": image_url}},
+                        {"type": "image_url", "image_url": {"url": image_url}},
                     ],
                 },
             ],
         }
-        r = self.session.post(url, json=body, timeout=90)
-        r.raise_for_status()
-        data = r.json()
+        data = self._post_chat_completions(body)
         text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         logger.debug(f"[openrouter_image_service] raw_response: {text[:500]}")
         rel, desc, ocr = 0.0, "", ""
@@ -83,7 +94,9 @@ class OpenRouterImageService:
                 ocr = line.split(":", 1)[1].strip()
         return {"relevance": rel, "description": desc, "text": ocr, "raw": text}
 
-    def process_pdf(self, pdf_path: str, output_dir: str, relevance_threshold: float) -> Dict[str, Any]:
+    def process_pdf(
+        self, pdf_path: str, output_dir: str, relevance_threshold: float, progress_callback=None
+    ) -> Dict[str, Any]:
         out = Path(output_dir)
         images_dir = out / "images"
         images_dir.mkdir(parents=True, exist_ok=True)
@@ -100,6 +113,11 @@ class OpenRouterImageService:
             if (page_index + 1) % 10 == 0 or page_index == 0:
                 logger.info(
                     f"   ⏳ 이미지 분석 진행: {page_index + 1}/{total_pages}페이지 (이미지 {len(image_list)}개)"
+                )
+            if progress_callback:
+                progress_callback(
+                    0.1 + 0.2 * ((page_index + 1) / max(total_pages, 1)),
+                    f"🧠 이미지 분석 {page_index + 1}/{total_pages}페이지...",
                 )
             for img_idx, img in enumerate(image_list):
                 stats["total_images_found"] += 1
