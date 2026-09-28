@@ -42,6 +42,11 @@ def _initialize_nltk():
             return False
 
 
+def _regex_sent_tokenize(text: str) -> List[str]:
+    """NLTK가 없을 때의 문장 분리 — 문장부호 뒤 공백에서만 나눠 부호를 유지하고 빈 문장·소수점 분리를 막는다"""
+    return [sentence for sentence in re.split(r"(?<=[.!?])\s+", text.strip()) if sentence]
+
+
 # NLTK 초기화 시도
 _nltk_available = _initialize_nltk()
 
@@ -52,8 +57,7 @@ try:
         raise ImportError("NLTK initialization failed")
 except ImportError:
     # NLTK 데이터가 없는 경우 간단한 대체 구현
-    def sent_tokenize(text):
-        return re.split(r"[.!?]+", text)
+    sent_tokenize = _regex_sent_tokenize
 
     def word_tokenize(text):
         return re.findall(r"\w+", text.lower())
