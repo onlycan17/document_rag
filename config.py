@@ -112,7 +112,8 @@ class Settings(BaseSettings):
     query_cache_max_entries: int = int(os.getenv("QUERY_CACHE_MAX_ENTRIES", "64"))
 
     # 쿼리 최적화 설정
-    enable_query_expansion: bool = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
+    # 쿼리 확장 기본 끔: 2026-09-28 골든 셋 33질의에서 확장 시 Hit@5 93.9% → 87.9%, MRR 0.874 → 0.760 (하이브리드 기준)
+    enable_query_expansion: bool = os.getenv("ENABLE_QUERY_EXPANSION", "false").lower() == "true"
     enable_query_preprocessing: bool = os.getenv("ENABLE_QUERY_PREPROCESSING", "true").lower() == "true"
 
     # LangSmith 설정
