@@ -79,7 +79,7 @@ class QueryEngine:
                     "answer": "벡터 데이터베이스에 문서가 없습니다. 먼저 문서를 업로드해주세요.",
                     "sources": [],
                     "status": "no_documents",
-                    "search_info": self.get_search_info(question, []),
+                    "search_info": self.get_search_info(question, processed_question, []),
                 }
 
             # 1. 관련 문서 검색 (향상된 검색 사용)
@@ -97,7 +97,7 @@ class QueryEngine:
                         "answer": self.generate_no_results_message(question, doc_count),
                         "sources": [],
                         "status": "no_relevant_documents",
-                        "search_info": self.get_search_info(question, []),
+                        "search_info": self.get_search_info(question, processed_question, []),
                     }
                 else:
                     relevant_docs = fallback_results
@@ -111,10 +111,10 @@ class QueryEngine:
 
             if enable_large_context and total_content_length > large_context_threshold:
                 logger.info(f"대량 컨텍스트 감지 ({total_content_length:,}자) - 병렬 처리 모드")
-                return self.process_large_context(question, relevant_docs)
+                return self.process_large_context(question, processed_question, relevant_docs)
             else:
                 logger.info(f"표준 컨텍스트 처리 ({total_content_length:,}자)")
-                return self.process_standard_context(question, relevant_docs)
+                return self.process_standard_context(question, processed_question, relevant_docs)
 
         except Exception as e:
             logger.error(f"쿼리 처리 중 오류 발생 ({type(e).__name__}): {e}", exc_info=True)
@@ -218,7 +218,7 @@ class QueryEngine:
                 return
 
             sources = self.document_processor.generate_enhanced_sources(prepared_docs)
-            search_info = self.get_search_info(question, relevant_docs)
+            search_info = self.get_search_info(question, processed_question, relevant_docs)
             formatted_full = self.answer_formatter.format(full_response, sources)
 
             yield {
@@ -397,7 +397,9 @@ class QueryEngine:
 - '몽촌토성에 대해 알려줘' → '몽촌토성 백제'
 - '발굴조사 결과는?' → '발굴 유물 출토'"""
 
-    def process_standard_context(self, question: str, relevant_docs: List[tuple]) -> Dict[str, Any]:
+    def process_standard_context(
+        self, question: str, processed_question: str, relevant_docs: List[tuple]
+    ) -> Dict[str, Any]:
         """기존 방식의 표준 컨텍스트 처리"""
         try:
             # 컨텍스트와 출처가 같은 문서 순서를 공유하도록 먼저 정렬한다
@@ -420,7 +422,7 @@ class QueryEngine:
 
             # 출처 정보 생성 ([문서 n] 라벨과 [출처 n] 번호를 일치시키기 위해 정렬된 문서 사용)
             sources = self.document_processor.generate_enhanced_sources(prepared_docs)
-            search_info = self.get_search_info(question, relevant_docs)
+            search_info = self.get_search_info(question, processed_question, relevant_docs)
             formatted_answer = self.answer_formatter.format(answer, sources)
 
             context_documents = [doc for doc, _ in relevant_docs]
@@ -480,22 +482,24 @@ class QueryEngine:
             return chunk
         return str(chunk)
 
-    def process_large_context(self, question: str, relevant_docs: List[tuple]) -> Dict[str, Any]:
+    def process_large_context(
+        self, question: str, processed_question: str, relevant_docs: List[tuple]
+    ) -> Dict[str, Any]:
         """대량 컨텍스트 처리 (병렬 처리 사용)"""
         try:
             # 대량 컨텍스트 처리 로직은 복잡하므로 여기서는 표준 처리로 폴백
             logger.warning("대량 컨텍스트 처리는 아직 구현되지 않음. 표준 처리로 폴백합니다.")
-            return self.process_standard_context(question, relevant_docs)
+            return self.process_standard_context(question, processed_question, relevant_docs)
 
         except Exception as e:
             logger.error(f"대량 컨텍스트 처리 중 오류: {str(e)}")
             raise
 
-    def get_search_info(self, question: str, documents: List[tuple]) -> Dict[str, Any]:
-        """검색 정보 생성"""
+    def get_search_info(self, question: str, processed_question: str, documents: List[tuple]) -> Dict[str, Any]:
+        """검색 정보 생성 (쿼리 확장은 비용이 커서 이미 전처리한 쿼리를 받는다)"""
         return {
             "original_query": question,
-            "processed_query": self.preprocess_query(question),
+            "processed_query": processed_question,
             "total_documents": len(documents),
             "search_method": settings.vector_db_type,
             "context_tokens": self._last_context_tokens,
