@@ -47,3 +47,26 @@ def test_image_analysis_sends_image_as_image_url_with_reasoning_off(monkeypatch,
     assert image_parts and all(p["type"] == "image_url" for p in image_parts)
     assert captured["reasoning"] == {"enabled": False}
     assert result["relevance"] == 0.9
+
+
+def test_record_input_merges_inputs_without_add_inputs_method(monkeypatch):
+    """langsmith 0.2.x RunTree에는 add_inputs가 없다 — 입력 병합과 이후 출력 기록이 모두 되어야 한다"""
+    import src.utils.tracing as tracing
+
+    class RunTreeWithoutAddInputs:
+        def __init__(self):
+            self.inputs, self.outputs, self.metadata = {"question": "q"}, {}, {}
+
+        def add_metadata(self, metadata):
+            self.metadata.update(metadata)
+
+        def add_outputs(self, outputs):
+            self.outputs.update(outputs)
+
+    run = RunTreeWithoutAddInputs()
+    monkeypatch.setattr(tracing, "_current_run_tree", lambda: run)
+
+    tracing._patch_current_run(input={"top_k": 12}, output={"answer": "a"}, metadata={"cache_hit": False})
+
+    assert run.inputs == {"question": "q", "top_k": 12}
+    assert run.outputs == {"answer": "a"} and run.metadata == {"cache_hit": False}
