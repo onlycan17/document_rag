@@ -105,7 +105,10 @@ class MainController:
             st.session_state.current_provider = settings.llm_provider
 
         if "current_model" not in st.session_state:
-            st.session_state.current_model = None
+            from config import settings
+
+            # None이면 사이드바가 모델 목록 첫 항목(알파벳순)을 골라 체인을 바꿔 버린다
+            st.session_state.current_model = settings.model_for(st.session_state.current_provider)
 
         if "debug_mode" not in st.session_state:
             st.session_state.debug_mode = False
