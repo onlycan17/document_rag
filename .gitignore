@@ -15,6 +15,7 @@ ENV/
 data/documents/*
 data/processed/*
 vector_db/*
+vector_db_backup_*/
 !data/documents/.gitkeep
 !data/processed/.gitkeep
 !vector_db/.gitkeep
