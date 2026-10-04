@@ -6,6 +6,8 @@
     python scripts/eval/retrieval_eval.py --k 3            # Hit@3 기준
     python scripts/eval/retrieval_eval.py --golden <path>  # 다른 골든 셋
     python scripts/eval/retrieval_eval.py --upload         # 결과를 LangSmith에 기록
+    python scripts/eval/retrieval_eval.py --expand         # 운영과 같이 쿼리 확장 후 검색
+    ENABLE_HYBRID_SEARCH=true python scripts/eval/retrieval_eval.py  # 하이브리드 검색 평가
 
 실제 임베딩 API를 호출하므로 질의 수만큼 API 비용이 발생한다.
 벡터 DB를 재구축한 뒤 다시 실행하면 임베딩 모델 변경 효과를 숫자로 비교할 수 있다.
@@ -20,6 +22,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.rag.query_engine import QueryEngine  # noqa: E402
 from src.utils.retrieval_metrics import best_relevant_rank, hit_at_k, mrr  # noqa: E402
 from src.utils.tracing import (  # noqa: E402
     langsmith_enabled,
@@ -33,14 +36,20 @@ from src.vectorstore import VectorDatabase  # noqa: E402
 DEFAULT_GOLDEN = PROJECT_ROOT / "tests" / "eval" / "golden_retrieval.json"
 
 
-def evaluate(vector_db: VectorDatabase, cases: list[dict], k: int) -> dict:
-    """골든 셋 전체를 검색해 사례별 순위와 요약 지표를 반환한다."""
+def evaluate(vector_db: VectorDatabase, cases: list[dict], k: int, expand: bool = False) -> dict:
+    """골든 셋 전체를 검색해 사례별 순위와 요약 지표를 반환한다.
+
+    expand=True면 운영 경로와 같이 QueryEngine.preprocess_query로 확장한 질의로 검색한다.
+    """
+    query_engine = QueryEngine(vector_db, llm_manager=None, document_processor=None) if expand else None
     detail = []
     ranks: list = []
     for case in cases:
-        results = vector_db.search(case["question"], k=k)
+        query = query_engine.preprocess_query(case["question"]) if query_engine else case["question"]
+        results = vector_db.search(query, k=k)
         sources = [str(getattr(doc, "metadata", {}).get("source", "")) for doc, _ in results]
-        rank = best_relevant_rank(sources, case["expected_sources"])
+        contents = [doc.page_content for doc, _ in results]
+        rank = best_relevant_rank(sources, case["expected_sources"], contents, case.get("expected_content"))
         ranks.append(rank)
         detail.append({"question": case["question"], "rank": rank, "sources": sources})
     return {"ranks": ranks, "detail": detail, "hit_at_k": hit_at_k(ranks, k), "mrr": mrr(ranks)}
@@ -95,6 +104,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="골든 셋 기반 검색 품질 평가")
     parser.add_argument("--golden", type=Path, default=DEFAULT_GOLDEN, help="골든 셋 JSON 경로")
     parser.add_argument("--k", type=int, default=5, help="Hit@k 판정 기준 순위 (기본 5)")
+    parser.add_argument("--expand", action="store_true", help="운영과 같이 쿼리 확장 후 검색")
     parser.add_argument("--upload", action="store_true", help="결과를 LangSmith run·지표로 기록")
     args = parser.parse_args()
 
@@ -108,7 +118,7 @@ def main() -> None:
         sys.exit(1)
 
     print(f"문서 {vector_db.get_document_count()}개 청크에서 {len(cases)}개 질의 평가 (Hit@{args.k})\n")
-    result = evaluate(vector_db, cases, args.k)
+    result = evaluate(vector_db, cases, args.k, expand=args.expand)
     print_report(result, args.k)
     if args.upload:
         upload_to_langsmith(result, args.k)

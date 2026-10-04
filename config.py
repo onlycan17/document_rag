@@ -89,8 +89,9 @@ class Settings(BaseSettings):
     vector_db_type: str = "faiss"  # "faiss" 또는 "chromadb"
 
     # 청크 설정 - 성능 최적화
-    chunk_size: int = int(os.getenv("CHUNK_SIZE", "150"))  # 검색 정밀도 향상을 위한 청크 크기 조정
-    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "50"))  # 오버랩 조정
+    # 현 인덱스(평균 약 800자)의 구축 값. 짧은 청크 병합 상한(chunk_size × 1.5)도 이 값을 따른다
+    chunk_size: int = int(os.getenv("CHUNK_SIZE", "1000"))
+    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "200"))
     # 의미 기반 청킹 설정
     use_semantic_chunking: bool = os.getenv("USE_SEMANTIC_CHUNKING", "false").lower() == "true"
     semantic_chunk_sentences: int = 3  # 의미 기반 청킹 시 문장 단위
@@ -102,17 +103,17 @@ class Settings(BaseSettings):
     use_mmr_search: bool = os.getenv("USE_MMR_SEARCH", "true").lower() == "true"  # MMR 검색 활성화 (다양성 향상)
     mmr_diversity_score: float = 0.3  # MMR 다양성 점수
 
-    # 하이브리드 검색 설정
-    enable_hybrid_search: bool = os.getenv("ENABLE_HYBRID_SEARCH", "false").lower() == "true"
-    keyword_search_weight: float = float(os.getenv("KEYWORD_SEARCH_WEIGHT", "0.3"))  # 키워드 검색 가중치
-    vector_search_weight: float = float(os.getenv("VECTOR_SEARCH_WEIGHT", "0.7"))  # 벡터 검색 가중치
+    # 하이브리드 검색: 벡터 + 문자 n-gram TF-IDF 순위를 RRF로 융합
+    # 2026-09-28 골든 셋 33질의에서 Hit@5 90.9% → 93.9%, MRR 0.826 → 0.874 (벡터 MMR 대비)
+    enable_hybrid_search: bool = os.getenv("ENABLE_HYBRID_SEARCH", "true").lower() == "true"
 
     # 유사 질의 캐시 (전처리 완료 쿼리의 정확 일치 결과 재사용)
     query_cache_ttl_seconds: int = int(os.getenv("QUERY_CACHE_TTL_SECONDS", "300"))
     query_cache_max_entries: int = int(os.getenv("QUERY_CACHE_MAX_ENTRIES", "64"))
 
     # 쿼리 최적화 설정
-    enable_query_expansion: bool = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
+    # 쿼리 확장 기본 끔: 2026-09-28 골든 셋 33질의에서 확장 시 Hit@5 93.9% → 87.9%, MRR 0.874 → 0.760 (하이브리드 기준)
+    enable_query_expansion: bool = os.getenv("ENABLE_QUERY_EXPANSION", "false").lower() == "true"
     enable_query_preprocessing: bool = os.getenv("ENABLE_QUERY_PREPROCESSING", "true").lower() == "true"
 
     # LangSmith 설정

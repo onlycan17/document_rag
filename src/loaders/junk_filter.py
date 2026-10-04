@@ -1,4 +1,4 @@
-"""검색 품질을 떨어뜨리는 정크 텍스트 제거 (이미지 참조, 모델 토큰, 목차 점선, 숫자 나열, 판권면)"""
+"""검색 품질을 떨어뜨리는 정크 텍스트 제거 (이미지 참조·빈 이미지 설명, 모델 토큰, 목차, 숫자 나열, 판권면)"""
 
 import re
 
@@ -9,14 +9,23 @@ PLACEHOLDER_ALT = re.compile(r"^\s*(이미지|이メージ|image)?\s*\d*\s*(\(�
 # 멀티모달 변환 모델(GLM)이 남기는 박스 토큰 (밑줄이 지워진 형태 포함)
 MODEL_BOX_TOKEN = re.compile(r"<\|(begin|end)_?of_?box\|>")
 
+DOT_LEADER = re.compile(r"[·.…•∙]{5,}\s*\d*\s*$")  # 목차 점선 리더: "발간사·······5", "모델 •••••"
+
 JUNK_LINES = (
-    re.compile(r"[·.…•∙]{5,}\s*\d*\s*$"),  # 목차 점선 리더: "발간사·······5", "모델 •••••"
+    DOT_LEADER,
     re.compile(r"^[\d\s.,%~\-]+$"),  # 숫자만 있는 줄: 도표 수치, 쪽번호
     # 기존 정제 로직이 깨뜨린 이미지 참조: "이미지 1 (페이지 1) 연구(KERIS) Fpage001img001.png)"
     re.compile(r"^(이미지|이メージ)(\s+\d+\s+\(페이지\s*\d+\))?(\s.*\.(png|jpe?g|gif|webp)\)?)?$", re.IGNORECASE),
     re.compile(
         r"페이지\s*\d+의 이미지\s+\S+\.(png|jpe?g|gif|webp)$", re.IGNORECASE
     ),  # "**이미지**: 페이지 2의 이미지 ./a.png"
+    re.compile(r"^#+\s*페이지 내 이미지$"),  # 변환기가 붙이는 이미지 섹션 제목
+    # 비전 모델이 이미지를 받지 못했을 때 남긴 설명
+    re.compile(
+        r"^\**이미지 설명\**:.*(no (document )?image|no visible content|이미지가 (제공되지|포함되지|없)|"
+        r"이미지를 확인할 수 없)",
+        re.IGNORECASE,
+    ),
 )
 COLOPHON = re.compile(r"ISBN\s*[\d\-]{10,}")
 
@@ -28,9 +37,20 @@ def _replace_image(match: re.Match) -> str:
 
 def remove_junk_lines(text: str) -> str:
     """이미지 링크·모델 토큰을 지우고 정크 줄을 제거한다. 나머지 줄은 그대로 유지한다."""
-    text = MODEL_BOX_TOKEN.sub("", MARKDOWN_IMAGE.sub(_replace_image, text))
-    kept = [line for line in text.split("\n") if not any(p.search(line.strip()) for p in JUNK_LINES)]
+    lines = MODEL_BOX_TOKEN.sub("", MARKDOWN_IMAGE.sub(_replace_image, text)).split("\n")
+    kept = [
+        line
+        for index, line in enumerate(lines)
+        if not any(p.search(line.strip()) for p in JUNK_LINES) and not _is_wrapped_toc_head(lines, index)
+    ]
     return "\n".join(kept)
+
+
+def _is_wrapped_toc_head(lines: list[str], index: int) -> bool:
+    """두 줄로 줄바꿈된 목차 항목의 첫 줄: 다음 줄이 점선 리더로 끝나고 이 줄은 점선이 없다"""
+    if index + 1 >= len(lines) or not lines[index].strip():
+        return False
+    return bool(DOT_LEADER.search(lines[index + 1].strip())) and not DOT_LEADER.search(lines[index].strip())
 
 
 def is_colophon(text: str) -> bool:

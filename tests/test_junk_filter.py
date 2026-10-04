@@ -27,6 +27,13 @@ DROP_LINES = [
     "![image](/image/placeholder)",  # Upstage Document Parse 그림 자리표시자
     "**이미지**: 페이지 20의 이미지 ./images/몽촌토성4+하_page020_img006.png  ",
     "이미지: 페이지 10의 이미지 ./images/몽촌토성4+상page010img002.png",
+    "### 페이지 내 이미지",
+    "**이미지 설명**: No image provided; unable to perform document analysis or OCR.",
+    "**이미지 설명**: No document image provided for analysis.",
+    "**이미지 설명**: This is a completely black image with no visible content.",
+    "**이미지 설명**: 이미지가 제공되지 않아 분석할 수 없습니다.",
+    "**이미지 설명**: 입력에 이미지가 포함되지 않아 문서 이해와 관련된 분석이 불가능합니다.",
+    "**이미지 설명**: 이미지를 확인할 수 없어 정확한 설명을 제공할 수 없습니다.",
 ]
 
 
@@ -38,6 +45,21 @@ def test_meaningful_lines_are_kept(line):
 @pytest.mark.parametrize("line", DROP_LINES)
 def test_junk_lines_are_removed(line):
     assert remove_junk_lines(line).strip() == ""
+
+
+def test_meaningful_image_description_is_kept():
+    line = "**이미지 설명**: 북문지 석축 전경 사진으로 성벽 기저부 석렬이 보인다."
+    assert remove_junk_lines(line) == line
+
+
+def test_wrapped_table_of_contents_entry_is_removed_entirely():
+    toc = "사진 138 | Ⅰ-22호 수혈유구 출토유물 4 (20~22), Ⅰ-23호 수혈유구 (1 \n조사 전)··················148"
+    assert remove_junk_lines(toc).strip() == ""
+
+
+def test_body_caption_without_dot_leader_is_kept():
+    text = "도면 110 | Ⅰ-25호 수혈유구 평ㆍ입단면도, 토층도\n25호 수혈유구는 해발 15.6m 지점에 위치한다."
+    assert remove_junk_lines(text) == text
 
 
 def test_image_with_descriptive_alt_keeps_alt_text():

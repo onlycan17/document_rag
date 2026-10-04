@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from langchain.schema import Document
-from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import FAISS
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -36,6 +35,21 @@ def _retriever_sources(results: List[Tuple[Document, float]]) -> List[dict]:
     ]
 
 
+def reciprocal_rank_fusion(rankings: List[List[Document]], rank_constant: int = 60) -> List[Document]:
+    """여러 검색 순위를 RRF(순위 역수 합)로 융합한다. 점수 척도가 달라도 순위만 쓰므로 안전하다.
+
+    같은 청크는 본문으로 식별한다. 반환 순서 = 융합 점수 내림차순.
+    """
+    fused: Dict[str, float] = {}
+    docs: Dict[str, Document] = {}
+    for ranking in rankings:
+        for rank, doc in enumerate(ranking, start=1):
+            key = doc.page_content
+            fused[key] = fused.get(key, 0.0) + 1.0 / (rank_constant + rank)
+            docs.setdefault(key, doc)
+    return [docs[key] for key in sorted(fused, key=fused.get, reverse=True)]
+
+
 class VectorDatabase:
     """
     벡터 데이터베이스 클래스
@@ -49,9 +63,10 @@ class VectorDatabase:
         self.embedding_model = EmbeddingModel()
         self.vector_store = None
         self.documents_cache = []  # 키워드 검색을 위한 문서 캐시
-        self.bm25_retriever = None  # BM25 키워드 검색기
-        self.tfidf_vectorizer = None  # TF-IDF 벡터라이저
-        self.tfidf_matrix = None  # TF-IDF 매트릭스
+        self.tfidf_vectorizer = None  # 단어 TF-IDF (관련 용어 추출용)
+        self.tfidf_matrix = None
+        self.char_vectorizer = None  # 문자 n-gram TF-IDF (하이브리드 키워드 검색용)
+        self.char_matrix = None
         self._query_cache = {}  # 유사 질의 캐시: {f"{query}|{k}": (저장 시각, 결과)}
 
         self._initialize_vector_store()
@@ -114,15 +129,15 @@ class VectorDatabase:
             if not self.documents_cache:
                 return
 
-            # BM25 검색기 업데이트
+            # 문자 n-gram 인덱스: 형태소 분석 없이 조사 붙은 어절·"Ⅰ-25호" 같은 식별자를 매칭
             if settings.enable_hybrid_search:
-                texts = [doc.page_content for doc in self.documents_cache]
-                self.bm25_retriever = BM25Retriever.from_texts(
-                    texts, metadatas=[doc.metadata for doc in self.documents_cache]
+                self.char_vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 3), sublinear_tf=True)
+                self.char_matrix = self.char_vectorizer.fit_transform(
+                    [doc.page_content for doc in self.documents_cache]
                 )
-                logger.info("BM25 키워드 검색 인덱스 업데이트 완료")
+                logger.info("문자 n-gram 키워드 검색 인덱스 업데이트 완료")
 
-            # TF-IDF 인덱스 업데이트 (추가 키워드 검색용)
+            # 단어 TF-IDF 인덱스 (extract_related_terms가 어휘를 사용)
             texts = [self._preprocess_text_for_keyword_search(doc.page_content) for doc in self.documents_cache]
 
             self.tfidf_vectorizer = TfidfVectorizer(
@@ -169,7 +184,7 @@ class VectorDatabase:
 
         try:
             # 하이브리드 검색 사용 여부 확인
-            if settings.enable_hybrid_search and self.bm25_retriever:
+            if settings.enable_hybrid_search:
                 results = self._hybrid_search(query, k)
             else:
                 results = self._vector_search(query, k)
@@ -181,7 +196,7 @@ class VectorDatabase:
         record_metadata(
             {
                 "cache_hit": False,
-                "search_method": settings.search_method if hasattr(settings, "search_method") else "hybrid",
+                "search_method": "hybrid" if settings.enable_hybrid_search else "vector",
                 "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
             }
         )
@@ -234,115 +249,31 @@ class VectorDatabase:
             return self._similarity_search(query, k)
 
     def _hybrid_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
-        """하이브리드 검색 (벡터 + 키워드)"""
-        try:
-            # 1. 벡터 검색 결과
-            vector_results = self._similarity_search(query, k)
+        """하이브리드 검색: 벡터 순위와 문자 n-gram 키워드 순위를 RRF로 융합
 
-            # 2. 키워드 검색 결과
-            keyword_results = self._keyword_search(query, k)
-
-            # 3. 결과 통합 및 점수 정규화
-            combined_results = self._combine_search_results(
-                vector_results, keyword_results, settings.vector_search_weight, settings.keyword_search_weight
-            )
-
-            # 4. 상위 k개 결과 반환
-            combined_results.sort(key=lambda x: x[1])  # 점수 오름차순 정렬 (낮을수록 좋음)
-            return combined_results[:k]
-
-        except Exception as e:
-            logger.error(f"하이브리드 검색 실패, 벡터 검색만 사용: {str(e)}")
+        반환 점수는 FAISS 거리 그대로 두어 임계값·재랭킹·관련도 표시와 같은 척도를 유지한다.
+        키워드로만 찾은 청크를 살리는 것이 목적이므로 임계값 필터는 적용하지 않는다.
+        """
+        if settings.vector_db_type != "faiss" or self.char_matrix is None:
             return self._vector_search(query, k)
+        query_embedding = self.embedding_model.embeddings.embed_query(query)
+        # ponytail: 평면 인덱스 전수 검색으로 모든 청크 거리를 얻음 — 수십만 청크면 후보만 index.reconstruct로 계산
+        all_hits = self.vector_store.similarity_search_with_score_by_vector(
+            query_embedding, k=self.vector_store.index.ntotal
+        )
+        distances = {doc.page_content: float(score) for doc, score in all_hits}
+        candidates = k * 2
+        fused = reciprocal_rank_fusion(
+            [[doc for doc, _ in all_hits[:candidates]], self._keyword_search(query, candidates)]
+        )
+        worst = max(distances.values(), default=0.0)
+        return [(doc, distances.get(doc.page_content, worst)) for doc in fused[:k]]
 
-    def _keyword_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
-        """키워드 검색"""
-        keyword_results = []
-
-        try:
-            # BM25 검색
-            if self.bm25_retriever:
-                bm25_docs = self.bm25_retriever.get_relevant_documents(query)
-                for doc in bm25_docs[:k]:
-                    # BM25 점수를 거리로 변환 (간단한 추정)
-                    score = 0.5  # BM25는 정확한 점수를 제공하지 않으므로 기본값 사용
-                    keyword_results.append((doc, score))
-
-            # TF-IDF 검색 (추가 검증)
-            if self.tfidf_vectorizer and self.tfidf_matrix is not None:
-                tfidf_results = self._tfidf_search(query, k)
-                keyword_results.extend(tfidf_results)
-
-        except Exception as e:
-            logger.error(f"키워드 검색 실패: {str(e)}")
-
-        return keyword_results
-
-    def _tfidf_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
-        """TF-IDF 기반 키워드 검색"""
-        try:
-            # 쿼리 벡터화
-            query_processed = self._preprocess_text_for_keyword_search(query)
-            query_vector = self.tfidf_vectorizer.transform([query_processed])
-
-            # 코사인 유사도 계산
-            similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-
-            # 상위 k개 인덱스 추출
-            top_indices = np.argsort(similarities)[::-1][:k]
-
-            results = []
-            for idx in top_indices:
-                if idx < len(self.documents_cache) and similarities[idx] > 0.1:  # 최소 임계값
-                    doc = self.documents_cache[idx]
-                    # 유사도를 거리로 변환
-                    distance = 1 - similarities[idx]
-                    results.append((doc, distance))
-
-            return results
-
-        except Exception as e:
-            logger.error(f"TF-IDF 검색 실패: {str(e)}")
-            return []
-
-    def _combine_search_results(
-        self,
-        vector_results: List[Tuple[Document, float]],
-        keyword_results: List[Tuple[Document, float]],
-        vector_weight: float,
-        keyword_weight: float,
-    ) -> List[Tuple[Document, float]]:
-        """검색 결과 통합"""
-        combined_dict = {}
-
-        # 문서 ID 생성 함수
-        def get_doc_id(doc):
-            return doc.metadata.get("chunk_id", doc.page_content[:100])
-
-        # 벡터 검색 결과 추가
-        for doc, score in vector_results:
-            doc_id = get_doc_id(doc)
-            combined_dict[doc_id] = {"doc": doc, "vector_score": score, "keyword_score": None}
-
-        # 키워드 검색 결과 추가
-        for doc, score in keyword_results:
-            doc_id = get_doc_id(doc)
-            if doc_id in combined_dict:
-                combined_dict[doc_id]["keyword_score"] = score
-            else:
-                combined_dict[doc_id] = {"doc": doc, "vector_score": None, "keyword_score": score}
-
-        # 통합 점수 계산
-        results = []
-        for doc_id, data in combined_dict.items():
-            vector_score = data["vector_score"] if data["vector_score"] is not None else 1.0
-            keyword_score = data["keyword_score"] if data["keyword_score"] is not None else 1.0
-
-            # 가중 평균으로 통합 점수 계산
-            combined_score = vector_score * vector_weight + keyword_score * keyword_weight
-            results.append((data["doc"], combined_score))
-
-        return results
+    def _keyword_search(self, query: str, k: int) -> List[Document]:
+        """문자 n-gram TF-IDF 코사인 유사도 상위 k개 청크 (유사도 0 제외)"""
+        similarities = cosine_similarity(self.char_vectorizer.transform([query]), self.char_matrix).flatten()
+        top_indices = np.argsort(similarities)[::-1][:k]
+        return [self.documents_cache[i] for i in top_indices if similarities[i] > 0]
 
     def _filter_by_threshold(self, results: List[Tuple[Document, float]]) -> List[Tuple[Document, float]]:
         """임계값에 따른 결과 필터링"""
